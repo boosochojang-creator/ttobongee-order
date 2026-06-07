@@ -31,7 +31,7 @@ export default function TablePage() {
     audioStarted.current = true
     try {
       const ctx = new AudioContext()
-      function playNote(freq: number, start: number, dur: number, vol: number) {
+      const playNote = (freq: number, start: number, dur: number, vol: number) => {
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
         osc.connect(gain); gain.connect(ctx.destination)

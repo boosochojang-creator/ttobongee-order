@@ -6,7 +6,8 @@
       "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\DSEKTOP\\\\Desktop\\\\ttobongee-order\\\\customer-app\\\\app\\\\store\\\\[storeId]\\\\checkout\")",
       "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\DSEKTOP\\\\Desktop\\\\ttobongee-order\\\\customer-app\\\\app\\\\store\\\\[storeId]\\\\order\\\\[orderId]\")",
       "Bash(Write-Host \"Directories created\")",
-      "Bash(C:\\\\Users\\\\DSEKTOP\\\\AppData\\\\Roaming\\\\npm\\\\claude.cmd *)"
+      "Bash(C:\\\\Users\\\\DSEKTOP\\\\AppData\\\\Roaming\\\\npm\\\\claude.cmd *)",
+      "PowerShell(git *)"
     ]
   }
 }
