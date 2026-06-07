@@ -1,0 +1,305 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+:root {
+  --bg: #0d0d0d;
+  --bg2: #1a1a1a;
+  --bg3: #242424;
+  --border: #333;
+  --text: #f5f5f5;
+  --text2: #999;
+  --gold: #c8a900;
+  /* 루나: 주방 컬러 코딩 */
+  --new-bg: #2a0808;
+  --new-border: #e84040;
+  --new-text: #ff6b6b;
+  --accepted-bg: #1a1a00;
+  --accepted-border: #c8a900;
+  --cooking-bg: #1a1200;
+  --cooking-border: #f09000;
+  --cooking-text: #f09000;
+  --done-bg: #071a0d;
+  --done-border: #3ac47d;
+  --done-text: #3ac47d;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+button { cursor: pointer; border: none; font-family: inherit; }
+
+/* PIN 화면 */
+.pin-screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 40px 24px;
+}
+.pin-screen .brand { font-size: 22px; font-weight: 900; color: var(--gold); }
+.pin-screen input {
+  width: 200px;
+  padding: 16px;
+  background: var(--bg3);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 24px;
+  text-align: center;
+  letter-spacing: 8px;
+  font-family: inherit;
+  outline: none;
+}
+.pin-screen input:focus { border-color: var(--gold); }
+.pin-btn {
+  padding: 14px 48px;
+  background: var(--gold);
+  color: #111;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 10px;
+}
+
+/* 대시보드 헤더 */
+.owner-header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.owner-header .brand { font-size: 18px; font-weight: 900; color: var(--gold); }
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--done-text);
+  background: var(--done-bg);
+  border: 1px solid var(--done-border);
+  border-radius: 20px;
+  padding: 4px 10px;
+}
+.live-dot {
+  width: 8px; height: 8px;
+  background: var(--done-text);
+  border-radius: 50%;
+  animation: blink 1.2s infinite;
+}
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+/* 요약 통계 */
+.summary-bar {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+}
+.stat-card {
+  flex-shrink: 0;
+  background: var(--bg3);
+  border-radius: 10px;
+  padding: 12px 16px;
+  min-width: 100px;
+}
+.stat-card .label { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+.stat-card .value { font-size: 18px; font-weight: 900; color: var(--gold); }
+
+/* 탭 */
+.owner-tabs {
+  display: flex;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.owner-tabs button {
+  flex: 1;
+  padding: 14px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  background: none;
+  border-bottom: 2px solid transparent;
+}
+.owner-tabs button.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* 주문 칸반 보드 */
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 16px;
+  align-items: start;
+}
+@media (max-width: 700px) {
+  .kanban { grid-template-columns: 1fr; }
+}
+.kanban-col h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text2);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* 주문 카드 - 루나: 컬러 코딩, 큰 글씨 */
+.order-card {
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  padding: 16px;
+  margin-bottom: 12px;
+  position: relative;
+  transition: all 0.2s;
+}
+.order-card.new-order {
+  background: var(--new-bg);
+  border-color: var(--new-border);
+  animation: flashNew 0.8s ease-in-out;
+}
+@keyframes flashNew {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.order-card.cash_pending {
+  background: var(--new-bg);
+  border-color: var(--new-border);
+}
+.order-card.accepted {
+  background: var(--accepted-bg);
+  border-color: var(--accepted-border);
+}
+.order-card.cooking {
+  background: var(--cooking-bg);
+  border-color: var(--cooking-border);
+}
+.order-card.done-card {
+  background: var(--done-bg);
+  border-color: var(--done-border);
+  opacity: 0.8;
+}
+
+/* 루나: 테이블 번호 크게 */
+.order-table {
+  font-size: 28px;
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+.order-table span { font-size: 14px; font-weight: 400; color: var(--text2); }
+
+.order-time {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.pay-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.pay-badge.cash { background: rgba(200,169,0,0.15); color: var(--gold); }
+.pay-badge.card { background: rgba(100,150,255,0.15); color: #99aaff; }
+.pay-badge.kakao { background: rgba(255,220,0,0.15); color: #ffd700; }
+.pay-badge.toss { background: rgba(0,150,255,0.15); color: #66bbff; }
+
+.order-items-list { font-size: 15px; margin-bottom: 14px; line-height: 1.8; }
+.order-items-list li { list-style: none; }
+.order-items-list li strong { font-size: 17px; }
+
+.order-total {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 14px;
+}
+
+/* 루나: 버튼 절반 크기로 */
+.action-btns { display: flex; gap: 8px; }
+.action-btn {
+  flex: 1;
+  padding: 14px 6px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  transition: opacity 0.15s;
+}
+.action-btn:active { opacity: 0.7; }
+.btn-accept { background: var(--gold); color: #111; }
+.btn-cooking { background: var(--cooking-border); color: #111; }
+.btn-done { background: var(--done-border); color: #111; }
+.btn-cancel { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+
+/* 메뉴 관리 */
+.menu-manage { padding: 16px; }
+.menu-row {
+  display: flex;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.menu-row-info { flex: 1; }
+.menu-row-name { font-size: 15px; font-weight: 600; }
+.menu-row-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.toggle-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.toggle-btn.on { background: rgba(58,196,125,0.15); color: var(--done-text); border: 1px solid var(--done-border); }
+.toggle-btn.off { background: rgba(232,64,64,0.15); color: var(--new-text); border: 1px solid var(--new-border); }
+
+/* 회원 목록 */
+.member-list { padding: 16px; }
+.member-row {
+  display: flex;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.member-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--bg3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.member-info { flex: 1; }
+.member-phone { font-size: 15px; font-weight: 600; }
+.member-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.visit-badge {
+  background: rgba(200,169,0,0.12);
+  color: var(--gold);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 700;
+}
+
+/* 빈 상태 */
+.empty { padding: 48px 16px; text-align: center; color: var(--text2); font-size: 14px; }
