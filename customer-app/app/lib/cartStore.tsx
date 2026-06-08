@@ -20,6 +20,7 @@ type CartCtx = {
   removeItem: (id: number) => void
   updateQty: (id: number, qty: number) => void
   clearCart: () => void
+  clearItems: () => void
   setTableNo: (t: string) => void
   setOrderType: (t: string) => void
   setMember: (id: string, phone: string) => void
@@ -66,6 +67,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setPhone('')
   }
 
+  const clearItems = () => setItems([])
+
   const setMember = (id: string, ph: string) => {
     setIsMember(true)
     setUserId(id)
@@ -90,6 +93,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         removeItem,
         updateQty,
         clearCart,
+        clearItems,
         setTableNo,
         setOrderType,
         setMember,

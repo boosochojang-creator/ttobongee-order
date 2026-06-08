@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 
 const TABLES = [
@@ -16,12 +16,24 @@ const TABLES = [
 ]
 
 export default function TablePage() {
+  return <Suspense><TablePageContent /></Suspense>
+}
+
+function TablePageContent() {
   const router = useRouter()
-  const { setTableNo, setOrderType } = useCart()
+  const params = useSearchParams()
+  const { setTableNo, setOrderType, clearItems } = useCart()
   const [showPopup, setShowPopup] = useState(false)
+  const [confirmTable, setConfirmTable] = useState<typeof TABLES[0] | null>(null)
   const audioStarted = useRef(false)
 
   useEffect(() => {
+    const tableParam = params.get('table')
+    if (tableParam) {
+      // QR 직접 스캔 진입: 해당 테이블 확인 팝업
+      const found = TABLES.find(t => String(t.no) === tableParam)
+      if (found) setConfirmTable(found)
+    }
     const closed = sessionStorage.getItem('music-popup-closed')
     if (!closed) setShowPopup(true)
   }, [])
@@ -159,6 +171,55 @@ export default function TablePage() {
           <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다.
         </div>
       </div>
+
+      {/* QR 스캔 테이블 확인 팝업 */}
+      {confirmTable && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.85)',
+          zIndex:400, display:'flex', alignItems:'flex-end', justifyContent:'center'
+        }}>
+          <div style={{
+            background:'#1c1c1c', borderRadius:'20px 20px 0 0',
+            padding:'28px 24px 48px', width:'100%', maxWidth:'480px',
+            borderTop:'2px solid #c8a900'
+          }}>
+            <div style={{fontSize:13, color:'#888', marginBottom:8}}>QR 코드로 진입하셨습니다</div>
+            <div style={{fontSize:26, fontWeight:900, color:'#fff', marginBottom:6}}>
+              {confirmTable.label}{confirmTable.sub !== '테이블' ? ` (${confirmTable.sub})` : ''} 테이블
+            </div>
+            <div style={{fontSize:16, color:'#ccc', marginBottom:28}}>
+              지금 앉아 계신 자리가 맞으신가요?
+            </div>
+            <button
+              onClick={() => {
+                beep()
+                clearItems()
+                setTableNo(String(confirmTable.no))
+                setOrderType('dine_in')
+                router.push('/store/baegun/menu')
+              }}
+              style={{
+                width:'100%', padding:'16px',
+                background:'#c8a900', color:'#111',
+                fontSize:17, fontWeight:900,
+                borderRadius:12, border:'none', cursor:'pointer', marginBottom:12
+              }}
+            >
+              네, 맞아요 — 주문하기
+            </button>
+            <button
+              onClick={() => setConfirmTable(null)}
+              style={{
+                width:'100%', padding:'13px',
+                background:'none', color:'#666',
+                fontSize:14, border:'1px solid #333', borderRadius:12, cursor:'pointer'
+              }}
+            >
+              아니요, 다른 테이블 선택
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
