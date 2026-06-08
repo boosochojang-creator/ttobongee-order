@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useRef, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 
 const TABLES = [
@@ -15,25 +15,16 @@ const TABLES = [
   { no: 9, label: '외부2', sub: '외부석' },
 ]
 
-export default function TablePage() {
-  return <Suspense><TablePageContent /></Suspense>
-}
+const GRADE_LABEL: Record<string, string> = { gold: '🥇 골드 단골', silver: '🥈 실버 단골', bronze: '🥉 브론즈 단골' }
+const GRADE_COLOR: Record<string, string> = { gold: '#FFD700', silver: '#C0C0C0', bronze: '#CD7F32' }
 
-function TablePageContent() {
+export default function TablePage() {
   const router = useRouter()
-  const params = useSearchParams()
-  const { setTableNo, setOrderType, clearItems } = useCart()
+  const { setTableNo, setOrderType, clearItems, isMember, phone, grade, visitCount } = useCart()
   const [showPopup, setShowPopup] = useState(false)
-  const [confirmTable, setConfirmTable] = useState<typeof TABLES[0] | null>(null)
   const audioStarted = useRef(false)
 
   useEffect(() => {
-    const tableParam = params.get('table')
-    if (tableParam) {
-      // QR 직접 스캔 진입: 해당 테이블 확인 팝업
-      const found = TABLES.find(t => String(t.no) === tableParam)
-      if (found) setConfirmTable(found)
-    }
     const closed = sessionStorage.getItem('music-popup-closed')
     if (!closed) setShowPopup(true)
   }, [])
@@ -54,7 +45,6 @@ function TablePageContent() {
         osc.start(ctx.currentTime + start)
         osc.stop(ctx.currentTime + start + dur + 0.1)
       }
-      // 잔잔한 멜로디 (식욕 돋는 느낌)
       const melody = [523,659,784,659,523,392,440,523,659,784,880,784,659,523]
       melody.forEach((freq, i) => playNote(freq, i * 0.35, 0.3, 0.06))
     } catch {}
@@ -64,13 +54,6 @@ function TablePageContent() {
     sessionStorage.setItem('music-popup-closed', '1')
     setShowPopup(false)
     startMusic()
-  }
-
-  function select(t: { no: number; label: string }) {
-    beep()
-    setTableNo(String(t.no))
-    setOrderType('dine_in')
-    router.push('/store/baegun/menu')
   }
 
   function beep() {
@@ -86,8 +69,17 @@ function TablePageContent() {
     } catch {}
   }
 
+  function select(t: { no: number }) {
+    beep()
+    clearItems()
+    setTableNo(String(t.no))
+    setOrderType('dine_in')
+    router.push('/store/baegun/menu')
+  }
+
   function takeout() {
     beep()
+    clearItems()
     setTableNo('0')
     setOrderType('takeout')
     router.push('/store/baegun/menu')
@@ -145,8 +137,32 @@ function TablePageContent() {
       )}
 
       <div className="table-map">
-        <h2 style={{fontSize:28, fontWeight:900}}>어느 자리에 계세요?</h2>
-        <p style={{fontSize:18, color:'#aaa', marginBottom:24}}>앉아 계신 테이블 번호를 눌러주세요</p>
+        {/* 회원/비회원 인사말 */}
+        {isMember ? (
+          <>
+            <h2 style={{fontSize:28, fontWeight:900, marginBottom:8}}>
+              {phone.slice(-4)}님 어서오세요! 👋
+            </h2>
+            <div style={{display:'flex', gap:8, justifyContent:'center', alignItems:'center', marginBottom:8}}>
+              <span style={{
+                background: `${GRADE_COLOR[grade] ?? '#CD7F32'}22`,
+                color: GRADE_COLOR[grade] ?? '#CD7F32',
+                border: `1px solid ${GRADE_COLOR[grade] ?? '#CD7F32'}66`,
+                borderRadius:20, padding:'3px 12px', fontSize:13, fontWeight:700,
+              }}>
+                {GRADE_LABEL[grade] ?? '🥉 브론즈 단골'}
+              </span>
+              <span style={{fontSize:13, color:'#888'}}>· {visitCount}번째 방문</span>
+            </div>
+          </>
+        ) : (
+          <h2 style={{fontSize:28, fontWeight:900}}>어느 자리에 계세요?</h2>
+        )}
+
+        <p style={{fontSize:16, color:'#aaa', marginBottom:24, lineHeight:1.7}}>
+          테이블 또는 좌석 바닥에 부착된 번호를 확인 후<br/>해당 번호를 눌러주세요
+        </p>
+
         <div className="table-grid">
           {TABLES.map(t => (
             <button key={t.no} className="table-btn" onClick={() => select(t)}>
@@ -155,71 +171,29 @@ function TablePageContent() {
             </button>
           ))}
         </div>
+
         <button className="takeout-btn" onClick={takeout}>
           🛍️ 포장 주문
         </button>
+
         <div style={{
           marginTop:28, padding:'20px 16px',
           textAlign:'center', fontSize:14,
           lineHeight:1.9, color:'#CCCCCC'
         }}>
-          🎁 주문 전{' '}
-          <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
-          <span style={{color:'#FF6B00', fontWeight:700}}>5% 추가 할인</span>{' '}
-          혜택도 놓치지 마세요!<br/>
-          오늘도{' '}
-          <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다.
+          {isMember ? (
+            <>오늘도 <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다 😊</>
+          ) : (
+            <>🎁 주문 전{' '}
+              <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
+              <span style={{color:'#FF6B00', fontWeight:700}}>5% 추가 할인</span>{' '}
+              혜택도 놓치지 마세요!<br/>
+              오늘도{' '}
+              <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다.
+            </>
+          )}
         </div>
       </div>
-
-      {/* QR 스캔 테이블 확인 팝업 */}
-      {confirmTable && (
-        <div style={{
-          position:'fixed', inset:0, background:'rgba(0,0,0,0.85)',
-          zIndex:400, display:'flex', alignItems:'flex-end', justifyContent:'center'
-        }}>
-          <div style={{
-            background:'#1c1c1c', borderRadius:'20px 20px 0 0',
-            padding:'28px 24px 48px', width:'100%', maxWidth:'480px',
-            borderTop:'2px solid #c8a900'
-          }}>
-            <div style={{fontSize:13, color:'#888', marginBottom:8}}>QR 코드로 진입하셨습니다</div>
-            <div style={{fontSize:26, fontWeight:900, color:'#fff', marginBottom:6}}>
-              {confirmTable.label}{confirmTable.sub !== '테이블' ? ` (${confirmTable.sub})` : ''} 테이블
-            </div>
-            <div style={{fontSize:16, color:'#ccc', marginBottom:28}}>
-              지금 앉아 계신 자리가 맞으신가요?
-            </div>
-            <button
-              onClick={() => {
-                beep()
-                clearItems()
-                setTableNo(String(confirmTable.no))
-                setOrderType('dine_in')
-                router.push('/store/baegun/menu')
-              }}
-              style={{
-                width:'100%', padding:'16px',
-                background:'#c8a900', color:'#111',
-                fontSize:17, fontWeight:900,
-                borderRadius:12, border:'none', cursor:'pointer', marginBottom:12
-              }}
-            >
-              네, 맞아요 — 주문하기
-            </button>
-            <button
-              onClick={() => setConfirmTable(null)}
-              style={{
-                width:'100%', padding:'13px',
-                background:'none', color:'#666',
-                fontSize:14, border:'1px solid #333', borderRadius:12, cursor:'pointer'
-              }}
-            >
-              아니요, 다른 테이블 선택
-            </button>
-          </div>
-        </div>
-      )}
     </main>
   )
 }
