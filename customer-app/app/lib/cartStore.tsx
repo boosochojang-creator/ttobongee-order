@@ -16,6 +16,8 @@ type CartCtx = {
   isMember: boolean
   userId: string | null
   phone: string
+  grade: string
+  visitCount: number
   addItem: (item: { id: number; name: string; price: number }) => void
   removeItem: (id: number) => void
   updateQty: (id: number, qty: number) => void
@@ -23,7 +25,7 @@ type CartCtx = {
   clearItems: () => void
   setTableNo: (t: string) => void
   setOrderType: (t: string) => void
-  setMember: (id: string, phone: string) => void
+  setMember: (id: string, phone: string, grade?: string, visitCount?: number) => void
   totalQty: number
   totalAmount: number
   discountAmount: number
@@ -39,6 +41,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isMember, setIsMember] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [phone, setPhone] = useState('')
+  const [grade, setGrade] = useState('bronze')
+  const [visitCount, setVisitCount] = useState(0)
 
   const addItem = (item: { id: number; name: string; price: number }) => {
     setItems((prev) => {
@@ -65,14 +69,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setIsMember(false)
     setUserId(null)
     setPhone('')
+    setGrade('bronze')
+    setVisitCount(0)
   }
 
   const clearItems = () => setItems([])
 
-  const setMember = (id: string, ph: string) => {
+  const setMember = (id: string, ph: string, gr?: string, vc?: number) => {
     setIsMember(true)
     setUserId(id)
     setPhone(ph)
+    if (gr !== undefined) setGrade(gr)
+    if (vc !== undefined) setVisitCount(vc)
   }
 
   const totalQty = items.reduce((sum, i) => sum + i.qty, 0)
@@ -89,6 +97,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         isMember,
         userId,
         phone,
+        grade,
+        visitCount,
         addItem,
         removeItem,
         updateQty,

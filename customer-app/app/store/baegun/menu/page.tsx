@@ -21,9 +21,12 @@ const FORTUNES = [
   '지금이 바로 치킨 먹을 최고의 타이밍!',
 ]
 
+const GRADE_LABEL: Record<string, string> = { gold: '🥇 골드 단골', silver: '🥈 실버 단골', bronze: '🥉 브론즈 단골' }
+const GRADE_COLOR: Record<string, string> = { gold: '#FFD700', silver: '#C0C0C0', bronze: '#CD7F32' }
+
 export default function MenuPage() {
   const router = useRouter()
-  const { addItem, updateQty, items, totalQty, finalAmount, tableNo, orderType, isMember } = useCart()
+  const { addItem, updateQty, items, totalQty, finalAmount, tableNo, orderType, isMember, phone, grade, visitCount } = useCart()
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [activeCat, setActiveCat] = useState('세트메뉴')
   const [showCall, setShowCall] = useState(false)
@@ -70,8 +73,33 @@ export default function MenuPage() {
         <span className="table-badge">{label}</span>
       </div>
 
-      {/* 회원 유도 배너 */}
-      {showLoginBanner && (
+      {/* 회원 배너 */}
+      {isMember ? (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(200,169,0,0.15), rgba(200,169,0,0.05))',
+          border: `1px solid ${GRADE_COLOR[grade] ?? '#7a6400'}44`,
+          borderRadius: 12, padding: '16px 18px', margin: '12px 16px 0',
+          display: 'flex', alignItems: 'center', gap: 14,
+        }}>
+          <div style={{ fontSize: 36 }}>😊</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#f0f0f0' }}>
+              {phone.slice(-4)}님, 다시 오셨군요!
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{
+                background: `${GRADE_COLOR[grade] ?? '#CD7F32'}22`,
+                color: GRADE_COLOR[grade] ?? '#CD7F32',
+                border: `1px solid ${GRADE_COLOR[grade] ?? '#CD7F32'}66`,
+                borderRadius: 20, padding: '2px 10px', fontSize: 13, fontWeight: 700,
+              }}>
+                {GRADE_LABEL[grade] ?? '🥉 브론즈 단골'}
+              </span>
+              <span style={{ fontSize: 13, color: '#888' }}>· {visitCount}번째 방문</span>
+            </div>
+          </div>
+        </div>
+      ) : showLoginBanner && (
         <div style={{
           background:'linear-gradient(135deg, rgba(200,169,0,0.18), rgba(200,169,0,0.06))',
           border:'1px solid #7a6400', borderRadius:12,

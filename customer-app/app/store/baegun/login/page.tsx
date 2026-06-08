@@ -19,22 +19,28 @@ export default function LoginPage() {
     try {
       // upsert 회원
       const { data: existing } = await supabase
-        .from('users').select('id').eq('store_id', 'baegun').eq('phone', digits).single()
+        .from('users').select('id, grade, visit_count').eq('store_id', 'baegun').eq('phone', digits).single()
 
       let uid: string
+      let memberGrade = 'bronze'
+      let memberVisitCount = 0
       if (existing) {
         uid = existing.id
+        memberGrade = existing.grade ?? 'bronze'
+        memberVisitCount = existing.visit_count ?? 0
         await supabase.from('users').update({
           last_visit: new Date().toISOString()
         }).eq('id', uid)
       } else {
         const { data: newUser, error: err } = await supabase.from('users').insert({
           store_id: 'baegun', phone: digits
-        }).select('id').single()
+        }).select('id, grade, visit_count').single()
         if (err || !newUser) throw err
         uid = newUser.id
+        memberGrade = newUser.grade ?? 'bronze'
+        memberVisitCount = newUser.visit_count ?? 0
       }
-      setMember(uid, digits)
+      setMember(uid, digits, memberGrade, memberVisitCount)
       router.back()
     } catch {
       setError('오류가 발생했어요. 다시 시도해주세요')
