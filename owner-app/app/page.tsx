@@ -71,6 +71,9 @@ export default function OwnerDashboard() {
   const [closingConfirm, setClosingConfirm] = useState(false)
   const [bizMonth, setBizMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
   const [bizYear, setBizYear] = useState(new Date().getFullYear())
+  const [pinDB, setPinDB] = useState('1234')
+  const [pinChangeForm, setPinChangeForm] = useState({ current: '', new1: '', new2: '' })
+  const [pinChangeMsg, setPinChangeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const seenIds = useRef(new Set<string>())
   const audioRef = useRef<AudioContext | null>(null)
   const isFirst = useRef(true)
@@ -202,6 +205,11 @@ export default function OwnerDashboard() {
     loadYearlyReports(bizYear)
   }, [authed, tab, bizSubTab, bizYear, loadYearlyReports])
 
+  useEffect(() => {
+    supabase.from('stores').select('pin_code').eq('id', 'baegun').single()
+      .then(({ data }) => { if (data?.pin_code) setPinDB(data.pin_code) })
+  }, [])
+
   const loadMenus = async () => {
     const { data } = await supabase.from('menus').select('*').eq('store_id', 'baegun').order('category').order('sort_order')
     if (data) setMenus(data)
@@ -303,6 +311,26 @@ export default function OwnerDashboard() {
     await loadTodayReport()
   }
 
+  const changePIN = async () => {
+    setPinChangeMsg(null)
+    if (pinChangeForm.current !== pinDB) {
+      setPinChangeMsg({ type: 'error', text: '현재 PIN이 올바르지 않아요' })
+      return
+    }
+    if (!/^\d{4}$/.test(pinChangeForm.new1)) {
+      setPinChangeMsg({ type: 'error', text: '새 PIN은 숫자 4자리여야 해요' })
+      return
+    }
+    if (pinChangeForm.new1 !== pinChangeForm.new2) {
+      setPinChangeMsg({ type: 'error', text: '새 PIN 확인이 일치하지 않아요' })
+      return
+    }
+    await supabase.from('stores').update({ pin_code: pinChangeForm.new1 }).eq('id', 'baegun')
+    setPinDB(pinChangeForm.new1)
+    setPinChangeForm({ current: '', new1: '', new2: '' })
+    setPinChangeMsg({ type: 'success', text: 'PIN이 변경되었습니다' })
+  }
+
   if (!authed) return (
     <div className="pin-screen">
       <div className="brand">🍗 또봉이통닭 점주</div>
@@ -323,7 +351,7 @@ export default function OwnerDashboard() {
   )
 
   function handlePin() {
-    if (pin === '1234') { setAuthed(true) }
+    if (pin === pinDB) { setAuthed(true) }
     else { setPinError('PIN이 올바르지 않아요'); setPin('') }
   }
 
@@ -849,6 +877,42 @@ export default function OwnerDashboard() {
                 {yearTotal === 0 && <div style={{ textAlign: 'center', color: '#444', fontSize: 13, paddingTop: 12 }}>{bizYear}년 영업 기록 없음</div>}
               </div>
             )}
+
+            {/* PIN 변경 */}
+            <div style={{ margin: '16px 16px 0', background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#aaa', marginBottom: 14 }}>🔐 PIN 변경</div>
+              {(['current', 'new1', 'new2'] as const).map((key, i) => (
+                <div key={key} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>
+                    {i === 0 ? '현재 PIN' : i === 1 ? '새 PIN (숫자 4자리)' : '새 PIN 확인'}
+                  </div>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={pinChangeForm[key]}
+                    onChange={e => { setPinChangeForm(p => ({ ...p, [key]: e.target.value })); setPinChangeMsg(null) }}
+                    placeholder="••••"
+                    style={{
+                      width: '100%', padding: '10px 12px', background: '#111',
+                      border: '1px solid #333', borderRadius: 8, color: '#fff',
+                      fontSize: 18, letterSpacing: 6, boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              ))}
+              {pinChangeMsg && (
+                <div style={{ fontSize: 13, marginBottom: 10, color: pinChangeMsg.type === 'success' ? '#3ac47d' : '#e84040' }}>
+                  {pinChangeMsg.type === 'success' ? '✅ ' : '❌ '}{pinChangeMsg.text}
+                </div>
+              )}
+              <button
+                onClick={changePIN}
+                style={{ width: '100%', padding: 13, background: '#c8a900', color: '#111', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              >
+                PIN 변경하기
+              </button>
+            </div>
 
             {/* 마감 확인 팝업 */}
             {closingConfirm && (
