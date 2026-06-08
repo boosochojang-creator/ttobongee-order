@@ -44,6 +44,11 @@ export default function OwnerDashboard() {
   const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState({ name: '', price: '' })
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addForm, setAddForm] = useState({ category: '치킨류', name: '', price: '' })
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
   const seenIds = useRef(new Set<string>())
   const audioRef = useRef<AudioContext | null>(null)
   const isFirst = useRef(true)
@@ -167,6 +172,31 @@ export default function OwnerDashboard() {
 
   const toggleMenu = async (id: number, cur: boolean) => {
     await supabase.from('menus').update({ is_available: !cur }).eq('id', id)
+    await loadMenus()
+  }
+
+  const addMenu = async () => {
+    if (!addForm.name.trim() || !addForm.price) return
+    await supabase.from('menus').insert({
+      store_id: 'baegun', category: addForm.category,
+      name: addForm.name.trim(), price: parseInt(addForm.price),
+      sort_order: 999, is_available: true,
+    })
+    setAddForm({ category: '치킨류', name: '', price: '' })
+    setShowAddForm(false)
+    await loadMenus()
+  }
+
+  const saveEdit = async () => {
+    if (!editingId || !editForm.name.trim() || !editForm.price) return
+    await supabase.from('menus').update({ name: editForm.name.trim(), price: parseInt(editForm.price) }).eq('id', editingId)
+    setEditingId(null)
+    await loadMenus()
+  }
+
+  const deleteMenu = async (id: number) => {
+    await supabase.from('menus').delete().eq('id', id)
+    setDeleteConfirmId(null)
     await loadMenus()
   }
 
@@ -309,21 +339,128 @@ export default function OwnerDashboard() {
       )}
 
       {/* 메뉴 관리 */}
-      {tab === 'menu' && (
-        <div className="menu-manage">
-          {menus.map(m => (
-            <div key={m.id} className="menu-row">
-              <div className="menu-row-info">
-                <div className="menu-row-name">{m.name}</div>
-                <div className="menu-row-sub">{m.category} · {won(m.price)}</div>
+      {tab === 'menu' && (() => {
+        const activeMenus = menus.filter(m => m.is_available !== false)
+        const inactiveMenus = menus.filter(m => m.is_available === false)
+
+        const MenuRow = ({ m }: { m: any }) => (
+          <div key={m.id} className="menu-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            {editingId === m.id ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #555', borderRadius: 8, padding: '8px 12px', fontSize: 14 }}
+                />
+                <input
+                  type="number"
+                  value={editForm.price}
+                  onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
+                  style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #555', borderRadius: 8, padding: '8px 12px', fontSize: 14 }}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={saveEdit} style={{ flex: 1, padding: '8px', background: '#c8a900', color: '#111', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>저장</button>
+                  <button onClick={() => setEditingId(null)} style={{ flex: 1, padding: '8px', background: '#2a2a2a', color: '#aaa', border: '1px solid #444', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>취소</button>
+                </div>
               </div>
-              <button className={`toggle-btn ${m.is_available ? 'on' : 'off'}`} onClick={() => toggleMenu(m.id, m.is_available)}>
-                {m.is_available ? '판매중' : '품절'}
+            ) : deleteConfirmId === m.id ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 13, color: '#e84040' }}>「{m.name}」 을(를) 삭제할까요?</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => deleteMenu(m.id)} style={{ flex: 1, padding: '8px', background: '#e84040', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>삭제</button>
+                  <button onClick={() => setDeleteConfirmId(null)} style={{ flex: 1, padding: '8px', background: '#2a2a2a', color: '#aaa', border: '1px solid #444', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>취소</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="menu-row-info">
+                  <div className="menu-row-name" style={{ opacity: m.is_available === false ? 0.45 : 1 }}>{m.name}</div>
+                  <div className="menu-row-sub">{m.category} · {won(m.price)}</div>
+                </div>
+                <button onClick={() => { setEditingId(m.id); setEditForm({ name: m.name, price: String(m.price) }) }}
+                  style={{ padding: '6px 10px', background: '#2a2a2a', color: '#ccc', border: '1px solid #444', borderRadius: 8, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
+                  수정
+                </button>
+                <button onClick={() => setDeleteConfirmId(m.id)}
+                  style={{ padding: '6px 10px', background: 'rgba(232,64,64,0.12)', color: '#e84040', border: '1px solid rgba(232,64,64,0.3)', borderRadius: 8, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
+                  삭제
+                </button>
+                <button className={`toggle-btn ${m.is_available ? 'on' : 'off'}`} onClick={() => toggleMenu(m.id, m.is_available)}>
+                  {m.is_available ? '판매중' : '품절'}
+                </button>
+              </div>
+            )}
+          </div>
+        )
+
+        return (
+          <div className="menu-manage">
+            {/* 메뉴 추가 */}
+            <div style={{ marginBottom: 16 }}>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                style={{
+                  width: '100%', padding: '12px',
+                  background: showAddForm ? '#2a2a2a' : '#c8a900',
+                  color: showAddForm ? '#aaa' : '#111',
+                  border: showAddForm ? '1px solid #333' : 'none',
+                  borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                {showAddForm ? '✕ 취소' : '+ 메뉴 추가'}
               </button>
+              {showAddForm && (
+                <div style={{ background: '#1c1c1c', border: '1px solid #333', borderRadius: 12, padding: '16px', marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <select
+                    value={addForm.category}
+                    onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}
+                    style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: 8, padding: '10px 12px', fontSize: 14 }}
+                  >
+                    {['세트메뉴', '치킨류', '안주류', '음료/주류'].map(c => <option key={c}>{c}</option>)}
+                  </select>
+                  <input
+                    placeholder="메뉴명"
+                    value={addForm.name}
+                    onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                    style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: 8, padding: '10px 12px', fontSize: 14 }}
+                  />
+                  <input
+                    placeholder="가격 (숫자만)"
+                    type="number"
+                    value={addForm.price}
+                    onChange={e => setAddForm(f => ({ ...f, price: e.target.value }))}
+                    style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: 8, padding: '10px 12px', fontSize: 14 }}
+                  />
+                  <button
+                    onClick={addMenu}
+                    disabled={!addForm.name.trim() || !addForm.price}
+                    style={{
+                      padding: '12px', background: '#c8a900', color: '#111',
+                      border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
+                      cursor: 'pointer', opacity: addForm.name.trim() && addForm.price ? 1 : 0.4,
+                    }}
+                  >
+                    저장
+                  </button>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+
+            {/* 판매중 메뉴 */}
+            {activeMenus.map(m => <MenuRow key={m.id} m={m} />)}
+
+            {/* 품절 메뉴 */}
+            {inactiveMenus.length > 0 && (
+              <>
+                <div style={{ fontSize: 12, color: '#555', padding: '14px 0 6px', borderTop: '1px solid #2a2a2a', marginTop: 4 }}>
+                  품절 처리된 메뉴 ({inactiveMenus.length})
+                </div>
+                {inactiveMenus.map(m => <MenuRow key={m.id} m={m} />)}
+              </>
+            )}
+          </div>
+        )
+      })()}
 
       {/* 매출 내역 */}
       {tab === 'sales' && (() => {
