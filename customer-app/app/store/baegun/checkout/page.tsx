@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
+import LegalFooter from '../../../lib/LegalFooter'
 
 type PayMethod = 'card' | 'kakao' | 'toss' | 'cash'
 const won = (n: number) => n.toLocaleString() + '원'
@@ -137,10 +138,21 @@ export default function CheckoutPage() {
 
         {error && <p style={{ color: 'var(--red)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
 
-        <div style={{ height: 20 }} />
+        {/* 약관 동의 안내 */}
+        <div style={{ fontSize: 12, color: '#555', lineHeight: 1.9, marginTop: 16, marginBottom: 4 }}>
+          주문하기 버튼을 누르면{' '}
+          <a href="/terms" style={{ color: '#888', textDecoration: 'underline' }}>이용약관</a>,{' '}
+          <a href="/privacy" style={{ color: '#888', textDecoration: 'underline' }}>개인정보처리방침</a>,{' '}
+          <a href="/refund" style={{ color: '#888', textDecoration: 'underline' }}>환불정책</a>에{' '}
+          동의한 것으로 간주됩니다.
+        </div>
+
+        <div style={{ height: 12 }} />
         <button className="btn-primary" onClick={handleOrder} disabled={loading}>
           {loading ? '처리 중...' : `${won(finalAmount)} 주문하기`}
         </button>
+
+        <LegalFooter />
       </div>
     </main>
   )

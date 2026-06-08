@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
+import LegalFooter from '../../../lib/LegalFooter'
 
 type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean }
 
@@ -146,6 +147,9 @@ export default function MenuPage() {
           )
         })}
       </div>
+
+      {/* 법적 고지 푸터 */}
+      <LegalFooter />
 
       {/* 직원 호출 버튼 */}
       <button className="call-fab" onClick={() => setShowCall(true)} style={{
