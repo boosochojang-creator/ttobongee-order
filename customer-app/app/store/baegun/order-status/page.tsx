@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
+import LegalFooter from '../../../lib/LegalFooter'
 
 type Status = 'pending' | 'paid' | 'cash_pending' | 'accepted' | 'cooking' | 'done' | 'canceled'
 
@@ -138,6 +139,7 @@ function StatusContent() {
           다시 주문하기
         </button>
       </div>
+      <LegalFooter />
     </main>
   )
 
@@ -192,6 +194,7 @@ function StatusContent() {
           </div>
         )}
       </div>
+      <LegalFooter />
     </main>
   )
 }

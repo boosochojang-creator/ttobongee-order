@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
+import LegalFooter from '../../../lib/LegalFooter'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -76,6 +77,7 @@ export default function LoginPage() {
           할인 없이 그냥 주문할게요
         </button>
       </div>
+      <LegalFooter />
     </main>
   )
 }

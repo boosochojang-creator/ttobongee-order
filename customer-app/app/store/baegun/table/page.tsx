@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
+import LegalFooter from '../../../lib/LegalFooter'
 
 const TABLES = [
   { no: 1, label: '1번', sub: '테이블' },
@@ -194,6 +195,7 @@ export default function TablePage() {
           )}
         </div>
       </div>
+      <LegalFooter />
     </main>
   )
 }

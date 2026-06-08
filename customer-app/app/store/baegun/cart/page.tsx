@@ -1,6 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
+import LegalFooter from '../../../lib/LegalFooter'
 
 const won = (n: number) => n.toLocaleString() + '원'
 
@@ -20,6 +21,7 @@ export default function CartPage() {
         <button className="btn-primary" style={{ marginTop: 16, width: 'auto', padding: '12px 32px' }}
           onClick={() => router.back()}>메뉴 보러 가기</button>
       </div>
+      <LegalFooter />
     </main>
   )
 
@@ -71,6 +73,7 @@ export default function CartPage() {
           결제하러 가기
         </button>
       </div>
+      <LegalFooter />
     </main>
   )
 }
