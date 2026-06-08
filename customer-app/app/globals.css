@@ -136,7 +136,7 @@ a { text-decoration: none; color: inherit; }
 /* 카테고리 탭 (루나 제안: sticky) */
 .cat-tabs {
   position: sticky;
-  top: 57px;
+  top: 55px;
   z-index: 90;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -166,6 +166,7 @@ a { text-decoration: none; color: inherit; }
 
 /* 메뉴 리스트 */
 .menu-list { padding: 8px 0 120px; }
+.menu-list > div { scroll-margin-top: 114px; }
 .menu-item {
   display: flex;
   align-items: center;

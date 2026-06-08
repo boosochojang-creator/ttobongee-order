@@ -118,7 +118,7 @@ export default function MenuPage() {
       {/* 메뉴 목록 */}
       <div className="menu-list">
         {CATS.map(cat => {
-          const catMenus = menus.filter(m => m.category === cat)
+          const catMenus = menus.filter(m => m.category === cat && m.is_available !== false)
           if (!catMenus.length) return null
           return (
             <div key={cat} ref={el => { catRefs.current[cat] = el }}>
