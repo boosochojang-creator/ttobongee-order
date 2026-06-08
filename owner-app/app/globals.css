@@ -125,15 +125,20 @@ button { cursor: pointer; border: none; font-family: inherit; }
   display: flex;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .owner-tabs button {
   flex: 1;
-  padding: 14px 8px;
-  font-size: 14px;
+  min-width: 60px;
+  padding: 13px 6px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text2);
   background: none;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .owner-tabs button.active { color: var(--gold); border-bottom-color: var(--gold); }
 

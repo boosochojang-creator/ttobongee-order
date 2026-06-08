@@ -39,7 +39,7 @@ export default function OwnerDashboard() {
   const [orders, setOrders] = useState<Order[]>([])
   const [menus, setMenus] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
-  const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales'>('orders')
+  const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business'>('orders')
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
   const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
@@ -49,6 +49,13 @@ export default function OwnerDashboard() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({ category: '치킨류', name: '', price: '' })
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const [bizSubTab, setBizSubTab] = useState<'daily' | 'monthly' | 'yearly'>('daily')
+  const [todayReport, setTodayReport] = useState<any>(null)
+  const [monthlyReports, setMonthlyReports] = useState<any[]>([])
+  const [yearlyReports, setYearlyReports] = useState<any[]>([])
+  const [closingConfirm, setClosingConfirm] = useState(false)
+  const [bizMonth, setBizMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
+  const [bizYear, setBizYear] = useState(new Date().getFullYear())
   const seenIds = useRef(new Set<string>())
   const audioRef = useRef<AudioContext | null>(null)
   const isFirst = useRef(true)
@@ -123,6 +130,19 @@ export default function OwnerDashboard() {
     })
   }, [playAlert])
 
+  const loadMonthlyReports = useCallback(async (year: number, month: number) => {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const { data } = await supabase.from('daily_reports').select('*')
+      .eq('store_id', 'baegun').gte('date', `${year}-${pad(month)}-01`).lte('date', `${year}-${pad(month)}-31`).order('date')
+    setMonthlyReports(data || [])
+  }, [])
+
+  const loadYearlyReports = useCallback(async (year: number) => {
+    const { data } = await supabase.from('daily_reports').select('date, total_sales, order_count')
+      .eq('store_id', 'baegun').gte('date', `${year}-01-01`).lte('date', `${year}-12-31`)
+    setYearlyReports(data || [])
+  }, [])
+
   useEffect(() => {
     if (!authed) return
     loadOrders()
@@ -150,6 +170,21 @@ export default function OwnerDashboard() {
 
     return () => { supabase.removeChannel(ch); supabase.removeChannel(callCh); clearInterval(poll) }
   }, [authed, loadOrders, playAlert])
+
+  useEffect(() => {
+    if (!authed || tab !== 'business') return
+    loadTodayReport()
+  }, [authed, tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!authed || tab !== 'business' || bizSubTab !== 'monthly') return
+    loadMonthlyReports(bizMonth.year, bizMonth.month)
+  }, [authed, tab, bizSubTab, bizMonth.year, bizMonth.month, loadMonthlyReports])
+
+  useEffect(() => {
+    if (!authed || tab !== 'business' || bizSubTab !== 'yearly') return
+    loadYearlyReports(bizYear)
+  }, [authed, tab, bizSubTab, bizYear, loadYearlyReports])
 
   const loadMenus = async () => {
     const { data } = await supabase.from('menus').select('*').eq('store_id', 'baegun').order('category').order('sort_order')
@@ -198,6 +233,41 @@ export default function OwnerDashboard() {
     await supabase.from('menus').delete().eq('id', id)
     setDeleteConfirmId(null)
     await loadMenus()
+  }
+
+  const loadTodayReport = async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data } = await supabase.from('daily_reports').select('*')
+      .eq('store_id', 'baegun').eq('date', today).maybeSingle()
+    setTodayReport(data || null)
+  }
+
+  const startBusiness = async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    await supabase.from('daily_reports').upsert(
+      { store_id: 'baegun', date: today, start_time: new Date().toISOString() },
+      { onConflict: 'store_id,date' }
+    )
+    await loadTodayReport()
+  }
+
+  const closeBusiness = async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: raw } = await supabase.from('orders')
+      .select('final_amount, payment_method').eq('store_id', 'baegun').eq('status', 'done')
+      .gte('created_at', `${today}T00:00:00`)
+    const list = raw || []
+    const total = list.reduce((s: number, o: any) => s + o.final_amount, 0)
+    const byM = (m: string) => list.filter((o: any) => o.payment_method === m).reduce((s: number, o: any) => s + o.final_amount, 0)
+    const count = list.length
+    await supabase.from('daily_reports').upsert({
+      store_id: 'baegun', date: today, end_time: new Date().toISOString(),
+      total_sales: total, card_sales: byM('card'), cash_sales: byM('cash'),
+      kakao_sales: byM('kakao'), toss_sales: byM('toss'),
+      order_count: count, avg_order_value: count > 0 ? Math.round(total / count) : 0,
+    }, { onConflict: 'store_id,date' })
+    setClosingConfirm(false)
+    await loadTodayReport()
   }
 
   if (!authed) return (
@@ -299,10 +369,11 @@ export default function OwnerDashboard() {
 
       {/* 탭 */}
       <div className="owner-tabs">
-        <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>주문 관리</button>
-        <button className={tab === 'menu' ? 'active' : ''} onClick={() => { setTab('menu'); loadMenus() }}>메뉴 관리</button>
-        <button className={tab === 'members' ? 'active' : ''} onClick={() => { setTab('members'); loadMembers() }}>회원 목록</button>
-        <button className={tab === 'sales' ? 'active' : ''} onClick={() => setTab('sales')}>매출 내역</button>
+        <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>주문</button>
+        <button className={tab === 'menu' ? 'active' : ''} onClick={() => { setTab('menu'); loadMenus() }}>메뉴</button>
+        <button className={tab === 'members' ? 'active' : ''} onClick={() => { setTab('members'); loadMembers() }}>회원</button>
+        <button className={tab === 'sales' ? 'active' : ''} onClick={() => setTab('sales')}>매출</button>
+        <button className={tab === 'business' ? 'active' : ''} onClick={() => setTab('business')}>영업</button>
       </div>
 
       {/* 주문 칸반 */}
@@ -524,6 +595,242 @@ export default function OwnerDashboard() {
                 )}
               </div>
             ))}
+          </div>
+        )
+      })()}
+
+      {/* 영업 관리 */}
+      {tab === 'business' && (() => {
+        const pad2 = (n: number) => String(n).padStart(2, '0')
+        const fmtTime = (iso?: string) => iso
+          ? new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+          : '-'
+
+        // 오늘 실시간 (orders state 기준)
+        const todaySales = orders.filter(o => o.status === 'done')
+        const todaySalesTotal = todaySales.reduce((s, o) => s + o.final_amount, 0)
+        const todayCount = todaySales.length
+
+        // 이달 바 차트
+        const daysInMonth = new Date(bizMonth.year, bizMonth.month, 0).getDate()
+        const monthDays = Array.from({ length: daysInMonth }, (_, i) => {
+          const d = i + 1
+          const dateStr = `${bizMonth.year}-${pad2(bizMonth.month)}-${pad2(d)}`
+          const r = monthlyReports.find(r => r.date === dateStr)
+          return { day: d, total: r?.total_sales || 0 }
+        })
+        const maxMonthDay = Math.max(...monthDays.map(d => d.total), 1)
+        const monthTotal = monthlyReports.reduce((s, r) => s + r.total_sales, 0)
+        const monthCount = monthlyReports.reduce((s, r) => s + r.order_count, 0)
+
+        // 연간 바 차트
+        const yearMonths = Array.from({ length: 12 }, (_, i) => {
+          const m = i + 1
+          const recs = yearlyReports.filter(r => new Date(r.date + 'T12:00:00').getMonth() + 1 === m)
+          return { month: m, total: recs.reduce((s, r) => s + r.total_sales, 0), count: recs.reduce((s, r) => s + r.order_count, 0) }
+        })
+        const maxYearMonth = Math.max(...yearMonths.map(m => m.total), 1)
+        const yearTotal = yearlyReports.reduce((s, r) => s + r.total_sales, 0)
+
+        const SB = ({ label, value, gold }: { label: string; value: string; gold?: boolean }) => (
+          <div style={{ flex: 1, background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 12, padding: '12px 8px', textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: '#666', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: gold ? '#c8a900' : '#ccc' }}>{value}</div>
+          </div>
+        )
+
+        const NavBtn = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) => (
+          <button onClick={onClick} style={{ background: 'none', border: '1px solid #333', color: '#ccc', borderRadius: 8, padding: '6px 16px', cursor: 'pointer', fontSize: 18 }}>{children}</button>
+        )
+
+        return (
+          <div style={{ paddingBottom: 40 }}>
+            {/* 서브탭 */}
+            <div style={{ display: 'flex', borderBottom: '1px solid #222' }}>
+              {(['daily', 'monthly', 'yearly'] as const).map(t => (
+                <button key={t} onClick={() => setBizSubTab(t)} style={{
+                  flex: 1, padding: '11px 8px', fontSize: 13, fontWeight: 600,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: bizSubTab === t ? '#c8a900' : '#666',
+                  borderBottom: `2px solid ${bizSubTab === t ? '#c8a900' : 'transparent'}`,
+                }}>
+                  {t === 'daily' ? '오늘' : t === 'monthly' ? '이달' : '연간'}
+                </button>
+              ))}
+            </div>
+
+            {/* ── 오늘 ── */}
+            {bizSubTab === 'daily' && (
+              <div style={{ padding: 16 }}>
+                {/* 영업 상태 카드 */}
+                <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 18, marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>영업 시작</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: todayReport?.start_time ? '#3ac47d' : '#444' }}>{fmtTime(todayReport?.start_time)}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>마감</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: todayReport?.end_time ? '#c8a900' : '#444' }}>{fmtTime(todayReport?.end_time)}</div>
+                    </div>
+                  </div>
+                  {!todayReport?.start_time ? (
+                    <button onClick={startBusiness} style={{ width: '100%', padding: 14, background: '#3ac47d', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                      🟢 영업 시작
+                    </button>
+                  ) : !todayReport?.end_time ? (
+                    <button onClick={() => setClosingConfirm(true)} style={{ width: '100%', padding: 14, background: '#c8a900', color: '#111', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                      🛎️ 영업 마감
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ textAlign: 'center', fontSize: 14, color: '#3ac47d', fontWeight: 700 }}>✅ 오늘 영업 마감 완료</div>
+                      <button onClick={() => setClosingConfirm(true)} style={{ width: '100%', padding: 11, background: '#2a2a2a', color: '#888', border: '1px solid #333', borderRadius: 10, fontSize: 13, cursor: 'pointer' }}>
+                        재마감 (데이터 갱신)
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 실시간 현황 */}
+                <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 16, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 10 }}>오늘 실시간 현황 (완료 주문)</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <SB label="총 매출" value={won(todaySalesTotal)} gold />
+                    <SB label="주문 수" value={`${todayCount}건`} />
+                    <SB label="평균 객단가" value={todayCount > 0 ? won(Math.round(todaySalesTotal / todayCount)) : '-'} />
+                  </div>
+                </div>
+
+                {/* 마감 데이터 */}
+                {todayReport?.end_time && (
+                  <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 16 }}>
+                    <div style={{ fontSize: 11, color: '#666', marginBottom: 10 }}>마감 집계 데이터</div>
+                    {[{ label: '💳 카드', val: todayReport.card_sales }, { label: '💛 카카오', val: todayReport.kakao_sales },
+                      { label: '💙 토스', val: todayReport.toss_sales }, { label: '💵 현금', val: todayReport.cash_sales }]
+                      .filter(r => r.val > 0).map(r => (
+                      <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#ccc', marginBottom: 6 }}>
+                        <span>{r.label}</span><span>{won(r.val)}</span>
+                      </div>
+                    ))}
+                    <div style={{ borderTop: '1px solid #2a2a2a', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#c8a900', marginTop: 4 }}>
+                      <span>합계</span><span>{won(todayReport.total_sales)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666', marginTop: 6 }}>
+                      <span>주문 {todayReport.order_count}건</span>
+                      <span>평균 {won(todayReport.avg_order_value)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── 이달 ── */}
+            {bizSubTab === 'monthly' && (
+              <div style={{ padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <NavBtn onClick={() => setBizMonth(p => { const d = new Date(p.year, p.month - 2, 1); return { year: d.getFullYear(), month: d.getMonth() + 1 } })}>‹</NavBtn>
+                  <span style={{ fontWeight: 700, fontSize: 16 }}>{bizMonth.year}년 {bizMonth.month}월</span>
+                  <NavBtn onClick={() => setBizMonth(p => { const d = new Date(p.year, p.month, 1); return { year: d.getFullYear(), month: d.getMonth() + 1 } })}>›</NavBtn>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <SB label="월 매출" value={won(monthTotal)} gold />
+                  <SB label="주문" value={`${monthCount}건`} />
+                  <SB label="영업일" value={`${monthlyReports.length}일`} />
+                </div>
+                {/* 일별 바 차트 */}
+                <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 16, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 10 }}>일별 매출</div>
+                  <div style={{ display: 'flex', height: 72, alignItems: 'flex-end', gap: 1 }}>
+                    {monthDays.map(d => (
+                      <div key={d.day} style={{ flex: 1, borderRadius: '2px 2px 0 0', minHeight: d.total > 0 ? 3 : 0,
+                        height: d.total > 0 ? `${Math.max((d.total / maxMonthDay) * 68, 3)}px` : 0,
+                        background: d.total > 0 ? '#c8a900' : 'transparent' }} />
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 1, marginTop: 4 }}>
+                    {monthDays.map(d => (
+                      <div key={d.day} style={{ flex: 1, textAlign: 'center', fontSize: 7, color: '#444' }}>
+                        {d.day === 1 || d.day % 10 === 0 ? d.day : ''}
+                      </div>
+                    ))}
+                  </div>
+                  {monthlyReports.length === 0 && <div style={{ textAlign: 'center', color: '#444', fontSize: 13, paddingTop: 8 }}>데이터 없음</div>}
+                </div>
+                {/* 일별 목록 */}
+                {[...monthlyReports].reverse().map(r => (
+                  <div key={r.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 4px', borderBottom: '1px solid #1e1e1e', fontSize: 14 }}>
+                    <span style={{ color: '#888' }}>{r.date.slice(5)}</span>
+                    <span style={{ color: '#aaa' }}>{r.order_count}건</span>
+                    <span style={{ fontWeight: 700, color: '#c8a900' }}>{won(r.total_sales)}</span>
+                  </div>
+                ))}
+                {monthlyReports.length === 0 && <div style={{ textAlign: 'center', color: '#444', fontSize: 13, paddingTop: 12 }}>이달 영업 기록 없음</div>}
+              </div>
+            )}
+
+            {/* ── 연간 ── */}
+            {bizSubTab === 'yearly' && (
+              <div style={{ padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <NavBtn onClick={() => setBizYear(y => y - 1)}>‹</NavBtn>
+                  <span style={{ fontWeight: 700, fontSize: 16 }}>{bizYear}년</span>
+                  <NavBtn onClick={() => setBizYear(y => y + 1)}>›</NavBtn>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <SB label="연간 매출" value={won(yearTotal)} gold />
+                  <SB label="총 주문" value={`${yearlyReports.reduce((s, r) => s + r.order_count, 0)}건`} />
+                  <SB label="영업일" value={`${yearlyReports.length}일`} />
+                </div>
+                {/* 월별 바 차트 */}
+                <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 16, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 10 }}>월별 매출</div>
+                  <div style={{ display: 'flex', height: 90, alignItems: 'flex-end', gap: 3 }}>
+                    {yearMonths.map(m => (
+                      <div key={m.month} style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                        <div style={{ width: '75%', borderRadius: '3px 3px 0 0', minHeight: m.total > 0 ? 4 : 0,
+                          height: m.total > 0 ? `${Math.max((m.total / maxYearMonth) * 86, 4)}px` : 0,
+                          background: m.total > 0 ? '#c8a900' : '#1e1e1e' }} />
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 3, marginTop: 6 }}>
+                    {yearMonths.map(m => (
+                      <div key={m.month} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#555' }}>{m.month}</div>
+                    ))}
+                  </div>
+                </div>
+                {/* 월별 목록 */}
+                {yearMonths.filter(m => m.total > 0).reverse().map(m => (
+                  <div key={m.month} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 4px', borderBottom: '1px solid #1e1e1e', fontSize: 14 }}>
+                    <span style={{ color: '#888' }}>{m.month}월</span>
+                    <span style={{ color: '#aaa' }}>{m.count}건</span>
+                    <span style={{ fontWeight: 700, color: '#c8a900' }}>{won(m.total)}</span>
+                  </div>
+                ))}
+                {yearTotal === 0 && <div style={{ textAlign: 'center', color: '#444', fontSize: 13, paddingTop: 12 }}>{bizYear}년 영업 기록 없음</div>}
+              </div>
+            )}
+
+            {/* 마감 확인 팝업 */}
+            {closingConfirm && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                <div style={{ background: '#1c1c1c', borderRadius: '20px 20px 0 0', padding: '28px 24px 48px', width: '100%', maxWidth: 480, borderTop: '2px solid #c8a900' }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: '#c8a900', marginBottom: 10 }}>🛎️ 영업 마감</div>
+                  <div style={{ fontSize: 14, color: '#ccc', marginBottom: 24, lineHeight: 1.8 }}>
+                    {todayReport?.end_time
+                      ? '이미 마감된 날입니다. 재마감 시 완료 주문 기준으로 데이터가 갱신됩니다.'
+                      : '오늘 영업을 마감할까요? 완료 주문 기준으로 매출이 집계됩니다.'}
+                  </div>
+                  <button onClick={closeBusiness} style={{ width: '100%', padding: 14, background: '#c8a900', color: '#111', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
+                    마감하기
+                  </button>
+                  <button onClick={() => setClosingConfirm(false)} style={{ width: '100%', padding: 12, background: 'none', color: '#666', border: '1px solid #333', borderRadius: 10, fontSize: 13, cursor: 'pointer' }}>
+                    취소
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )
       })()}
