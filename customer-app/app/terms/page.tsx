@@ -1,14 +1,14 @@
-'use client'
-import { useRouter } from 'next/navigation'
+import type { Metadata } from 'next'
+import BackButton from '../lib/BackButton'
+
+export const metadata: Metadata = {
+  title: '이용약관 | 또봉이통닭 백운역점',
+}
 
 export default function TermsPage() {
-  const router = useRouter()
   return (
     <main style={{ background: '#111', minHeight: '100vh', color: '#e0e0e0', fontFamily: 'sans-serif' }}>
-      <div style={{ position: 'sticky', top: 0, background: '#111', borderBottom: '1px solid #222', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, zIndex: 10 }}>
-        <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#e0e0e0', fontSize: 20, cursor: 'pointer', padding: 0 }}>←</button>
-        <span style={{ fontWeight: 700, fontSize: 16 }}>이용약관</span>
-      </div>
+      <BackButton title="이용약관" />
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 20px 60px', lineHeight: 1.9, fontSize: 14 }}>
         <p style={{ color: '#888', marginBottom: 24 }}>시행일: 2024년 1월 1일</p>
 
