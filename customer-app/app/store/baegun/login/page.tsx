@@ -19,13 +19,12 @@ export default function LoginPage() {
     try {
       // upsert 회원
       const { data: existing } = await supabase
-        .from('users').select('id, visit_count').eq('store_id', 'baegun').eq('phone', digits).single()
+        .from('users').select('id').eq('store_id', 'baegun').eq('phone', digits).single()
 
       let uid: string
       if (existing) {
         uid = existing.id
         await supabase.from('users').update({
-          visit_count: existing.visit_count + 1,
           last_visit: new Date().toISOString()
         }).eq('id', uid)
       } else {

@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase'
 
 type Order = {
   id: string
+  user_id: string | null
   table_no: number
   order_type: string
   status: string
@@ -12,9 +13,23 @@ type Order = {
   is_member: boolean
   created_at: string
   items?: { name_snapshot: string; qty: number; subtotal: number }[]
+  member_info?: { visit_count: number; grade: string } | null
 }
 
 const won = (n: number) => n.toLocaleString() + '원'
+
+function getGrade(visits: number) {
+  if (visits >= 10) return 'gold'
+  if (visits >= 5) return 'silver'
+  return 'bronze'
+}
+
+const GRADE_LABEL: Record<string, string> = {
+  gold: '🥇 골드', silver: '🥈 실버', bronze: '🥉 브론즈'
+}
+const GRADE_COLOR: Record<string, string> = {
+  gold: '#FFD700', silver: '#C0C0C0', bronze: '#CD7F32'
+}
 
 const PAY_LABELS: Record<string, string> = {
   card: '💳 카드', kakao: '💛 카카오', toss: '💙 토스', cash: '💵 현금'
@@ -94,8 +109,9 @@ export default function OwnerDashboard() {
     const today = new Date().toISOString().slice(0, 10)
     const { data } = await supabase
       .from('orders')
-      .select(`id, table_no, order_type, status, final_amount, payment_method, is_member, created_at,
-               order_items(name_snapshot, qty, subtotal)`)
+      .select(`id, user_id, table_no, order_type, status, final_amount, payment_method, is_member, created_at,
+               order_items(name_snapshot, qty, subtotal),
+               users(visit_count, grade)`)
       .eq('store_id', 'baegun')
       .neq('status', 'canceled')
       .gte('created_at', `${today}T00:00:00`)
@@ -103,7 +119,7 @@ export default function OwnerDashboard() {
 
     if (!data) return
 
-    const mapped = data.map((o: any) => ({ ...o, items: o.order_items }))
+    const mapped = data.map((o: any) => ({ ...o, items: o.order_items, member_info: o.users || null }))
 
     // 새 주문 감지 → 알림음
     if (!isFirst.current) {
@@ -192,7 +208,7 @@ export default function OwnerDashboard() {
   }
 
   const loadMembers = async () => {
-    const { data } = await supabase.from('users').select('phone, visit_count, last_visit').eq('store_id', 'baegun').order('last_visit', { ascending: false })
+    const { data } = await supabase.from('users').select('phone, visit_count, total_spent, last_visit, grade').eq('store_id', 'baegun').order('visit_count', { ascending: false })
     if (data) setMembers(data)
   }
 
@@ -202,6 +218,23 @@ export default function OwnerDashboard() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order_id: orderId, status }),
     })
+    if (status === 'done') {
+      const order = orders.find(o => o.id === orderId)
+      if (order?.user_id && order?.is_member) {
+        const { data: user } = await supabase.from('users')
+          .select('visit_count, total_spent').eq('id', order.user_id).single()
+        if (user) {
+          const newVisits = (user.visit_count || 0) + 1
+          const newSpent = (user.total_spent || 0) + order.final_amount
+          await supabase.from('users').update({
+            visit_count: newVisits,
+            total_spent: newSpent,
+            grade: getGrade(newVisits),
+            last_visit: new Date().toISOString().slice(0, 10),
+          }).eq('id', order.user_id)
+        }
+      }
+    }
     await loadOrders()
   }
 
@@ -308,8 +341,13 @@ export default function OwnerDashboard() {
       </div>
       <span className={`pay-badge ${order.payment_method}`}>
         {PAY_LABELS[order.payment_method] || order.payment_method}
-        {order.is_member && ' · 단골'}
+        {order.is_member && !order.member_info && ' · 단골'}
       </span>
+      {order.is_member && order.member_info && (
+        <div style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[order.member_info.grade] || '#c8a900', marginTop: 4 }}>
+          {GRADE_LABEL[order.member_info.grade]} · {order.member_info.visit_count}번째 방문
+        </div>
+      )}
       <ul className="order-items-list">
         {order.items?.map((item, i) => (
           <li key={i}><strong>{item.name_snapshot}</strong> × {item.qty}</li>
@@ -841,10 +879,18 @@ export default function OwnerDashboard() {
           {members.length === 0 && <div className="empty">등록된 단골이 없어요</div>}
           {members.map((m, i) => (
             <div key={i} className="member-row">
-              <div className="member-avatar">👤</div>
+              <div className="member-avatar" style={{ fontSize: 20 }}>
+                {(GRADE_LABEL[m.grade || 'bronze'] || '🥉').split(' ')[0]}
+              </div>
               <div className="member-info">
                 <div className="member-phone">{m.phone}</div>
-                <div className="member-sub">최근 방문: {m.last_visit?.slice(0, 10) || '-'}</div>
+                <div className="member-sub">
+                  <span style={{ color: GRADE_COLOR[m.grade || 'bronze'], fontWeight: 600 }}>
+                    {GRADE_LABEL[m.grade || 'bronze']}
+                  </span>
+                  {' · '}최근 {m.last_visit?.slice(0, 10) || '-'}
+                  {' · '}누적 {won(m.total_spent || 0)}
+                </div>
               </div>
               <span className="visit-badge">{m.visit_count}회</span>
             </div>
