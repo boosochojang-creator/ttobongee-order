@@ -15,6 +15,14 @@ const PAY_OPTIONS: { key: PayMethod; icon: string; label: string }[] = [
   { key: 'cash', icon: '💵', label: '현금결제' },
 ]
 
+const STORE_ID = process.env.NEXT_PUBLIC_PORTONE_STORE_ID!
+
+const CHANNEL_KEY: Record<string, string> = {
+  card: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_CARD || '',
+  kakao: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_KAKAO || '',
+  toss: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS || '',
+}
+
 export default function CheckoutPage() {
   const router = useRouter()
   const { items, tableNo, orderType, isMember, userId, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
@@ -26,49 +34,102 @@ export default function CheckoutPage() {
     if (!items.length) return
     setLoading(true)
     setError('')
+
+    // 1. 주문 생성
+    const status = payMethod === 'cash' ? 'cash_pending' : 'pending'
+    const { data: order, error: orderErr } = await supabase.from('orders').insert({
+      store_id: 'baegun',
+      table_no: Number(tableNo),
+      order_type: orderType,
+      status,
+      total_amount: totalAmount,
+      discount_amount: discountAmount,
+      final_amount: finalAmount,
+      payment_method: payMethod,
+      user_id: userId,
+      is_member: isMember,
+    }).select('id').single()
+
+    if (orderErr || !order) {
+      setError('주문 접수 중 오류가 발생했어요. 다시 시도해주세요.')
+      setLoading(false)
+      return
+    }
+
+    // 2. 주문 상세 저장
+    const orderItems = items.map(i => ({
+      order_id: order.id,
+      menu_id: i.id,
+      name_snapshot: i.name,
+      price_snapshot: i.price,
+      qty: i.qty,
+      subtotal: i.price * i.qty,
+    }))
+    const { error: itemErr } = await supabase.from('order_items').insert(orderItems)
+    if (itemErr) {
+      setError('주문 접수 중 오류가 발생했어요. 다시 시도해주세요.')
+      setLoading(false)
+      return
+    }
+
+    // 3. 현금 결제 → 바로 대기화면
+    if (payMethod === 'cash') {
+      clearCart()
+      router.push(`/store/baegun/order-status?id=${order.id}&cash=1`)
+      return
+    }
+
+    // 4. 전자결제 → PortOne V2 결제창 호출
     try {
-      // 주문 생성 (아렌: cash → cash_pending, 카드 → pending)
-      const status = payMethod === 'cash' ? 'cash_pending' : 'pending'
-      const { data: order, error: orderErr } = await supabase.from('orders').insert({
-        store_id: 'baegun',
-        table_no: Number(tableNo),
-        order_type: orderType,
-        status,
-        total_amount: totalAmount,
-        discount_amount: discountAmount,
-        final_amount: finalAmount,
-        payment_method: payMethod,
-        user_id: userId,
-        is_member: isMember,
-      }).select('id').single()
+      const PortOne = await import('@portone/browser-sdk/v2')
 
-      if (orderErr || !order) throw orderErr
+      const orderName = items.map(i => i.name).join(', ').slice(0, 100)
 
-      // 주문 상세 insert (아렌: snapshot 저장)
-      const orderItems = items.map(i => ({
-        order_id: order.id,
-        menu_id: i.id,
-        name_snapshot: i.name,
-        price_snapshot: i.price,
-        qty: i.qty,
-        subtotal: i.price * i.qty,
-      }))
-      const { error: itemErr } = await supabase.from('order_items').insert(orderItems)
-      if (itemErr) throw itemErr
+      const pgResponse = await PortOne.requestPayment({
+        storeId: STORE_ID,
+        channelKey: CHANNEL_KEY[payMethod],
+        paymentId: order.id,
+        orderName,
+        totalAmount: finalAmount,
+        currency: 'CURRENCY_KRW',
+        payMethod: payMethod === 'card' ? 'CARD' : 'EASY_PAY',
+        ...(payMethod !== 'card' && {
+          easyPay: {
+            easyPayProvider: payMethod === 'kakao' ? 'KAKAOPAY' : 'TOSSPAY',
+          },
+        }),
+      })
+
+      // 결제 취소 또는 실패
+      if (pgResponse?.code !== undefined) {
+        await supabase.from('orders').update({ status: 'canceled' }).eq('id', order.id)
+        setError(pgResponse.message || '결제가 취소되었습니다')
+        setLoading(false)
+        return
+      }
+
+      // 5. 서버 검증
+      const verifyRes = await fetch('/api/payment/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          paymentId: pgResponse?.paymentId ?? order.id,
+          expectedAmount: finalAmount,
+        }),
+      })
+
+      const verifyData = await verifyRes.json()
+      if (!verifyData.ok) {
+        setError(verifyData.error || '결제 검증에 실패했습니다')
+        setLoading(false)
+        return
+      }
 
       clearCart()
-
-      if (payMethod === 'cash') {
-        // 현금: 바로 대기화면으로 (카운터 안내)
-        router.push(`/store/baegun/order-status?id=${order.id}&cash=1`)
-      } else {
-        // 카드/간편결제: PortOne 연동 (현재 MVP는 바로 대기화면)
-        // TODO: PortOne V2 연동 시 여기서 결제창 호출
-        router.push(`/store/baegun/order-status?id=${order.id}`)
-      }
-    } catch (e) {
-      setError('주문 접수 중 오류가 발생했어요. 다시 시도해주세요.')
-    } finally {
+      router.push(`/store/baegun/order-status?id=${order.id}`)
+    } catch (e: any) {
+      setError('결제 처리 중 오류가 발생했어요. 다시 시도해주세요.')
       setLoading(false)
     }
   }
@@ -109,7 +170,7 @@ export default function CheckoutPage() {
         <div className="pay-methods">
           {PAY_OPTIONS.map(o => (
             <button key={o.key} className={`pay-btn${payMethod === o.key ? ' selected' : ''}`}
-              onClick={() => setPayMethod(o.key)}>
+              onClick={() => { setPayMethod(o.key); setError('') }}>
               <span className="pay-icon">{o.icon}</span>
               {o.label}
             </button>
@@ -136,7 +197,15 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {error && <p style={{ color: 'var(--red)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+        {error && (
+          <div style={{
+            background:'#2a0a0a', border:'1px solid #e84040',
+            borderRadius:10, padding:'12px 14px',
+            color:'#e84040', fontSize:14, marginTop:16
+          }}>
+            ❌ {error}
+          </div>
+        )}
 
         {/* 약관 동의 안내 */}
         <div style={{ fontSize: 12, color: '#555', lineHeight: 1.9, marginTop: 16, marginBottom: 4 }}>
@@ -149,7 +218,9 @@ export default function CheckoutPage() {
 
         <div style={{ height: 12 }} />
         <button className="btn-primary" onClick={handleOrder} disabled={loading}>
-          {loading ? '처리 중...' : `${won(finalAmount)} 주문하기`}
+          {loading
+            ? payMethod === 'cash' ? '주문 접수 중...' : '결제창 열리는 중...'
+            : `${won(finalAmount)} ${payMethod === 'cash' ? '주문하기' : '결제하기'}`}
         </button>
 
         <LegalFooter />
