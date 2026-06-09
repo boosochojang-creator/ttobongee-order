@@ -313,10 +313,6 @@ export default function OwnerDashboard() {
 
   const changePIN = async () => {
     setPinChangeMsg(null)
-    if (pinChangeForm.current !== pinDB) {
-      setPinChangeMsg({ type: 'error', text: '현재 PIN이 올바르지 않아요' })
-      return
-    }
     if (!/^\d{4}$/.test(pinChangeForm.new1)) {
       setPinChangeMsg({ type: 'error', text: '새 PIN은 숫자 4자리여야 해요' })
       return
@@ -325,7 +321,16 @@ export default function OwnerDashboard() {
       setPinChangeMsg({ type: 'error', text: '새 PIN 확인이 일치하지 않아요' })
       return
     }
-    await supabase.from('stores').update({ pin_code: pinChangeForm.new1 }).eq('id', 'baegun')
+    const res = await fetch('/api/update-pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPin: pinChangeForm.current, newPin: pinChangeForm.new1 }),
+    })
+    const data = await res.json()
+    if (!data.ok) {
+      setPinChangeMsg({ type: 'error', text: data.error || 'PIN 변경에 실패했어요' })
+      return
+    }
     setPinDB(pinChangeForm.new1)
     setPinChangeForm({ current: '', new1: '', new2: '' })
     setPinChangeMsg({ type: 'success', text: 'PIN이 변경되었습니다' })
