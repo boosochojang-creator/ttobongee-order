@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { CartProvider } from './lib/cartStore'
 import GlobalCallButton from './lib/GlobalCallButton'
+import PWAPrompt from './lib/PWAPrompt'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <CartProvider>
           {children}
           <GlobalCallButton />
+          <PWAPrompt />
         </CartProvider>
       </body>
     </html>
