@@ -74,6 +74,8 @@ export default function OwnerDashboard() {
   const [pinDB, setPinDB] = useState('1234')
   const [pinChangeForm, setPinChangeForm] = useState({ current: '', new1: '', new2: '' })
   const [pinChangeMsg, setPinChangeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [imgUploading, setImgUploading] = useState(false)
+  const [imgMsg, setImgMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null)
   const seenIds = useRef(new Set<string>())
   const audioRef = useRef<AudioContext | null>(null)
   const isFirst = useRef(true)
@@ -504,14 +506,34 @@ export default function OwnerDashboard() {
                   onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
                   style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #555', borderRadius: 8, padding: '8px 12px', fontSize: 14 }}
                 />
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: '#2a2a2a', border: '1px dashed #555', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#aaa' }}>
-                  🖼 이미지 교체
-                  {m.image_url && <img src={m.image_url} style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4 }} alt="" />}
-                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 10, cursor: imgUploading ? 'not-allowed' : 'pointer',
+                  background: '#2a2a2a', border: '1px dashed #555', borderRadius: 8,
+                  padding: '10px 12px', fontSize: 13, color: '#aaa',
+                  opacity: imgUploading ? 0.6 : 1,
+                }}>
+                  {m.image_url
+                    ? <img src={m.image_url} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} alt="" />
+                    : <span style={{ fontSize: 28, flexShrink: 0 }}>🖼</span>}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ color: '#ccc', fontWeight: 600 }}>
+                      {imgUploading && imgMsg?.id === String(m.id) ? '업로드 중…' : m.image_url ? '이미지 교체' : '이미지 업로드'}
+                    </span>
+                    <span style={{ fontSize: 11, color: '#666' }}>
+                      {imgMsg?.id === String(m.id)
+                        ? <span style={{ color: imgMsg.ok ? '#3ac47d' : '#e84040' }}>{imgMsg.text}</span>
+                        : 'JPG / PNG / WEBP'}
+                    </span>
+                  </div>
+                  <input type="file" accept="image/*" style={{ display: 'none' }} disabled={imgUploading} onChange={async e => {
                     const file = e.target.files?.[0]; if (!file) return
-                    const fd = new FormData(); fd.append('file', file); fd.append('menuId', m.id)
-                    await fetch('/api/upload-image', { method: 'POST', body: fd })
-                    await loadMenus()
+                    setImgUploading(true); setImgMsg(null)
+                    const fd = new FormData(); fd.append('file', file); fd.append('menuId', String(m.id))
+                    const res = await fetch('/api/upload-image', { method: 'POST', body: fd })
+                    const data = await res.json()
+                    setImgUploading(false)
+                    setImgMsg({ id: String(m.id), ok: data.ok, text: data.ok ? '✅ 업로드 완료!' : `❌ ${data.error || '실패'}` })
+                    if (data.ok) { setTimeout(() => setImgMsg(null), 3000); await loadMenus() }
                   }} />
                 </label>
                 <div style={{ display: 'flex', gap: 8 }}>
