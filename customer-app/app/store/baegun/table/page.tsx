@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import LegalFooter from '../../../lib/LegalFooter'
+import { supabase } from '../../../lib/supabase'
 
 const TABLES = [
   { no: 1, label: '1번', sub: '테이블' },
@@ -19,42 +20,69 @@ const TABLES = [
 const GRADE_LABEL: Record<string, string> = { gold: '🥇 골드 단골', silver: '🥈 실버 단골', bronze: '🥉 브론즈 단골' }
 const GRADE_COLOR: Record<string, string> = { gold: '#FFD700', silver: '#C0C0C0', bronze: '#CD7F32' }
 
+function stripEmoji(text: string) {
+  // eslint-disable-next-line
+  return text.replace(new RegExp('[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]', 'gu'), '').trim()
+}
+
 export default function TablePage() {
   const router = useRouter()
   const { setTableNo, setOrderType, clearItems, isMember, phone, grade, visitCount } = useCart()
   const [showPopup, setShowPopup] = useState(false)
-  const audioStarted = useRef(false)
+  const [greetingText, setGreetingText] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const bgmStarted = useRef(false)
 
   useEffect(() => {
     const closed = sessionStorage.getItem('music-popup-closed')
     if (!closed) setShowPopup(true)
   }, [])
 
-  function startMusic() {
-    if (audioStarted.current) return
-    audioStarted.current = true
+  async function startBGM() {
+    if (bgmStarted.current) return
+    bgmStarted.current = true
+
+    // BGM URL: Supabase Storage bgm 버킷 우선, 없으면 로컬 fallback
+    let bgmUrl = '/bgm.mp3'
     try {
-      const ctx = new AudioContext()
-      const playNote = (freq: number, start: number, dur: number, vol: number) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain); gain.connect(ctx.destination)
-        osc.type = 'sine'
-        osc.frequency.value = freq
-        gain.gain.setValueAtTime(vol, ctx.currentTime + start)
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur)
-        osc.start(ctx.currentTime + start)
-        osc.stop(ctx.currentTime + start + dur + 0.1)
-      }
-      const melody = [523,659,784,659,523,392,440,523,659,784,880,784,659,523]
-      melody.forEach((freq, i) => playNote(freq, i * 0.35, 0.3, 0.06))
+      const { data } = await supabase.from('stores').select('bgm_url').eq('id', 'baegun').single()
+      if (data?.bgm_url) bgmUrl = data.bgm_url
     } catch {}
+
+    try {
+      const audio = new Audio(bgmUrl)
+      audio.volume = 0.15
+      audio.loop = true
+      audioRef.current = audio
+      await audio.play()
+    } catch {}
+  }
+
+  function speakGreeting(text: string) {
+    try {
+      window.speechSynthesis.cancel()
+      const u = new SpeechSynthesisUtterance(text)
+      u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.92
+      window.speechSynthesis.speak(u)
+    } catch {}
+  }
+
+  function showGreetingToast(text: string) {
+    setGreetingText(text)
+    speakGreeting(text)
+    setTimeout(() => setGreetingText(null), 3000)
   }
 
   function closePopup() {
     sessionStorage.setItem('music-popup-closed', '1')
     setShowPopup(false)
-    startMusic()
+    startBGM()
+
+    if (isMember && phone) {
+      showGreetingToast(`${phone.slice(-4)}님, 다시 오셨군요! 반갑습니다`)
+    } else {
+      showGreetingToast('또봉이통닭 백운역점에 오신 것을 환영합니다')
+    }
   }
 
   function beep() {
@@ -92,6 +120,21 @@ export default function TablePage() {
         <span className="logo">🍗 또봉이통닭 백운역점</span>
       </div>
 
+      {/* 인사말 토스트 */}
+      {greetingText && (
+        <div style={{
+          position: 'fixed', top: 72, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(30,30,30,0.96)', border: '1px solid #c8a900',
+          borderRadius: 14, padding: '14px 22px',
+          fontSize: 16, fontWeight: 700, color: '#f0f0f0',
+          zIndex: 500, whiteSpace: 'nowrap',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          animation: 'fadeIn 0.3s ease',
+        }}>
+          {greetingText}
+        </div>
+      )}
+
       {/* 배경음악 팝업 */}
       {showPopup && (
         <div style={{
@@ -109,7 +152,6 @@ export default function TablePage() {
             <div style={{fontSize:15, color:'#ccc', lineHeight:1.8, marginBottom:20}}>
               주문 전 <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
               <span style={{color:'#FF6B00', fontWeight:700}}>5% 할인</span> 혜택을 받으세요!<br/>
-              매장 QR 또는 NFC로 언제든 빠른 주문이 가능합니다.<br/>
               <span style={{color:'#FFD700', fontWeight:700}}>오늘도 최고의 바삭함</span>으로 보답하겠습니다 😊
             </div>
             <button

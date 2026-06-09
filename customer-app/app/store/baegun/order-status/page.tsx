@@ -31,9 +31,28 @@ function StatusContent() {
   const router = useRouter()
   const orderId = params.get('id')
   const isCash = params.get('cash') === '1'
+  const memberPhone = params.get('phone') ?? ''
   const [status, setStatus] = useState<Status>('pending')
   const [fortune] = useState(() => FORTUNES[Math.floor(Math.random() * FORTUNES.length)])
   const prevStatus = useRef<Status | null>(null)
+  const [receiptPhone, setReceiptPhone] = useState(memberPhone)
+  const [receiptSent, setReceiptSent] = useState(false)
+  const [receiptLoading, setReceiptLoading] = useState(false)
+  const [receiptError, setReceiptError] = useState('')
+  const [showReceiptInput, setShowReceiptInput] = useState(false)
+
+  const sendReceipt = async (phone: string) => {
+    setReceiptLoading(true); setReceiptError('')
+    const res = await fetch('/api/send-receipt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, phone }),
+    })
+    const data = await res.json()
+    setReceiptLoading(false)
+    if (data.ok) { setReceiptSent(true); setShowReceiptInput(false) }
+    else setReceiptError(data.error || '발송 실패')
+  }
 
   useEffect(() => {
     if (!orderId) return
@@ -182,6 +201,86 @@ function StatusContent() {
             <div style={{fontSize:17, fontWeight:700, color:'#FFD700', lineHeight:1.7}}>
               {fortune}
             </div>
+          </div>
+        )}
+
+        {/* 영수증 문자 발송 */}
+        {orderId && (
+          <div style={{
+            marginTop: 24,
+            background: '#1a1a1a', border: '1px solid #333',
+            borderRadius: 12, padding: '18px 16px',
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#ccc', marginBottom: 12 }}>
+              📄 영수증을 문자로 받으시겠습니까?
+            </div>
+
+            {receiptSent ? (
+              <div style={{ fontSize: 14, color: '#4caf50', fontWeight: 600 }}>
+                ✅ 영수증이 발송됐어요!
+              </div>
+            ) : memberPhone ? (
+              /* 회원: 자동 발송 */
+              <div>
+                <div style={{ fontSize: 13, color: '#888', marginBottom: 10 }}>
+                  등록 번호 {memberPhone.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3')} 로 발송됩니다
+                </div>
+                <button
+                  onClick={() => sendReceipt(memberPhone)}
+                  disabled={receiptLoading}
+                  style={{
+                    background: '#c8a900', color: '#111',
+                    border: 'none', borderRadius: 8,
+                    padding: '10px 20px', fontSize: 14, fontWeight: 700,
+                    cursor: receiptLoading ? 'not-allowed' : 'pointer',
+                    opacity: receiptLoading ? 0.6 : 1,
+                  }}
+                >
+                  {receiptLoading ? '발송 중…' : '영수증 받기'}
+                </button>
+              </div>
+            ) : showReceiptInput ? (
+              /* 비회원: 번호 입력 */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  type="tel"
+                  placeholder="전화번호 입력 (예: 01012345678)"
+                  value={receiptPhone}
+                  onChange={e => setReceiptPhone(e.target.value)}
+                  style={{
+                    background: '#111', border: '1px solid #444', borderRadius: 8,
+                    padding: '10px 14px', color: '#f0f0f0', fontSize: 14, outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => sendReceipt(receiptPhone)}
+                  disabled={receiptLoading || receiptPhone.length < 10}
+                  style={{
+                    background: '#c8a900', color: '#111',
+                    border: 'none', borderRadius: 8,
+                    padding: '10px', fontSize: 14, fontWeight: 700,
+                    cursor: (receiptLoading || receiptPhone.length < 10) ? 'not-allowed' : 'pointer',
+                    opacity: (receiptLoading || receiptPhone.length < 10) ? 0.6 : 1,
+                  }}
+                >
+                  {receiptLoading ? '발송 중…' : '영수증 발송'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowReceiptInput(true)}
+                style={{
+                  background: 'none', border: '1px solid #555', borderRadius: 8,
+                  padding: '10px 20px', color: '#aaa', fontSize: 14, cursor: 'pointer',
+                }}
+              >
+                전화번호 입력해서 받기
+              </button>
+            )}
+
+            {receiptError && (
+              <div style={{ fontSize: 13, color: '#f44', marginTop: 8 }}>{receiptError}</div>
+            )}
           </div>
         )}
 

@@ -59,11 +59,11 @@ export default function OwnerDashboard() {
   const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name: '', price: '' })
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({ category: '치킨류', name: '', price: '' })
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [bizSubTab, setBizSubTab] = useState<'daily' | 'monthly' | 'yearly'>('daily')
   const [todayReport, setTodayReport] = useState<any>(null)
   const [monthlyReports, setMonthlyReports] = useState<any[]>([])
@@ -246,8 +246,12 @@ export default function OwnerDashboard() {
     await loadOrders()
   }
 
-  const toggleMenu = async (id: number, cur: boolean) => {
-    await supabase.from('menus').update({ is_available: !cur }).eq('id', id)
+  const toggleMenu = async (id: string, cur: boolean) => {
+    await fetch('/api/toggle-menu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_available: cur }),
+    })
     await loadMenus()
   }
 
@@ -270,7 +274,7 @@ export default function OwnerDashboard() {
     await loadMenus()
   }
 
-  const deleteMenu = async (id: number) => {
+  const deleteMenu = async (id: string) => {
     await supabase.from('menus').delete().eq('id', id)
     setDeleteConfirmId(null)
     await loadMenus()
@@ -500,6 +504,16 @@ export default function OwnerDashboard() {
                   onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
                   style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #555', borderRadius: 8, padding: '8px 12px', fontSize: 14 }}
                 />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: '#2a2a2a', border: '1px dashed #555', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#aaa' }}>
+                  🖼 이미지 교체
+                  {m.image_url && <img src={m.image_url} style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4 }} alt="" />}
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
+                    const file = e.target.files?.[0]; if (!file) return
+                    const fd = new FormData(); fd.append('file', file); fd.append('menuId', m.id)
+                    await fetch('/api/upload-image', { method: 'POST', body: fd })
+                    await loadMenus()
+                  }} />
+                </label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={saveEdit} style={{ flex: 1, padding: '8px', background: '#c8a900', color: '#111', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>저장</button>
                   <button onClick={() => setEditingId(null)} style={{ flex: 1, padding: '8px', background: '#2a2a2a', color: '#aaa', border: '1px solid #444', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>취소</button>
@@ -882,6 +896,23 @@ export default function OwnerDashboard() {
                 {yearTotal === 0 && <div style={{ textAlign: 'center', color: '#444', fontSize: 13, paddingTop: 12 }}>{bizYear}년 영업 기록 없음</div>}
               </div>
             )}
+
+            {/* BGM 변경 */}
+            <div style={{ margin: '16px 16px 0', background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#aaa', marginBottom: 12 }}>🎵 배경음악 변경</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', background: '#111', border: '1px dashed #444', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#888' }}>
+                MP3 파일 선택
+                <input type="file" accept="audio/*" style={{ display: 'none' }} onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return
+                  const fd = new FormData(); fd.append('file', file)
+                  const res = await fetch('/api/upload-bgm', { method: 'POST', body: fd })
+                  const data = await res.json()
+                  if (data.ok) alert('배경음악이 변경되었습니다')
+                  else alert('업로드 실패: ' + data.error)
+                }} />
+              </label>
+              <div style={{ fontSize: 11, color: '#555', marginTop: 6 }}>업로드 후 고객앱 재진입 시 새 음악이 적용됩니다</div>
+            </div>
 
             {/* PIN 변경 */}
             <div style={{ margin: '16px 16px 0', background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 18 }}>

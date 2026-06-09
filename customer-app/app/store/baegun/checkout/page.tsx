@@ -25,7 +25,7 @@ const CHANNEL_KEY: Record<string, string> = {
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { items, tableNo, orderType, isMember, userId, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
+  const { items, tableNo, orderType, isMember, userId, phone, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
   const [payMethod, setPayMethod] = useState<PayMethod>('card')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -75,7 +75,7 @@ export default function CheckoutPage() {
     // 3. 현금 결제 → 바로 대기화면
     if (payMethod === 'cash') {
       clearCart()
-      router.push(`/store/baegun/order-status?id=${order.id}&cash=1`)
+      router.push(`/store/baegun/order-status?id=${order.id}&cash=1${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
       return
     }
 
@@ -127,7 +127,7 @@ export default function CheckoutPage() {
       }
 
       clearCart()
-      router.push(`/store/baegun/order-status?id=${order.id}`)
+      router.push(`/store/baegun/order-status?id=${order.id}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
     } catch (e: any) {
       setError('결제 처리 중 오류가 발생했어요. 다시 시도해주세요.')
       setLoading(false)

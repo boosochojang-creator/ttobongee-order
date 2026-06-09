@@ -1,6 +1,6 @@
 {
-  "name": "또봉이통닭 백운역점",
-  "short_name": "또봉이통닭",
+  "name": "또봉이백운역점",
+  "short_name": "또봉이백운역점",
   "description": "QR 모바일 주문",
   "start_url": "/",
   "display": "standalone",

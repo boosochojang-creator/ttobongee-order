@@ -5,7 +5,7 @@ import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 
-type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean }
+type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; image_url?: string | null }
 
 const CATS = ['세트메뉴', '치킨류', '안주류', '음료/주류']
 const CAT_ICONS: Record<string, string> = {
@@ -154,7 +154,11 @@ export default function MenuPage() {
               <div className="section-header">{CAT_ICONS[cat]} {cat}</div>
               {catMenus.map(item => (
                 <div key={item.id} className={`menu-item${!item.is_available ? ' sold-out' : ''}`}>
-                  <div className="menu-thumb">{CAT_ICONS[item.category]}</div>
+                  <div className="menu-thumb" style={{ width: 72, height: 72, flexShrink: 0, borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a1a' }}>
+                    {item.image_url
+                      ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <span style={{ fontSize: 32 }}>{CAT_ICONS[item.category]}</span>}
+                  </div>
                   <div className="menu-info">
                     <div className="menu-name">{item.name}</div>
                     <div className="menu-price">{item.price.toLocaleString()}원</div>
@@ -203,7 +207,9 @@ export default function MenuPage() {
             {['💧 물 주세요', '🥗 치킨무 추가', '🧻 물티슈 주세요', '👋 직원 직접 호출'].map(t => (
               <button key={t} className="sheet-btn" onClick={() => {
                 try {
-                  const u = new SpeechSynthesisUtterance(`${tableNo}번 테이블 ${t} 호출입니다`)
+                  // eslint-disable-next-line
+                  const textOnly = t.replace(new RegExp('[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]', 'gu'), '').trim()
+                  const u = new SpeechSynthesisUtterance(`${tableNo}번 테이블 ${textOnly} 호출입니다`)
                   u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.9
                   window.speechSynthesis.speak(u)
                   const ctx = new AudioContext()
