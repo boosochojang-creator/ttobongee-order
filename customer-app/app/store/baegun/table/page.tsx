@@ -1,9 +1,9 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
+import { useBgm } from '../../../lib/BgmContext'
 import LegalFooter from '../../../lib/LegalFooter'
-import { supabase } from '../../../lib/supabase'
 
 const TABLES = [
   { no: 1, label: '1번', sub: '테이블' },
@@ -28,35 +28,14 @@ function stripEmoji(text: string) {
 export default function TablePage() {
   const router = useRouter()
   const { setTableNo, setOrderType, clearItems, isMember, phone, grade, visitCount } = useCart()
+  const { startBGM } = useBgm()
   const [showPopup, setShowPopup] = useState(false)
   const [greetingText, setGreetingText] = useState<string | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const bgmStarted = useRef(false)
 
   useEffect(() => {
     const closed = sessionStorage.getItem('music-popup-closed')
     if (!closed) setShowPopup(true)
   }, [])
-
-  async function startBGM() {
-    if (bgmStarted.current) return
-    bgmStarted.current = true
-
-    // BGM URL: Supabase Storage bgm 버킷 우선, 없으면 로컬 fallback
-    let bgmUrl = '/bgm.mp3'
-    try {
-      const { data } = await supabase.from('stores').select('bgm_url').eq('id', 'baegun').single()
-      if (data?.bgm_url) bgmUrl = data.bgm_url
-    } catch {}
-
-    try {
-      const audio = new Audio(bgmUrl)
-      audio.volume = 0.15
-      audio.loop = true
-      audioRef.current = audio
-      await audio.play()
-    } catch {}
-  }
 
   function speakGreeting(text: string) {
     try {
@@ -150,9 +129,15 @@ export default function TablePage() {
               🍗 또봉이통닭에 오신 걸 환영해요!
             </div>
             <div style={{fontSize:15, color:'#ccc', lineHeight:1.8, marginBottom:20}}>
-              주문 전 <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
-              <span style={{color:'#FF6B00', fontWeight:700}}>5% 할인</span> 혜택을 받으세요!<br/>
-              <span style={{color:'#FFD700', fontWeight:700}}>오늘도 최고의 바삭함</span>으로 보답하겠습니다 😊
+              {isMember ? (
+                <><span style={{color:'#FFD700', fontWeight:700}}>오늘도 최고의 바삭함</span>으로 보답하겠습니다 😊</>
+              ) : (
+                <>
+                  주문 전 <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
+                  <span style={{color:'#FF6B00', fontWeight:700}}>5% 할인</span> 혜택을 받으세요!<br/>
+                  <span style={{color:'#FFD700', fontWeight:700}}>오늘도 최고의 바삭함</span>으로 보답하겠습니다 😊
+                </>
+              )}
             </div>
             <button
               onClick={closePopup}

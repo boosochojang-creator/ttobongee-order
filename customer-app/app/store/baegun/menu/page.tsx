@@ -32,10 +32,23 @@ export default function MenuPage() {
   const [showCall, setShowCall] = useState(false)
   const [showLoginBanner, setShowLoginBanner] = useState(!isMember)
   const catRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const headerRef = useRef<HTMLDivElement>(null)
+  const [headerH, setHeaderH] = useState(114)
 
   useEffect(() => {
     supabase.from('menus').select('*').eq('store_id', 'baegun').order('sort_order')
       .then(({ data }) => { if (data) setMenus(data) })
+  }, [])
+
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const update = () => setHeaderH(el.offsetHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    window.addEventListener('resize', update)
+    return () => { ro.disconnect(); window.removeEventListener('resize', update) }
   }, [])
 
   const scrollToCat = (cat: string) => {
@@ -67,10 +80,26 @@ export default function MenuPage() {
 
   return (
     <main>
-      {/* 상단 헤더 */}
-      <div className="top-bar">
-        <span className="logo">🍗 또봉이</span>
-        <span className="table-badge">{label}</span>
+      {/* 상단 고정 헤더 (헤더 + 조리 안내 + 카테고리 탭) */}
+      <div className="sticky-header" ref={headerRef}>
+        <div className="top-bar" style={{ position: 'static' }}>
+          <span className="logo">🍗 또봉이</span>
+          <span className="table-badge">{label}</span>
+        </div>
+
+        {/* 조리 중 안내 배너 */}
+        <div className="cook-notice">
+          갓 튀긴 맛을 위해 조리 중입니다 🍗 대기 상황에 따라 10~30분 소요될 수 있어요. 조금만 기다려 주시면 맛으로 보답할게요!
+        </div>
+
+        {/* 카테고리 탭 */}
+        <div className="cat-tabs" style={{ position: 'static' }}>
+          {CATS.map(c => (
+            <button key={c} className={activeCat === c ? 'active' : ''} onClick={() => scrollToCat(c)}>
+              {CAT_ICONS[c]} {c}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 회원 배너 */}
@@ -135,22 +164,13 @@ export default function MenuPage() {
         </div>
       )}
 
-      {/* 카테고리 탭 */}
-      <div className="cat-tabs">
-        {CATS.map(c => (
-          <button key={c} className={activeCat === c ? 'active' : ''} onClick={() => scrollToCat(c)}>
-            {CAT_ICONS[c]} {c}
-          </button>
-        ))}
-      </div>
-
       {/* 메뉴 목록 */}
       <div className="menu-list">
         {CATS.map(cat => {
           const catMenus = menus.filter(m => m.category === cat && m.is_available !== false)
           if (!catMenus.length) return null
           return (
-            <div key={cat} ref={el => { catRefs.current[cat] = el }}>
+            <div key={cat} ref={el => { catRefs.current[cat] = el }} style={{ scrollMarginTop: headerH }}>
               <div className="section-header">{CAT_ICONS[cat]} {cat}</div>
               {catMenus.map(item => (
                 <div key={item.id} className={`menu-item${!item.is_available ? ' sold-out' : ''}`}>

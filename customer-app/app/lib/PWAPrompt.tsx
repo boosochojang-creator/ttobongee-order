@@ -1,13 +1,30 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 export default function PWAPrompt() {
+  const pathname = usePathname()
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [show, setShow] = useState(false)
+  const [isIOS, setIsIOS] = useState(false)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (localStorage.getItem('pwa-prompt-done')) return
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as any).standalone === true
+
+    if (standalone) {
+      localStorage.setItem('pwa-installed', '1')
+      return
+    }
+    if (localStorage.getItem('pwa-installed') === '1') return
+    if (sessionStorage.getItem('pwa-banner-dismissed') === '1') return
+
+    const ios = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase())
+    if (ios) {
+      setIsIOS(true)
+      setShow(true)
+      return
+    }
 
     const handler = (e: Event) => {
       e.preventDefault()
@@ -18,76 +35,67 @@ export default function PWAPrompt() {
     return () => window.removeEventListener('beforeinstallprompt', handler as EventListener)
   }, [])
 
+  if (pathname !== '/store/baegun/table') return null
+  if (!show) return null
+
   const dismiss = () => {
-    localStorage.setItem('pwa-prompt-done', '1')
+    sessionStorage.setItem('pwa-banner-dismissed', '1')
     setShow(false)
   }
 
   const install = async () => {
     if (!deferredPrompt) return
     deferredPrompt.prompt()
-    await deferredPrompt.userChoice
-    localStorage.setItem('pwa-prompt-done', '1')
+    const choice = await deferredPrompt.userChoice
+    if (choice.outcome === 'accepted') localStorage.setItem('pwa-installed', '1')
     setShow(false)
   }
 
-  if (!show) return null
-
   return (
     <div style={{
-      position: 'fixed', inset: 0,
-      background: 'rgba(0,0,0,0.75)',
-      zIndex: 9999,
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+      width: 'calc(100% - 32px)', maxWidth: 'calc(var(--max-w) - 32px)',
+      zIndex: 250,
+      background: '#1c1c1c', border: '1px solid #c8a900',
+      borderRadius: 14, padding: '14px 16px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
     }}>
-      <div style={{
-        background: '#1c1c1c',
-        borderRadius: '20px 20px 0 0',
-        borderTop: '2px solid #c8a900',
-        padding: '28px 24px 44px',
-        width: '100%', maxWidth: 480,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-          <img src="/icon-192.png" alt="아이콘"
-            style={{ width: 56, height: 56, borderRadius: 14 }} />
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#f0f0f0' }}>
-              또봉이백운역점
-            </div>
-            <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>
-              홈 화면에 아이콘을 추가하시겠습니까?
-            </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <span style={{ fontSize: 22, lineHeight: 1 }}>📲</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f0f0', lineHeight: 1.6 }}>
+            홈 화면에 추가하면 더 편하게 주문할 수 있어요!
           </div>
+          {isIOS && (
+            <div style={{ fontSize: 12, color: '#aaa', marginTop: 6, lineHeight: 1.7 }}>
+              Safari 하단 <span style={{ color: '#FFD700', fontWeight: 700 }}>공유 버튼</span> →{' '}
+              <span style={{ color: '#FFD700', fontWeight: 700 }}>'홈 화면에 추가'</span>를 눌러주세요
+            </div>
+          )}
         </div>
-        <p style={{ fontSize: 14, color: '#bbb', lineHeight: 1.7, marginBottom: 22 }}>
-          홈 화면에 추가하면 앱처럼 빠르게 실행할 수 있습니다.<br />
-          추가하지 않아도 모든 기능은 동일하게 이용 가능합니다.
-        </p>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={dismiss}
-            style={{
-              flex: 1, padding: '14px',
-              background: 'none', color: '#888',
-              fontSize: 15, border: '1px solid #333',
-              borderRadius: 12, cursor: 'pointer',
-            }}
-          >
-            아니오
-          </button>
-          <button
-            onClick={install}
-            style={{
-              flex: 2, padding: '14px',
-              background: '#c8a900', color: '#111',
-              fontSize: 15, fontWeight: 700,
-              border: 'none', borderRadius: 12, cursor: 'pointer',
-            }}
-          >
-            예, 추가할게요
-          </button>
-        </div>
+        <button
+          onClick={dismiss}
+          style={{
+            background: 'none', border: 'none', color: '#666',
+            fontSize: 18, lineHeight: 1, padding: 2, cursor: 'pointer',
+          }}
+        >
+          ✕
+        </button>
       </div>
+      {!isIOS && (
+        <button
+          onClick={install}
+          style={{
+            width: '100%', marginTop: 12, padding: '12px',
+            background: '#c8a900', color: '#111',
+            fontSize: 14, fontWeight: 700,
+            border: 'none', borderRadius: 10, cursor: 'pointer',
+          }}
+        >
+          홈 화면에 추가하기
+        </button>
+      )}
     </div>
   )
 }

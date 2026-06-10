@@ -40,6 +40,8 @@ function StatusContent() {
   const [receiptLoading, setReceiptLoading] = useState(false)
   const [receiptError, setReceiptError] = useState('')
   const [showReceiptInput, setShowReceiptInput] = useState(false)
+  const [showInstallTip, setShowInstallTip] = useState(false)
+  const autoSentRef = useRef(false)
 
   const sendReceipt = async (phone: string) => {
     setReceiptLoading(true); setReceiptError('')
@@ -53,6 +55,18 @@ function StatusContent() {
     if (data.ok) { setReceiptSent(true); setShowReceiptInput(false) }
     else setReceiptError(data.error || '발송 실패')
   }
+
+  // 회원: 가입 시 등록한 전화번호로 영수증 자동 발송
+  useEffect(() => {
+    if (autoSentRef.current) return
+    if (!orderId || !memberPhone) return
+    autoSentRef.current = true
+    sendReceipt(memberPhone)
+  }, [orderId, memberPhone])
+
+  useEffect(() => {
+    if (localStorage.getItem('pwa-installed') !== '1') setShowInstallTip(true)
+  }, [])
 
   useEffect(() => {
     if (!orderId) return
@@ -290,6 +304,11 @@ function StatusContent() {
             <button className="btn-primary" onClick={() => router.push('/store/baegun/menu')}>
               추가 주문하기
             </button>
+            {showInstallTip && (
+              <div style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: '#888', lineHeight: 1.6 }}>
+                📲 다음 방문엔 더 빠르게! 홈 화면에 추가해 두세요 😊
+              </div>
+            )}
           </div>
         )}
       </div>

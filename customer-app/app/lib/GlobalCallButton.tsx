@@ -6,6 +6,11 @@ import { supabase } from './supabase'
 
 const CALL_ITEMS = ['💧 물 주세요', '🥗 치킨무 추가', '🧻 물티슈 주세요', '👋 직원 직접 호출']
 
+function stripEmoji(text: string) {
+  // eslint-disable-next-line
+  return text.replace(new RegExp('[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]', 'gu'), '').trim()
+}
+
 export default function GlobalCallButton() {
   const pathname = usePathname()
   const { tableNo } = useCart()
@@ -32,7 +37,7 @@ export default function GlobalCallButton() {
     // 음성
     try {
       const label = tableNo && tableNo !== '0' ? `${tableNo}번 테이블` : '포장'
-      const u = new SpeechSynthesisUtterance(`${label} ${item} 호출입니다`)
+      const u = new SpeechSynthesisUtterance(`${label} ${stripEmoji(item)} 호출입니다`)
       u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.9
       window.speechSynthesis.speak(u)
     } catch {}

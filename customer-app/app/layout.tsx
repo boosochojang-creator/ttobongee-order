@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { CartProvider } from './lib/cartStore'
+import { BgmProvider } from './lib/BgmContext'
 import GlobalCallButton from './lib/GlobalCallButton'
+import GlobalBgmButton from './lib/GlobalBgmButton'
 import PWAPrompt from './lib/PWAPrompt'
 import './globals.css'
 
@@ -24,9 +26,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <CartProvider>
-          {children}
-          <GlobalCallButton />
-          <PWAPrompt />
+          <BgmProvider>
+            {children}
+            <GlobalCallButton />
+            <GlobalBgmButton />
+            <PWAPrompt />
+          </BgmProvider>
         </CartProvider>
       </body>
     </html>

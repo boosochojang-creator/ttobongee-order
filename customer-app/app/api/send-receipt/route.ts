@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
 
     const lines = [
       `[또봉이통닭 백운역점]`,
+      `주문이 접수되었습니다 🍗`,
+      `주문번호: ${orderId.slice(0, 8).toUpperCase()}`,
       `${dateStr} ${tableLabel}`,
       `─────────────────`,
       ...items.map(i => `${i.name_snapshot} × ${i.qty}  ${i.subtotal.toLocaleString()}원`),
@@ -69,6 +71,7 @@ export async function POST(req: NextRequest) {
       `합계: ${order.final_amount.toLocaleString()}원`,
       `결제: ${payLabel[order.payment_method] || order.payment_method}`,
       `─────────────────`,
+      `조리 후 알려드릴게요!`,
       `감사합니다 😊`,
       `문의: 032-299-9848`,
     ]

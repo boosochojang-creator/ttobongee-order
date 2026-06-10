@@ -133,6 +133,26 @@ a { text-decoration: none; color: inherit; }
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 
+/* 상단 고정 헤더 (top-bar + 조리 안내 + 카테고리 탭 묶음) */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg);
+}
+
+/* 조리 중 안내 배너 */
+.cook-notice {
+  background: linear-gradient(135deg, rgba(200,169,0,0.18), rgba(200,169,0,0.06));
+  border-bottom: 1px solid var(--gold-dim);
+  color: var(--gold-light);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+  text-align: center;
+  padding: 8px 16px;
+}
+
 /* 카테고리 탭 (루나 제안: sticky) */
 .cat-tabs {
   position: sticky;
