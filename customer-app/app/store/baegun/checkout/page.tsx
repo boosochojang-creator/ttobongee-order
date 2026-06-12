@@ -129,6 +129,7 @@ export default function CheckoutPage() {
       clearCart()
       router.push(`/store/baegun/order-status?id=${order.id}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
     } catch (e: any) {
+      console.error('[checkout] 결제 처리 오류:', e)
       setError('결제 처리 중 오류가 발생했어요. 다시 시도해주세요.')
       setLoading(false)
     }
