@@ -3,7 +3,8 @@ import { CartProvider } from './lib/cartStore'
 import { BgmProvider } from './lib/BgmContext'
 import GlobalCallButton from './lib/GlobalCallButton'
 import GlobalBgmButton from './lib/GlobalBgmButton'
-import PWAPrompt from './lib/PWAPrompt'
+// v1.4: PWA 설치 유도 배너 비활성화 (./lib/PWAPrompt.tsx 참조 — 구조 보존)
+// import PWAPrompt from './lib/PWAPrompt'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -30,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
             <GlobalCallButton />
             <GlobalBgmButton />
-            <PWAPrompt />
+            {/* <PWAPrompt /> */}
           </BgmProvider>
         </CartProvider>
       </body>

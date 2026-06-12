@@ -25,6 +25,7 @@ html, body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 #__next, main {
@@ -196,19 +197,19 @@ a { text-decoration: none; color: inherit; }
 }
 .menu-item.sold-out { opacity: 0.4; pointer-events: none; }
 .menu-thumb {
-  width: 72px;
-  height: 72px;
+  width: 92px;
+  height: 92px;
   border-radius: 10px;
   background: var(--bg3);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 36px;
 }
-.menu-info { flex: 1; }
-.menu-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-.menu-price { font-size: 14px; color: var(--gold); font-weight: 700; }
+.menu-info { flex: 1; min-width: 0; }
+.menu-name { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.menu-price { font-size: 17px; color: var(--gold); font-weight: 700; }
 .menu-tag { font-size: 11px; color: var(--text2); margin-top: 2px; }
 
 .qty-ctrl {

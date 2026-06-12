@@ -101,10 +101,13 @@ export default function OwnerDashboard() {
     } catch {}
   }, [])
 
-  function speakOrder(tableNo: number, orderType: string) {
+  function speakOrder(tableNo: number, orderType: string, paymentMethod: string) {
     try {
       const label = orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
-      const u = new SpeechSynthesisUtterance(`${label} 신규 주문입니다`)
+      const message = paymentMethod === 'cash'
+        ? `${label} 신규 주문입니다 — 현금결제입니다. 확인 후 접수해 주세요.`
+        : `${label} 신규 주문입니다`
+      const u = new SpeechSynthesisUtterance(message)
       u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.85
       window.speechSynthesis.speak(u)
     } catch {}
@@ -131,7 +134,7 @@ export default function OwnerDashboard() {
       mapped.forEach(o => {
         if (!seenIds.current.has(o.id) && (o.status === 'pending' || o.status === 'cash_pending')) {
           playAlert()
-          speakOrder(o.table_no, o.order_type)
+          speakOrder(o.table_no, o.order_type, o.payment_method)
           setHideDone(false)
         }
       })

@@ -40,7 +40,8 @@ function StatusContent() {
   const [receiptLoading, setReceiptLoading] = useState(false)
   const [receiptError, setReceiptError] = useState('')
   const [showReceiptInput, setShowReceiptInput] = useState(false)
-  const [showInstallTip, setShowInstallTip] = useState(false)
+  // v1.4: PWA 설치 유도 문구 비활성화 (PWAPrompt.tsx 참조 — 구조 보존)
+  // const [showInstallTip, setShowInstallTip] = useState(false)
   const autoSentRef = useRef(false)
 
   const sendReceipt = async (phone: string) => {
@@ -64,9 +65,10 @@ function StatusContent() {
     sendReceipt(memberPhone)
   }, [orderId, memberPhone])
 
-  useEffect(() => {
-    if (localStorage.getItem('pwa-installed') !== '1') setShowInstallTip(true)
-  }, [])
+  // v1.4: PWA 설치 유도 문구 비활성화 (PWAPrompt.tsx 참조 — 구조 보존)
+  // useEffect(() => {
+  //   if (localStorage.getItem('pwa-installed') !== '1') setShowInstallTip(true)
+  // }, [])
 
   useEffect(() => {
     if (!orderId) return
@@ -304,11 +306,13 @@ function StatusContent() {
             <button className="btn-primary" onClick={() => router.push('/store/baegun/menu')}>
               추가 주문하기
             </button>
+            {/* v1.4: PWA 설치 유도 문구 비활성화 (PWAPrompt.tsx 참조 — 구조 보존)
             {showInstallTip && (
               <div style={{ marginTop: 16, textAlign: 'center', fontSize: 13, color: '#888', lineHeight: 1.6 }}>
                 📲 다음 방문엔 더 빠르게! 홈 화면에 추가해 두세요 😊
               </div>
             )}
+            */}
           </div>
         )}
       </div>

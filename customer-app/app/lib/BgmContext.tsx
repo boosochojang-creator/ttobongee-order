@@ -39,7 +39,7 @@ export function BgmProvider({ children }: { children: ReactNode }) {
 
     try {
       const audio = new Audio(bgmUrl)
-      audio.volume = 0.15
+      audio.volume = 0.075
       audio.loop = true
       audioRef.current = audio
       if (sessionStorage.getItem(MUTE_KEY) !== '1') {

@@ -1,4 +1,8 @@
 'use client'
+
+// v1.4: PWA 홈 화면 추가 유도 배너 비활성화
+// 추후 회원/비회원 구분 기능 추가 시 재사용할 수 있도록 원본 구현을 주석으로 보존
+/*
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
@@ -98,4 +102,9 @@ export default function PWAPrompt() {
       )}
     </div>
   )
+}
+*/
+
+export default function PWAPrompt() {
+  return null
 }

@@ -14,6 +14,12 @@ const CAT_ICONS: Record<string, string> = {
   '안주류': '🥘',
   '음료/주류': '🍺',
 }
+// v1.4: 화면 표시용 카테고리명/아이콘 — DB category 값('음료/주류')은 그대로 두고 화면 표기만 "음료"로 변경
+const CAT_DISPLAY: Record<string, { label: string; icon: string }> = {
+  '음료/주류': { label: '음료', icon: '🥤' },
+}
+// v1.4: 이미지 없이 빈 썸네일로 표시할 상품명
+const NO_IMAGE_NAMES = ['음료(소)', '음료(대)']
 const FORTUNES = [
   '오늘 치킨 먹으면 좋은 일 생겨요 🍗',
   '생맥주 한 잔의 여유, 오늘 수고했어요 🍺',
@@ -96,7 +102,7 @@ export default function MenuPage() {
         <div className="cat-tabs" style={{ position: 'static' }}>
           {CATS.map(c => (
             <button key={c} className={activeCat === c ? 'active' : ''} onClick={() => scrollToCat(c)}>
-              {CAT_ICONS[c]} {c}
+              {CAT_DISPLAY[c]?.icon ?? CAT_ICONS[c]} {CAT_DISPLAY[c]?.label ?? c}
             </button>
           ))}
         </div>
@@ -171,13 +177,15 @@ export default function MenuPage() {
           if (!catMenus.length) return null
           return (
             <div key={cat} ref={el => { catRefs.current[cat] = el }} style={{ scrollMarginTop: headerH }}>
-              <div className="section-header">{CAT_ICONS[cat]} {cat}</div>
+              <div className="section-header">{CAT_DISPLAY[cat]?.icon ?? CAT_ICONS[cat]} {CAT_DISPLAY[cat]?.label ?? cat}</div>
               {catMenus.map(item => (
                 <div key={item.id} className={`menu-item${!item.is_available ? ' sold-out' : ''}`}>
-                  <div className="menu-thumb" style={{ width: 72, height: 72, flexShrink: 0, borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a1a' }}>
-                    {item.image_url
-                      ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <span style={{ fontSize: 32 }}>{CAT_ICONS[item.category]}</span>}
+                  <div className="menu-thumb" style={{ width: 92, height: 92, flexShrink: 0, borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a1a' }}>
+                    {NO_IMAGE_NAMES.includes(item.name)
+                      ? null
+                      : item.image_url
+                        ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontSize: 36 }}>{CAT_ICONS[item.category]}</span>}
                   </div>
                   <div className="menu-info">
                     <div className="menu-name">{item.name}</div>
