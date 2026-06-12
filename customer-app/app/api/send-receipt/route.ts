@@ -37,8 +37,9 @@ async function sendSMS(to: string, message: string) {
 export async function POST(req: NextRequest) {
   try {
     const { orderId, phone } = await req.json()
-    if (!orderId || !phone) {
-      return NextResponse.json({ ok: false, error: '주문 ID 또는 전화번호 누락' }, { status: 400 })
+    const cleanPhone = (phone || '').replace(/-/g, '').trim()
+    if (!orderId || cleanPhone.length < 10) {
+      return NextResponse.json({ ok: false, error: '전화번호가 올바르지 않습니다' }, { status: 400 })
     }
 
     const admin = createClient(
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
     ]
 
     const message = lines.join('\n')
-    const result = await sendSMS(phone, message)
+    const result = await sendSMS(cleanPhone, message)
 
     return NextResponse.json({ ok: true, skipped: result.skipped })
   } catch (e: any) {
