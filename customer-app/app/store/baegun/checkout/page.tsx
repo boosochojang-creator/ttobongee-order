@@ -98,6 +98,11 @@ export default function CheckoutPage() {
             easyPayProvider: payMethod === 'kakao' ? 'KAKAOPAY' : 'TOSSPAY',
           },
         }),
+        customer: {
+          email: 'guest@ttobongee.com',
+          phoneNumber: isMember && phone ? phone : '01000000000',
+          fullName: '또봉이고객',
+        },
       })
 
       // 결제 취소 또는 실패
