@@ -30,6 +30,7 @@ async function sendSMS(to: string, message: string) {
     body: form,
   })
   const data = await res.json()
+  console.log('[send-receipt] Aligo 응답:', JSON.stringify(data))
   if (data.result_code !== '1') throw new Error(data.message)
   return { ok: true }
 }
