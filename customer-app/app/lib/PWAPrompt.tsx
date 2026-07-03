@@ -1,110 +1,85 @@
 'use client'
 
-// v1.4: PWA 홈 화면 추가 유도 배너 비활성화
-// 추후 회원/비회원 구분 기능 추가 시 재사용할 수 있도록 원본 구현을 주석으로 보존
-/*
+// 홈 화면 설치 재안내 (그룹 A 보강판)
+// - 비회원: 아무것도 안 띄움 (설치 유도는 회원가입 완료 흐름에서만 — login 페이지 참조)
+// - 가입했는데 아직 설치 안 한 회원: 메뉴/테이블 화면 상단에 작은 재안내만 (강제 팝업 아님)
+// - 설치 완료: 영구 숨김 / 닫기(✕): 7일 숨김
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import {
+  getDeferredPrompt, clearDeferredPrompt, getMember,
+  isInstalled, isLaterActive, isIOS, markInstalled, setLater,
+} from './pwaInstall'
 
 export default function PWAPrompt() {
   const pathname = usePathname()
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [show, setShow] = useState(false)
-  const [isIOS, setIsIOS] = useState(false)
+  const [ios, setIos] = useState(false)
+  const [openGuide, setOpenGuide] = useState(false)
 
   useEffect(() => {
-    const standalone = window.matchMedia('(display-mode: standalone)').matches
-      || (window.navigator as any).standalone === true
-
-    if (standalone) {
-      localStorage.setItem('pwa-installed', '1')
-      return
-    }
-    if (localStorage.getItem('pwa-installed') === '1') return
-    if (sessionStorage.getItem('pwa-banner-dismissed') === '1') return
-
-    const ios = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase())
-    if (ios) {
-      setIsIOS(true)
-      setShow(true)
-      return
-    }
-
-    const handler = (e: Event) => {
-      e.preventDefault()
-      setDeferredPrompt(e)
-      setShow(true)
-    }
-    window.addEventListener('beforeinstallprompt', handler as EventListener)
-    return () => window.removeEventListener('beforeinstallprompt', handler as EventListener)
+    if (isInstalled() || isLaterActive()) return
+    if (!getMember()) return // 비회원에게는 독립 노출 안 함
+    setIos(isIOS())
+    const t = setTimeout(() => setShow(true), 1500)
+    return () => clearTimeout(t)
   }, [])
 
-  if (pathname !== '/store/baegun/table') return null
+  if (pathname !== '/store/baegun/menu' && pathname !== '/store/baegun/table') return null
   if (!show) return null
 
-  const dismiss = () => {
-    sessionStorage.setItem('pwa-banner-dismissed', '1')
-    setShow(false)
-  }
+  const dismiss = () => { setLater(7); setShow(false) }
 
-  const install = async () => {
-    if (!deferredPrompt) return
-    deferredPrompt.prompt()
-    const choice = await deferredPrompt.userChoice
-    if (choice.outcome === 'accepted') localStorage.setItem('pwa-installed', '1')
-    setShow(false)
+  const onInstallClick = async () => {
+    const dp = getDeferredPrompt()
+    if (!ios && dp) {
+      try {
+        dp.prompt()
+        const choice = await dp.userChoice
+        if (choice?.outcome === 'accepted') markInstalled()
+        clearDeferredPrompt()
+        setShow(false)
+        return
+      } catch {}
+    }
+    setOpenGuide(g => !g) // 이벤트가 없거나 아이폰이면 안내 열기
   }
 
   return (
     <div style={{
-      position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-      width: 'calc(100% - 32px)', maxWidth: 'calc(var(--max-w) - 32px)',
-      zIndex: 250,
-      background: '#1c1c1c', border: '1px solid #c8a900',
-      borderRadius: 14, padding: '14px 16px',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+      position: 'fixed', top: 64, right: 12, zIndex: 250, maxWidth: 300,
     }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <span style={{ fontSize: 22, lineHeight: 1 }}>📲</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f0f0', lineHeight: 1.6 }}>
-            홈 화면에 추가하면 더 편하게 주문할 수 있어요!
-          </div>
-          {isIOS && (
-            <div style={{ fontSize: 12, color: '#aaa', marginTop: 6, lineHeight: 1.7 }}>
-              Safari 하단 <span style={{ color: '#FFD700', fontWeight: 700 }}>공유 버튼</span> →{' '}
-              <span style={{ color: '#FFD700', fontWeight: 700 }}>'홈 화면에 추가'</span>를 눌러주세요
-            </div>
-          )}
-        </div>
-        <button
-          onClick={dismiss}
-          style={{
-            background: 'none', border: 'none', color: '#666',
-            fontSize: 18, lineHeight: 1, padding: 2, cursor: 'pointer',
-          }}
-        >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        background: '#1c1c1c', border: '1px solid #c8a900',
+        borderRadius: 100, padding: '8px 12px',
+        boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
+      }}>
+        <button onClick={onInstallClick} style={{
+          background: 'none', border: 'none', color: '#FFD700',
+          fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0,
+        }}>
+          📲 또봉이 바로가기 설치
+        </button>
+        <button onClick={dismiss} aria-label="닫기" style={{
+          background: 'none', border: 'none', color: '#666',
+          fontSize: 14, lineHeight: 1, cursor: 'pointer', padding: 2,
+        }}>
           ✕
         </button>
       </div>
-      {!isIOS && (
-        <button
-          onClick={install}
-          style={{
-            width: '100%', marginTop: 12, padding: '12px',
-            background: '#c8a900', color: '#111',
-            fontSize: 14, fontWeight: 700,
-            border: 'none', borderRadius: 10, cursor: 'pointer',
-          }}
-        >
-          홈 화면에 추가하기
-        </button>
+
+      {openGuide && (
+        <div style={{
+          marginTop: 8, background: '#1c1c1c', border: '1px solid #444',
+          borderRadius: 12, padding: '12px 14px', fontSize: 12,
+          color: '#ccc', lineHeight: 1.8,
+        }}>
+          {ios
+            ? <>아이폰은 Safari 하단 <span style={{ color: '#FFD700', fontWeight: 700 }}>공유 버튼(⬆️)</span>을 누른 뒤 <span style={{ color: '#FFD700', fontWeight: 700 }}>&lsquo;홈 화면에 추가&rsquo;</span>를 선택해 주세요.</>
+            : <>브라우저 메뉴(⋮)에서 <span style={{ color: '#FFD700', fontWeight: 700 }}>&lsquo;홈 화면에 추가&rsquo;</span> 또는 <span style={{ color: '#FFD700', fontWeight: 700 }}>&lsquo;앱 설치&rsquo;</span>를 눌러주세요.</>}
+        </div>
       )}
     </div>
   )
-}
-*/
-
-export default function PWAPrompt() {
-  return null
 }
