@@ -37,6 +37,7 @@ const PAY_LABELS: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '신규', paid: '신규', cash_pending: '현금대기',
+  verification_failed: '⚠️ 결제확인필요',
   accepted: '접수', cooking: '조리중', done: '조리완료', served: '서빙완료', canceled: '취소'
 }
 
@@ -134,7 +135,7 @@ export default function OwnerDashboard() {
     // 새 주문 감지 → 알림음
     if (!isFirst.current) {
       mapped.forEach(o => {
-        if (!seenIds.current.has(o.id) && (o.status === 'paid' || o.status === 'cash_pending')) {
+        if (!seenIds.current.has(o.id) && (o.status === 'paid' || o.status === 'cash_pending' || o.status === 'verification_failed')) {
           playAlert()
           speakOrder(o.table_no, o.order_type, o.payment_method)
           setHideDone(false)
@@ -378,13 +379,13 @@ export default function OwnerDashboard() {
     else { setPinError('PIN이 올바르지 않아요'); setPin('') }
   }
 
-  const newOrders = orders.filter(o => ['pending', 'paid', 'cash_pending'].includes(o.status))
+  const newOrders = orders.filter(o => ['pending', 'paid', 'cash_pending', 'verification_failed'].includes(o.status))
   const acceptedOrders = orders.filter(o => o.status === 'accepted')
   const cookingOrders = orders.filter(o => o.status === 'cooking')
   const doneOrders = orders.filter(o => o.status === 'done')
 
   const OrderCard = ({ order }: { order: Order }) => (
-    <div className={`order-card ${order.status === 'pending' || order.status === 'paid' ? 'new-order' : order.status === 'cash_pending' ? 'cash_pending' : order.status === 'accepted' ? 'accepted' : order.status === 'cooking' ? 'cooking' : 'done-card'}`}>
+    <div className={`order-card ${order.status === 'pending' || order.status === 'paid' ? 'new-order' : order.status === 'cash_pending' || order.status === 'verification_failed' ? 'cash_pending' : order.status === 'accepted' ? 'accepted' : order.status === 'cooking' ? 'cooking' : 'done-card'}`}>
       <div className="order-time">{timeAgo(order.created_at)}</div>
       <div className="order-table">
         {order.order_type === 'takeout' ? '🛍️ 포장' : `${order.table_no}번`}
@@ -408,6 +409,10 @@ export default function OwnerDashboard() {
       <div className="action-btns">
         {(order.status === 'pending' || order.status === 'paid' || order.status === 'cash_pending') && (
           <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'accepted')}>✅ 접수</button>
+        )}
+        {order.status === 'verification_failed' && (
+          /* 금액 불일치 등 검증 실패 — 포트원 콘솔에서 실제 결제 확인 후 수동 접수 */
+          <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'accepted')}>⚠️ 확인 후 접수</button>
         )}
         {order.status === 'accepted' && (
           <button className="action-btn btn-cooking" onClick={() => updateStatus(order.id, 'cooking')}>🍳 조리시작</button>
