@@ -122,6 +122,8 @@ export default function OwnerDashboard() {
                users(visit_count, grade)`)
       .eq('store_id', 'baegun')
       .neq('status', 'canceled')
+      // pending = 손님이 결제창만 열고 아직 결제 안 한 상태(취소·이탈 포함) → 확정 전이므로 점주 화면에서 제외
+      .neq('status', 'pending')
       .gte('created_at', `${today}T00:00:00`)
       .order('created_at', { ascending: false })
 
@@ -132,7 +134,7 @@ export default function OwnerDashboard() {
     // 새 주문 감지 → 알림음
     if (!isFirst.current) {
       mapped.forEach(o => {
-        if (!seenIds.current.has(o.id) && (o.status === 'pending' || o.status === 'cash_pending')) {
+        if (!seenIds.current.has(o.id) && (o.status === 'paid' || o.status === 'cash_pending')) {
           playAlert()
           speakOrder(o.table_no, o.order_type, o.payment_method)
           setHideDone(false)

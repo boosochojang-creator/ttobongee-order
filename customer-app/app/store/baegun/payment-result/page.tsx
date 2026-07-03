@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
+import { useCart } from '../../../lib/cartStore'
 import LegalFooter from '../../../lib/LegalFooter'
 
 // 모바일 결제 복귀 페이지.
@@ -24,6 +25,7 @@ function PaymentResultContent() {
   const [failReason, setFailReason] = useState('')
   const [canRetry, setCanRetry] = useState(false)
   const ranRef = useRef(false)
+  const { clearCart } = useCart()
 
   const verify = async () => {
     setPhase('verifying')
@@ -41,6 +43,7 @@ function PaymentResultContent() {
 
     // 이미 검증이 끝난 주문(새로고침 등) → 바로 상태 화면으로
     if (order.status !== 'pending' && order.status !== 'canceled') {
+      clearCart()
       router.replace(`/store/baegun/order-status?id=${orderId}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
       return
     }
@@ -57,6 +60,8 @@ function PaymentResultContent() {
     const data = await res.json().catch(() => ({ ok: false, error: '서버 응답 오류' }))
 
     if (data.ok) {
+      // 결제 확정 → 저장된 장바구니 비우기 (모바일은 checkout의 clearCart가 실행되지 않으므로 여기서)
+      clearCart()
       router.replace(`/store/baegun/order-status?id=${orderId}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
     } else {
       // 검증 실패: 결제완료로 절대 넘기지 않는다. 이중결제 위험이 있으니 주문 취소도 하지 않고
