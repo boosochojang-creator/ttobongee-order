@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
+import ProfilePrompt from '../../../lib/ProfilePrompt'
+import { getMemberLocal } from '../../../lib/memberState'
 
 type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; image_url?: string | null }
 
@@ -37,6 +39,10 @@ export default function MenuPage() {
   const [activeCat, setActiveCat] = useState('세트메뉴')
   const [showCall, setShowCall] = useState(false)
   const [showLoginBanner, setShowLoginBanner] = useState(!isMember)
+  // phone_member 이상(영구 가입 기록 보유)에게는 회원가입 문구를 절대 다시 안 띄움
+  // (isMember는 3시간짜리 장바구니 상태라, 시간이 지난 회원에게 가입 배너가 재노출되던 허점 보완)
+  const [isJoined, setIsJoined] = useState(false)
+  useEffect(() => { setIsJoined(!!getMemberLocal()) }, [])
   const catRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const headerRef = useRef<HTMLDivElement>(null)
   const [headerH, setHeaderH] = useState(114)
@@ -131,10 +137,19 @@ export default function MenuPage() {
                 {GRADE_LABEL[grade] ?? '🥉 브론즈 단골'}
               </span>
               <span style={{ fontSize: 13, color: '#888' }}>· {visitCount}번째 방문</span>
+              <button
+                onClick={() => router.push('/store/baegun/profile')}
+                style={{
+                  marginLeft: 'auto', background: 'none', border: '1px solid #444',
+                  borderRadius: 20, padding: '2px 10px', fontSize: 12, color: '#aaa', cursor: 'pointer',
+                }}
+              >
+                내 정보 ›
+              </button>
             </div>
           </div>
         </div>
-      ) : showLoginBanner && (
+      ) : (!isJoined && showLoginBanner) && (
         <div style={{
           background:'linear-gradient(135deg, rgba(200,169,0,0.18), rgba(200,169,0,0.06))',
           border:'1px solid #7a6400', borderRadius:12,
@@ -169,6 +184,9 @@ export default function MenuPage() {
           </div>
         </div>
       )}
+
+      {/* 추가정보(생일·주소) 입력 유도 카드 — phone_member/profile_incomplete 회원에게만 */}
+      <ProfilePrompt />
 
       {/* 메뉴 목록 */}
       <div className="menu-list">

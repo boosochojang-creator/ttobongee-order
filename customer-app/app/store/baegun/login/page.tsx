@@ -8,6 +8,7 @@ import {
   getDeferredPrompt, clearDeferredPrompt, isInstalled, isIOS,
   markInstalled, setMemberFlag,
 } from '../../../lib/pwaInstall'
+import { updateMemberLocal } from '../../../lib/memberState'
 
 // 가입 완료 후 이어지는 설치 안내 단계 종류
 type InstallStep = null | 'ios' | 'guide'
@@ -53,6 +54,12 @@ export default function LoginPage() {
       // ── 가입은 여기서 이미 확정 (아래 설치 흐름과 무관하게 유지됨) ──
       setMember(uid, digits, memberGrade, memberVisitCount)
       setMemberFlag(uid, digits)
+
+      // 서버의 회원 상태(B-2)를 로컬에 반영 — 컬럼이 아직 없는 환경에서도 로그인은 계속되도록 별도 조회
+      try {
+        const { data: st } = await supabase.from('users').select('member_status').eq('id', uid).single()
+        if (st?.member_status) updateMemberLocal({ status: st.member_status })
+      } catch {}
 
       // 가입 완료 → 같은 흐름에서 설치 승인 이어붙이기 (거부해도 가입은 그대로)
       if (isInstalled()) { router.back(); return }
