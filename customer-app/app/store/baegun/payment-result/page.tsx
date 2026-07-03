@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { useCart } from '../../../lib/cartStore'
 import LegalFooter from '../../../lib/LegalFooter'
+import { setActiveOrder } from '../../../lib/activeOrder'
 
 // 모바일 결제 복귀 페이지.
 // 결제창(리디렉션)에서 돌아오면 포트원이 paymentId(성공/실패 공통), code·message(실패 시)를
@@ -41,10 +42,11 @@ function PaymentResultContent() {
       return
     }
 
-    // 이미 검증이 끝난 주문(새로고침 등) → 바로 상태 화면으로
+    // 이미 검증이 끝난 주문(새로고침 등) → 메뉴로 (팝업+음성이 상태를 안내 — 그룹 C)
     if (order.status !== 'pending' && order.status !== 'canceled') {
       clearCart()
-      router.replace(`/store/baegun/order-status?id=${orderId}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
+      if (orderId) setActiveOrder(orderId)
+      router.replace('/store/baegun/menu')
       return
     }
 
@@ -60,9 +62,10 @@ function PaymentResultContent() {
     const data = await res.json().catch(() => ({ ok: false, error: '서버 응답 오류' }))
 
     if (data.ok) {
-      // 결제 확정 → 저장된 장바구니 비우기 (모바일은 checkout의 clearCart가 실행되지 않으므로 여기서)
+      // 결제 확정 → 장바구니 비우고 메뉴로 복귀, 이후 안내는 팝업+음성 (그룹 C)
       clearCart()
-      router.replace(`/store/baegun/order-status?id=${orderId}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
+      if (orderId) setActiveOrder(orderId)
+      router.replace('/store/baegun/menu')
     } else {
       // 검증 실패: 결제완료로 절대 넘기지 않는다. 이중결제 위험이 있으니 주문 취소도 하지 않고
       // 재확인/직원 문의를 안내한다 (실제로 돈이 빠졌을 수 있는 상태).

@@ -5,6 +5,7 @@ import GlobalCallButton from './lib/GlobalCallButton'
 import GlobalBgmButton from './lib/GlobalBgmButton'
 import PWAPrompt from './lib/PWAPrompt'
 import SWRegister from './lib/SWRegister'
+import OrderWatcher from './lib/OrderWatcher'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <GlobalBgmButton />
             <PWAPrompt />
             <SWRegister />
+            <OrderWatcher />
           </BgmProvider>
         </CartProvider>
       </body>

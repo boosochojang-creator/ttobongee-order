@@ -37,7 +37,7 @@ const PAY_LABELS: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '신규', paid: '신규', cash_pending: '현금대기',
-  accepted: '확인완료', cooking: '조리중', done: '완료', canceled: '취소'
+  accepted: '접수', cooking: '조리중', done: '조리완료', served: '서빙완료', canceled: '취소'
 }
 
 function timeAgo(dt: string) {
@@ -147,7 +147,7 @@ export default function OwnerDashboard() {
     setOrders(mapped)
 
     // 요약
-    const done = mapped.filter(o => ['accepted','cooking','done'].includes(o.status))
+    const done = mapped.filter(o => ['accepted','cooking','done','served'].includes(o.status))
     const todayAll = mapped
     setSummary({
       count: todayAll.length,
@@ -228,11 +228,18 @@ export default function OwnerDashboard() {
   }
 
   const updateStatus = async (orderId: string, status: string) => {
-    await fetch('/api/update-status', {
+    const res = await fetch('/api/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order_id: orderId, status }),
-    })
+    }).catch(() => null)
+    const result = res ? await res.json().catch(() => null) : null
+    if (!result?.ok) {
+      // DB가 아직 이 상태값을 모르는 경우(예: served 마이그레이션 전) — 에러 화면 없이 안내만
+      setCallToast('⏳ 처리 중 — 상태 변경이 아직 반영되지 않았어요. 잠시 후 다시 눌러주세요.')
+      setTimeout(() => setCallToast(null), 3500)
+      return
+    }
     if (status === 'done') {
       const order = orders.find(o => o.id === orderId)
       if (order?.user_id && order?.is_member) {
@@ -406,7 +413,10 @@ export default function OwnerDashboard() {
           <button className="action-btn btn-cooking" onClick={() => updateStatus(order.id, 'cooking')}>🍳 조리시작</button>
         )}
         {order.status === 'cooking' && (
-          <button className="action-btn btn-done" onClick={() => updateStatus(order.id, 'done')}>🛎️ 완료</button>
+          <button className="action-btn btn-done" onClick={() => updateStatus(order.id, 'done')}>🛎️ 조리완료</button>
+        )}
+        {order.status === 'done' && (
+          <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'served')}>✔️ 서빙완료</button>
         )}
         {order.status !== 'done' && (
           <button className="action-btn btn-cancel" onClick={() => updateStatus(order.id, 'canceled')}>취소</button>

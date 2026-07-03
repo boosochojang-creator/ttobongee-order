@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
+import { setActiveOrder } from '../../../lib/activeOrder'
 
 type PayMethod = 'card' | 'kakao' | 'toss' | 'cash'
 const won = (n: number) => n.toLocaleString() + '원'
@@ -89,10 +90,11 @@ export default function CheckoutPage() {
       return
     }
 
-    // 3. 현금 결제 → 바로 대기화면
+    // 3. 현금 결제 → 메뉴로 복귀 (별도 화면 없이 팝업+음성으로 안내 — 그룹 C)
     if (payMethod === 'cash') {
       clearCart()
-      router.push(`/store/baegun/order-status?id=${order.id}&cash=1${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
+      setActiveOrder(order.id)
+      router.push('/store/baegun/menu')
       return
     }
 
@@ -152,7 +154,8 @@ export default function CheckoutPage() {
       }
 
       clearCart()
-      router.push(`/store/baegun/order-status?id=${order.id}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`)
+      setActiveOrder(order.id)
+      router.push('/store/baegun/menu')
     } catch (e: any) {
       console.error('[checkout] 결제 처리 오류:', e)
       setError('결제 처리 중 오류가 발생했어요. 다시 시도해주세요.')

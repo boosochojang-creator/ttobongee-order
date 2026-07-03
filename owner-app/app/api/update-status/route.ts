@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const VALID = new Set(['accepted', 'cooking', 'done', 'canceled', 'cash_pending', 'pending', 'paid'])
+const VALID = new Set(['accepted', 'cooking', 'done', 'served', 'canceled', 'cash_pending', 'pending', 'paid'])
 
 export async function POST(req: NextRequest) {
   try {
