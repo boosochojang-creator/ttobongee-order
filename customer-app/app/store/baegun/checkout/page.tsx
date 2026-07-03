@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
@@ -23,12 +23,29 @@ const CHANNEL_KEY: Record<string, string> = {
   toss: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY_TOSS || '',
 }
 
+// 카카오페이·토스페이는 채널키가 환경변수에 등록된 경우에만 노출.
+// 키 없이 결제를 호출하면 포트원 에러가 나므로, 실연동 채널 등록 후 env 추가 + 재배포만 하면 자동으로 켜진다.
+const VISIBLE_PAY_OPTIONS = PAY_OPTIONS.filter(
+  o => o.key === 'card' || o.key === 'cash' || CHANNEL_KEY[o.key] !== ''
+)
+
 export default function CheckoutPage() {
   const router = useRouter()
   const { items, tableNo, orderType, isMember, userId, phone, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
   const [payMethod, setPayMethod] = useState<PayMethod>('card')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // 모바일에서 결제창(리디렉션)으로 갔다가 결제 없이 뒤로가기로 돌아오면 브라우저가
+  // 이전 화면을 그대로 복원(bfcache)해서 '결제창 열리는 중...' 상태에 갇힌다 → 복원 감지 시 버튼 원복.
+  // PC 팝업 흐름은 페이지 이동이 없어 persisted 이벤트가 발생하지 않으므로 영향 없음.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setLoading(false)
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
 
   const handleOrder = async () => {
     if (!items.length) return
@@ -92,6 +109,9 @@ export default function CheckoutPage() {
         orderName,
         totalAmount: finalAmount,
         currency: 'CURRENCY_KRW',
+        // 모바일은 결제창으로 페이지가 통째로 이동했다 돌아오는 리디렉션 방식이라 복귀 주소가 필수.
+        // PC(iframe/팝업)에서는 SDK가 이 값을 무시하므로 기존 흐름에 영향 없음.
+        redirectUrl: `${window.location.origin}/store/baegun/payment-result?orderId=${order.id}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`,
         payMethod: payMethod === 'card' ? 'CARD' : 'EASY_PAY',
         ...(payMethod !== 'card' && {
           easyPay: {
@@ -174,13 +194,16 @@ export default function CheckoutPage() {
         {/* 결제 수단 */}
         <div className="section-title">결제 수단</div>
         <div className="pay-methods">
-          {PAY_OPTIONS.map(o => (
+          {VISIBLE_PAY_OPTIONS.map(o => (
             <button key={o.key} className={`pay-btn${payMethod === o.key ? ' selected' : ''}`}
               onClick={() => { setPayMethod(o.key); setError('') }}>
               <span className="pay-icon">{o.icon}</span>
               {o.label}
             </button>
           ))}
+        </div>
+        <div style={{ fontSize: 12, color: '#777', marginTop: 8 }}>
+          카카오페이·토스페이·네이버페이 준비 중이에요 🙏
         </div>
 
         {/* 현금 안내 */}
