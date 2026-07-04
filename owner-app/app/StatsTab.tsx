@@ -10,6 +10,7 @@ type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
 type OrderRow = {
   id: string
+  user_id: string | null
   table_no: number
   order_type: string
   status: string
@@ -19,6 +20,10 @@ type OrderRow = {
 }
 
 type Ingredient = { menu_id: string; ingredient_name: string; amount_per_serving: number; unit: string }
+
+// F-2: 고객관리 통계용
+type UserRow = { id: string; created_at: string; marketing_opt_in: boolean | null; member_status: string | null; last_visit: string | null }
+type UserOrderRow = { user_id: string; created_at: string }
 
 const KST = '+09:00'
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -105,7 +110,7 @@ export default function StatsTab() {
     let alive = true
     setLoading(true)
     supabase.from('orders')
-      .select('id, table_no, order_type, status, final_amount, created_at, order_items(menu_id, name_snapshot, qty, subtotal)')
+      .select('id, user_id, table_no, order_type, status, final_amount, created_at, order_items(menu_id, name_snapshot, qty, subtotal)')
       .eq('store_id', 'baegun')
       .gte('created_at', new Date(range.start).toISOString())
       .lt('created_at', new Date(range.end).toISOString())
@@ -123,6 +128,72 @@ export default function StatsTab() {
       .select('menu_id, ingredient_name, amount_per_serving, unit')
       .then(({ data, error }) => setIngredients(error ? null : (data as Ingredient[])))
   }, [])
+
+  // F-2: 회원 전체 + 회원 주문 이력 (재방문·휴면은 visit_count가 아닌 주문 이력 기반 — 갱신 버그와 무관하게 정확)
+  const [members, setMembers] = useState<UserRow[]>([])
+  const [memberOrders, setMemberOrders] = useState<UserOrderRow[]>([])
+  useEffect(() => {
+    supabase.from('users')
+      .select('id, created_at, marketing_opt_in, member_status, last_visit')
+      .eq('store_id', 'baegun')
+      .then(({ data }) => setMembers((data as UserRow[]) || []))
+    supabase.from('orders')
+      .select('user_id, created_at')
+      .eq('store_id', 'baegun')
+      .not('user_id', 'is', null)
+      .not('status', 'in', '(canceled,pending,verification_failed)')
+      .then(({ data }) => setMemberOrders((data as UserOrderRow[]) || []))
+  }, [])
+
+  // F-2 집계
+  const crm = useMemo(() => {
+    // 신규회원: 기간 내 가입 (KST 경계는 range와 동일)
+    const newMembers = members.filter(u => {
+      const t = new Date(u.created_at).getTime()
+      return t >= range.start && t < range.end
+    }).length
+
+    // 재방문: 기간 내 주문한 회원 중, 기간 시작 전에도 주문 이력이 있는 회원
+    const firstOrder = new Map<string, number>()
+    const lastOrder = new Map<string, number>()
+    for (const o of memberOrders) {
+      const t = new Date(o.created_at).getTime()
+      if (!firstOrder.has(o.user_id) || t < firstOrder.get(o.user_id)!) firstOrder.set(o.user_id, t)
+      if (!lastOrder.has(o.user_id) || t > lastOrder.get(o.user_id)!) lastOrder.set(o.user_id, t)
+    }
+    const visitors = new Set<string>()
+    for (const o of memberOrders) {
+      const t = new Date(o.created_at).getTime()
+      if (t >= range.start && t < range.end) visitors.add(o.user_id)
+    }
+    let revisit = 0
+    visitors.forEach(uid => { if ((firstOrder.get(uid) ?? Infinity) < range.start) revisit += 1 })
+
+    // 마케팅 동의
+    const optIn = members.filter(u => u.marketing_opt_in === true).length
+
+    // 상태별 분포 (status 없는 옛 데이터 = phone_member)
+    const statusDist: Record<string, number> = { phone_member: 0, profile_incomplete: 0, profile_complete: 0 }
+    for (const u of members) {
+      const s = u.member_status || 'phone_member'
+      statusDist[s] = (statusDist[s] || 0) + 1
+    }
+
+    // 휴면: 마지막 활동(주문 이력 우선, 없으면 last_visit/가입일)로부터 경과일 — CRM 트리거 구간(10일/45~60일) 기준
+    const now = Date.now()
+    const dormant = { active: 0, d10: 0, d45: 0, d60: 0 }
+    for (const u of members) {
+      const last = lastOrder.get(u.id)
+        ?? (u.last_visit ? new Date(u.last_visit).getTime() : new Date(u.created_at).getTime())
+      const days = Math.floor((now - last) / DAY_MS)
+      if (days < 10) dormant.active += 1
+      else if (days < 45) dormant.d10 += 1
+      else if (days <= 60) dormant.d45 += 1
+      else dormant.d60 += 1
+    }
+
+    return { newMembers, visitors: visitors.size, revisit, revisitRate: visitors.size ? Math.round(revisit / visitors.size * 100) : 0, optIn, total: members.length, statusDist, dormant }
+  }, [members, memberOrders, range.start, range.end])
 
   const agg = useMemo(() => {
     const totalSales = orders.reduce((s, o) => s + (o.final_amount || 0), 0)
@@ -283,6 +354,62 @@ export default function StatsTab() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* ===== F-2: 고객관리 통계 ===== */}
+      <div style={{ fontWeight: 900, color: '#c8a900', fontSize: 15, margin: '20px 0 10px' }}>👥 고객관리</div>
+
+      {/* 신규/재방문 (선택한 기간 기준) */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center' }}>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>신규 가입 (기간 내)</div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>{crm.newMembers}명</div>
+        </div>
+        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center' }}>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>방문 회원 (기간 내)</div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>{crm.visitors}명</div>
+        </div>
+        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center' }}>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>재방문 회원</div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>{crm.revisit}명 <span style={{ fontSize: 13, color: '#888' }}>(재방문율 {crm.revisitRate}%)</span></div>
+        </div>
+      </div>
+
+      {/* 마케팅 동의 + 상태 분포 (전체 회원 기준) */}
+      <div style={box}>
+        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>📣 마케팅 수신동의 (전체 회원 기준)</div>
+        <div style={{ fontSize: 14, color: '#ccc' }}>
+          동의 {crm.optIn}명 / 전체 {crm.total}명
+          {' '}<span style={{ color: '#FFD700', fontWeight: 700 }}>({crm.total ? Math.round(crm.optIn / crm.total * 100) : 0}%)</span>
+        </div>
+      </div>
+
+      <div style={box}>
+        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>🪪 회원 상태별 분포</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><th style={th}>상태</th><th style={th}>인원</th></tr></thead>
+          <tbody>
+            <tr><td style={td}>전화번호만 가입 (phone_member)</td><td style={td}>{crm.statusDist.phone_member || 0}명</td></tr>
+            <tr><td style={td}>추가정보 일부 (profile_incomplete)</td><td style={td}>{crm.statusDist.profile_incomplete || 0}명</td></tr>
+            <tr><td style={td}>추가정보 완료 (profile_complete)</td><td style={td}>{crm.statusDist.profile_complete || 0}명</td></tr>
+          </tbody>
+        </table>
+        <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>* guest(비회원)는 가입 기록이 없어 인원 산정 불가 — 비회원 주문은 매출 통계에 포함됨</div>
+      </div>
+
+      {/* 휴면 구간 (CRM 트리거 기준: 10일 / 45~60일) */}
+      <div style={box}>
+        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>💤 휴면고객 (마지막 주문 기준, 오늘까지 경과일)</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><th style={th}>구간</th><th style={th}>인원</th></tr></thead>
+          <tbody>
+            <tr><td style={td}>활성 (10일 미만)</td><td style={td}>{crm.dormant.active}명</td></tr>
+            <tr><td style={td}>10~44일 미방문</td><td style={td}>{crm.dormant.d10}명</td></tr>
+            <tr><td style={td}>45~60일 미방문</td><td style={td}>{crm.dormant.d45}명</td></tr>
+            <tr><td style={td}>60일 초과 미방문</td><td style={td}>{crm.dormant.d60}명</td></tr>
+          </tbody>
+        </table>
+        <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>* 주문 이력이 없는 회원은 가입일 기준으로 계산</div>
       </div>
       </>
       )}
