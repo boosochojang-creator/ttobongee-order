@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
+import StatsTab from './StatsTab'
 
 type Order = {
   id: string
@@ -55,7 +56,7 @@ export default function OwnerDashboard() {
   const [orders, setOrders] = useState<Order[]>([])
   const [menus, setMenus] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
-  const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business'>('orders')
+  const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats'>('orders')
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
   const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
@@ -471,6 +472,7 @@ export default function OwnerDashboard() {
         <button className={tab === 'members' ? 'active' : ''} onClick={() => { setTab('members'); loadMembers() }}>회원</button>
         <button className={tab === 'sales' ? 'active' : ''} onClick={() => setTab('sales')}>매출</button>
         <button className={tab === 'business' ? 'active' : ''} onClick={() => setTab('business')}>영업</button>
+        <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>통계</button>
       </div>
 
       {/* 주문 칸반 */}
@@ -1014,6 +1016,9 @@ export default function OwnerDashboard() {
           </div>
         )
       })()}
+
+      {/* 통계 (그룹 F-1) */}
+      {tab === 'stats' && <StatsTab />}
 
       {/* 회원 목록 */}
       {tab === 'members' && (
