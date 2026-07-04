@@ -37,6 +37,59 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // ===== Phase 2: 배달 주문 =====
+  const [isDelivery, setIsDelivery] = useState(false)
+  const [addr, setAddr] = useState('')            // 도로명주소
+  const [addrDetail, setAddrDetail] = useState('') // 상세주소 (동/호수)
+  const [contactPhone, setContactPhone] = useState(phone || '')
+  const [deliveryFee, setDeliveryFee] = useState<number | null>(null)
+  const [deliveryDistanceM, setDeliveryDistanceM] = useState<number | null>(null)
+  const [calcLoading, setCalcLoading] = useState(false)
+  const [calcError, setCalcError] = useState('')
+  const [farNotice, setFarNotice] = useState(false) // 20km 초과 안내 (차단 아님)
+
+  // 최종 결제금액 = 장바구니 총액 + 배달료
+  const payTotal = finalAmount + (isDelivery && deliveryFee ? deliveryFee : 0)
+
+  // 배달료 계산 (실주행거리 기반, 서버 API)
+  const calcDeliveryFee = async (roadAddr: string) => {
+    if (!roadAddr || roadAddr.trim().length < 5) { setCalcError('주소를 먼저 입력해주세요'); return }
+    setCalcLoading(true); setCalcError(''); setDeliveryFee(null)
+    try {
+      const res = await fetch('/api/delivery-fee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: roadAddr }),
+      })
+      const data = await res.json()
+      if (!data.ok) { setCalcError(data.error || '배달료 계산에 실패했어요'); return }
+      setDeliveryFee(data.fee)
+      setDeliveryDistanceM(data.distanceM)
+      if (data.farNotice) setFarNotice(true)
+    } catch {
+      setCalcError('배달료 계산에 실패했어요. 다시 시도해주세요')
+    } finally {
+      setCalcLoading(false)
+    }
+  }
+
+  // 다음(카카오) 우편번호 검색 팝업 — 키 없이 무료
+  const openPostcode = () => {
+    const launch = () => new (window as any).daum.Postcode({
+      oncomplete: (data: any) => {
+        const road = data.roadAddress || data.address
+        setAddr(road)
+        setDeliveryFee(null)
+        calcDeliveryFee(road)
+      },
+    }).open()
+    if ((window as any).daum?.Postcode) { launch(); return }
+    const s = document.createElement('script')
+    s.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
+    s.onload = launch
+    document.body.appendChild(s)
+  }
+
   // 모바일에서 결제창(리디렉션)으로 갔다가 결제 없이 뒤로가기로 돌아오면 브라우저가
   // 이전 화면을 그대로 복원(bfcache)해서 '결제창 열리는 중...' 상태에 갇힌다 → 복원 감지 시 버튼 원복.
   // PC 팝업 흐름은 페이지 이동이 없어 persisted 이벤트가 발생하지 않으므로 영향 없음.
@@ -50,6 +103,13 @@ export default function CheckoutPage() {
 
   const handleOrder = async () => {
     if (!items.length) return
+    // 배달 주문 필수 항목 검증 (배달료 계산까지 완료돼야 결제 진행)
+    if (isDelivery) {
+      const digits = contactPhone.replace(/\D/g, '')
+      if (!addr.trim()) { setError('배달 주소를 입력해주세요'); return }
+      if (digits.length < 10) { setError('연락처를 정확히 입력해주세요'); return }
+      if (deliveryFee === null) { setError('배달료 계산을 먼저 해주세요 (주소 검색 시 자동 계산)'); return }
+    }
     setLoading(true)
     setError('')
 
@@ -57,15 +117,21 @@ export default function CheckoutPage() {
     const status = payMethod === 'cash' ? 'cash_pending' : 'pending'
     const { data: order, error: orderErr } = await supabase.from('orders').insert({
       store_id: 'baegun',
-      table_no: Number(tableNo),
-      order_type: orderType,
+      table_no: isDelivery ? 0 : Number(tableNo),
+      order_type: isDelivery ? 'delivery' : orderType,
       status,
       total_amount: totalAmount,
       discount_amount: discountAmount,
-      final_amount: finalAmount,
+      final_amount: payTotal, // 배달이면 배달료 포함 (결제 검증도 이 금액 기준)
       payment_method: payMethod,
       user_id: userId,
       is_member: isMember,
+      ...(isDelivery ? {
+        delivery_address: `${addr.trim()} ${addrDetail.trim()}`.trim(),
+        delivery_fee: deliveryFee,
+        delivery_distance_m: deliveryDistanceM,
+        customer_phone: contactPhone.replace(/\D/g, ''),
+      } : {}),
     }).select('id').single()
 
     if (orderErr || !order) {
@@ -109,7 +175,7 @@ export default function CheckoutPage() {
         channelKey: CHANNEL_KEY[payMethod],
         paymentId: order.id,
         orderName,
-        totalAmount: finalAmount,
+        totalAmount: payTotal,
         currency: 'CURRENCY_KRW',
         // 모바일은 결제창으로 페이지가 통째로 이동했다 돌아오는 리디렉션 방식이라 복귀 주소가 필수.
         // PC(iframe/팝업)에서는 SDK가 이 값을 무시하므로 기존 흐름에 영향 없음.
@@ -170,6 +236,54 @@ export default function CheckoutPage() {
         <span style={{ fontWeight: 700 }}>결제하기</span>
       </div>
       <div className="checkout-page">
+        {/* 받는 방법 (Phase 2: 배달) */}
+        <div className="section-title">받는 방법</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button onClick={() => { setIsDelivery(false); setError('') }} style={{
+            flex: 1, padding: '12px', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+            background: !isDelivery ? '#c8a900' : 'none', color: !isDelivery ? '#111' : '#aaa',
+            border: !isDelivery ? 'none' : '1px solid #444',
+          }}>🏪 {orderType === 'takeout' ? '포장' : '매장에서'}</button>
+          <button onClick={() => { setIsDelivery(true); setError('') }} style={{
+            flex: 1, padding: '12px', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+            background: isDelivery ? '#c8a900' : 'none', color: isDelivery ? '#111' : '#aaa',
+            border: isDelivery ? 'none' : '1px solid #444',
+          }}>🛵 배달로</button>
+        </div>
+
+        {isDelivery && (
+          <div style={{ background: 'var(--bg2)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="text" placeholder="도로명주소 (검색 버튼을 눌러주세요)" value={addr}
+                onChange={e => { setAddr(e.target.value); setDeliveryFee(null) }}
+                style={{ flex: 1, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '11px 12px', color: '#f0f0f0', fontSize: 14, outline: 'none' }} />
+              <button onClick={openPostcode} style={{
+                padding: '11px 14px', background: '#333', color: '#f0f0f0', fontSize: 13, fontWeight: 700,
+                border: '1px solid #555', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>🔍 주소 검색</button>
+            </div>
+            <input type="text" placeholder="상세주소 (동/호수)" value={addrDetail} onChange={e => setAddrDetail(e.target.value)}
+              style={{ background: '#111', border: '1px solid #444', borderRadius: 8, padding: '11px 12px', color: '#f0f0f0', fontSize: 14, outline: 'none' }} />
+            <input type="tel" inputMode="numeric" placeholder="연락처 (예: 01012345678)" value={contactPhone}
+              onChange={e => setContactPhone(e.target.value)}
+              style={{ background: '#111', border: '1px solid #444', borderRadius: 8, padding: '11px 12px', color: '#f0f0f0', fontSize: 14, outline: 'none' }} />
+            {deliveryFee === null && !calcLoading && addr.trim().length >= 5 && (
+              <button onClick={() => calcDeliveryFee(addr)} style={{
+                padding: '11px', background: '#1a1200', color: '#FFD700', fontSize: 14, fontWeight: 700,
+                border: '1px solid #7a6400', borderRadius: 8, cursor: 'pointer',
+              }}>🛵 배달료 계산하기</button>
+            )}
+            {calcLoading && <div style={{ fontSize: 13, color: '#888' }}>배달료 계산 중… (실주행거리 기준)</div>}
+            {calcError && <div style={{ fontSize: 13, color: 'var(--red)' }}>{calcError}</div>}
+            {deliveryFee !== null && (
+              <div style={{ fontSize: 14, color: '#ccc' }}>
+                🛵 배달료 <strong style={{ color: '#FFD700' }}>{won(deliveryFee)}</strong>
+                <span style={{ color: '#777', fontSize: 12 }}> · 실주행 약 {((deliveryDistanceM || 0) / 1000).toFixed(1)}km</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 주문 요약 */}
         <div className="section-title">주문 내역</div>
         <div style={{ background: 'var(--bg2)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 20 }}>
@@ -188,8 +302,13 @@ export default function CheckoutPage() {
                 <span>단골 할인 5%</span><span>-{won(discountAmount)}</span>
               </div>
             )}
+            {isDelivery && deliveryFee !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--text2)' }}>
+                <span>🛵 배달료</span><span>+{won(deliveryFee)}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 700, marginTop: 8 }}>
-              <span>최종 결제</span><span style={{ color: 'var(--gold)' }}>{won(finalAmount)}</span>
+              <span>최종 결제</span><span style={{ color: 'var(--gold)' }}>{won(payTotal)}</span>
             </div>
           </div>
         </div>
@@ -252,11 +371,35 @@ export default function CheckoutPage() {
         <button className="btn-primary" onClick={handleOrder} disabled={loading}>
           {loading
             ? payMethod === 'cash' ? '주문 접수 중...' : '결제창 열리는 중...'
-            : `${won(finalAmount)} ${payMethod === 'cash' ? '주문하기' : '결제하기'}`}
+            : `${won(payTotal)} ${payMethod === 'cash' ? '주문하기' : '결제하기'}`}
         </button>
 
         <LegalFooter />
       </div>
+
+      {/* 20km 초과 안내 (확정 문구 — 주문 차단 아님, 확인 후 계속 진행) */}
+      {farNotice && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}>
+          <div style={{
+            width: '100%', maxWidth: 360, background: '#1c1c1c', border: '1px solid #c8a900',
+            borderRadius: 18, padding: '26px 22px', boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 10 }}>🛵💨</div>
+            <div style={{ fontSize: 14, color: '#e0e0e0', lineHeight: 1.8 }}>
+              와, 멀리서도 저희 매장을 찾아주셔서 감사해요! 다만 거리가 있다 보니 배달 시간이 걸려서,
+              튀김류 특성상 매장에서 바로 드시는 것보다 식감이 조금 눅눅해질 수 있어요 🙏
+              그 점 참고 부탁드리고, 혹시 근처에 다른 맛집이 있으시다면 그쪽도 한번 이용해보시는 것도
+              좋을 것 같아요. 그래도 또봉이가 먹고 싶으시다면, 정성껏 배달해드릴게요!
+            </div>
+            <button className="btn-primary" style={{ marginTop: 18 }} onClick={() => setFarNotice(false)}>
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

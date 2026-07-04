@@ -105,7 +105,7 @@ export default function OwnerDashboard() {
 
   function speakOrder(tableNo: number, orderType: string, paymentMethod: string) {
     try {
-      const label = orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
+      const label = orderType === 'delivery' ? '배달' : orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
       const message = paymentMethod === 'cash'
         ? `${label} 신규 주문입니다 — 현금결제입니다. 확인 후 접수해 주세요.`
         : `${label} 신규 주문입니다`
@@ -119,7 +119,7 @@ export default function OwnerDashboard() {
     const today = new Date().toISOString().slice(0, 10)
     const { data } = await supabase
       .from('orders')
-      .select(`id, user_id, table_no, order_type, status, final_amount, payment_method, is_member, created_at,
+      .select(`*,
                order_items(name_snapshot, qty, subtotal),
                users(visit_count, grade)`)
       .eq('store_id', 'baegun')
@@ -389,9 +389,20 @@ export default function OwnerDashboard() {
     <div className={`order-card ${order.status === 'pending' || order.status === 'paid' ? 'new-order' : order.status === 'cash_pending' || order.status === 'verification_failed' ? 'cash_pending' : order.status === 'accepted' ? 'accepted' : order.status === 'cooking' ? 'cooking' : 'done-card'}`}>
       <div className="order-time">{timeAgo(order.created_at)}</div>
       <div className="order-table">
-        {order.order_type === 'takeout' ? '🛍️ 포장' : `${order.table_no}번`}
+        {order.order_type === 'delivery' ? '🛵 배달' : order.order_type === 'takeout' ? '🛍️ 포장' : `${order.table_no}번`}
         <span> {STATUS_LABEL[order.status] || order.status}</span>
       </div>
+      {order.order_type === 'delivery' && (
+        /* 배달 정보 — 전화번호 노출은 점주 화면 한정 (라이더 노출은 Phase 5에서 마스킹 처리 예정) */
+        <div style={{ background: '#101820', border: '1px solid #2a3a4a', borderRadius: 8, padding: '8px 10px', margin: '6px 0', fontSize: 13, lineHeight: 1.7, color: '#cde' }}>
+          <div>📍 {(order as any).delivery_address || '-'}</div>
+          <div>
+            🛵 배달료 {won((order as any).delivery_fee || 0)}
+            {(order as any).delivery_distance_m ? ` · 약 ${(((order as any).delivery_distance_m) / 1000).toFixed(1)}km` : ''}
+          </div>
+          <div>☎ <a href={`tel:${(order as any).customer_phone || ''}`} style={{ color: '#7fd4ff' }}>{(order as any).customer_phone || '-'}</a></div>
+        </div>
+      )}
       <span className={`pay-badge ${order.payment_method}`}>
         {PAY_LABELS[order.payment_method] || order.payment_method}
         {order.is_member && !order.member_info && ' · 단골'}

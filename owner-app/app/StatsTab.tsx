@@ -90,7 +90,7 @@ function shiftAnchor(period: Period, anchor: string, dir: 1 | -1): string {
   return `${y + dir}-${pad(m)}-${pad(d)}`
 }
 
-const ORDER_TYPE_LABEL: Record<string, string> = { dine_in: '매장식사', takeout: '포장' }
+const ORDER_TYPE_LABEL: Record<string, string> = { dine_in: '매장식사', takeout: '포장', delivery: '배달' }
 const PERIOD_LABEL: Record<Period, string> = { day: '일', week: '주', month: '월', quarter: '분기', year: '연' }
 
 const box: React.CSSProperties = { background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }
@@ -204,7 +204,7 @@ export default function StatsTab() {
     const byType = new Map<string, { count: number; sales: number }>()
 
     for (const o of orders) {
-      const tKey = o.order_type === 'takeout' ? '포장' : `${o.table_no}번`
+      const tKey = o.order_type === 'delivery' ? '배달' : o.order_type === 'takeout' ? '포장' : `${o.table_no}번`
       const t = byTable.get(tKey) || { count: 0, sales: 0 }
       t.count += 1; t.sales += o.final_amount || 0
       byTable.set(tKey, t)
