@@ -25,14 +25,19 @@ function calcFee(distanceM: number, s: Settings): number {
   return s.tier2_fee + Math.ceil((distanceM - s.tier2_max_m) / 100) * s.per_100m_fee
 }
 
-async function geocode(address: string, key: string): Promise<{ x: string; y: string } | null> {
+type GeocodeResult = { ok: true; x: string; y: string } | { ok: false; reason: string }
+
+async function geocode(address: string, key: string): Promise<GeocodeResult> {
   const res = await fetch(`${LOCAL_BASE}/v2/local/search/address.json?query=${encodeURIComponent(address)}`, {
     headers: { Authorization: `KakaoAK ${key}` }, cache: 'no-store',
   })
-  if (!res.ok) return null
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    return { ok: false, reason: `주소검색 API 오류 (HTTP ${res.status}) ${body.slice(0, 120)}` }
+  }
   const data = await res.json()
   const doc = data.documents?.[0]
-  return doc ? { x: doc.x, y: doc.y } : null
+  return doc ? { ok: true, x: doc.x, y: doc.y } : { ok: false, reason: 'no_result' }
 }
 
 // 매장 좌표는 요청 간 캐시 (DB 좌표 → 없으면 매장 주소 지오코딩)
@@ -57,13 +62,19 @@ export async function POST(req: NextRequest) {
     if (!storeCache) {
       if (store?.lat && store?.lng) storeCache = { x: String(store.lng), y: String(store.lat) }
       else {
-        storeCache = await geocode(store?.address || '인천 부평구 경원대로 1220', key)
-        if (!storeCache) return NextResponse.json({ ok: false, error: '매장 좌표 확인 실패' }, { status: 500 })
+        const g = await geocode(store?.address || '인천 부평구 경원대로 1220', key)
+        if (!g.ok) return NextResponse.json({ ok: false, error: `매장 좌표 확인 실패: ${(g as any).reason}` }, { status: 500 })
+        storeCache = { x: g.x, y: g.y }
       }
     }
 
     const dest = await geocode(String(address), key)
-    if (!dest) return NextResponse.json({ ok: false, error: '주소를 찾을 수 없어요. 도로명주소로 다시 검색해주세요' }, { status: 400 })
+    if (!dest.ok) {
+      if ((dest as any).reason === 'no_result') {
+        return NextResponse.json({ ok: false, error: '주소를 찾을 수 없어요. 도로명주소로 다시 검색해주세요' }, { status: 400 })
+      }
+      return NextResponse.json({ ok: false, error: `주소 검색에 실패했어요 (${(dest as any).reason})` }, { status: 502 })
+    }
 
     // 카카오내비 자동차 길찾기 → 실주행거리(m)
     const naviRes = await fetch(
