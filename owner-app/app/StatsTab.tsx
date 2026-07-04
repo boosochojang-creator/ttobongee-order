@@ -248,6 +248,71 @@ export default function StatsTab() {
     return { totalSales, count, avg: count ? Math.round(totalSales / count) : 0, menuRank, tableRank, typeRank, materials }
   }, [orders, ingredients])
 
+  // ===== F-3: 제출용 리포트 (엑셀 / PDF) =====
+  const reportTitle = `또봉이통닭 백운역점 매출·고객 현황 보고서`
+  const issuedAt = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) // KST 발행일
+
+  const downloadExcel = async () => {
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    const sum: (string | number)[][] = [
+      [reportTitle], [`기간: ${range.label} (KST 기준)`, `발행일: ${issuedAt()}`], [],
+      ['— 매출 요약 —'], ['총 매출(원)', agg.totalSales], ['주문 건수', agg.count], ['객단가(원)', agg.avg], [],
+      ['— 고객 현황 —'], ['신규 가입(기간 내)', crm.newMembers], ['방문 회원(기간 내)', crm.visitors],
+      ['재방문 회원', crm.revisit], ['재방문율(%)', crm.revisitRate],
+      ['마케팅 수신동의', `${crm.optIn} / ${crm.total}`],
+      ['휴면 10~44일', crm.dormant.d10], ['휴면 45~60일', crm.dormant.d45], ['휴면 60일 초과', crm.dormant.d60],
+      ['상태: 전화번호만', crm.statusDist.phone_member || 0], ['상태: 일부입력', crm.statusDist.profile_incomplete || 0], ['상태: 완료입력', crm.statusDist.profile_complete || 0],
+    ]
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), '요약')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [['순위', '메뉴', '수량', '매출액(원)'], ...agg.menuRank.map(([n, v], i) => [i + 1, n, v.qty, v.sales])]), '메뉴별')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [['테이블', '주문건수', '매출액(원)'], ...agg.tableRank.map(([t, v]) => [t, v.count, v.sales])]), '테이블별')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [['유형', '건수', '매출액(원)', '비중(%)'], ...agg.typeRank.map(([t, v]) => [t, v.count, v.sales, agg.totalSales ? Math.round(v.sales / agg.totalSales * 100) : 0])]), '주문유형별')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [['자재', '총 소요량', '단위'], ...agg.materials.map(m => [m.name, Number(m.amount.toFixed(2)), m.unit])]), '자재소요량')
+    XLSX.writeFile(wb, `또봉이_보고서_${range.label.replace(/[^\w가-힣~년월일분기]/g, '_')}.xlsx`)
+  }
+
+  const openPdfReport = () => {
+    const tbl = (heads: string[], rows: (string | number)[][]) =>
+      `<table><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${
+        rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${heads.length}">내역 없음</td></tr>`
+      }</tbody></table>`
+    const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${reportTitle}</title><style>
+      body{font-family:'Malgun Gothic',sans-serif;color:#111;margin:32px;font-size:12px}
+      h1{font-size:18px;border-bottom:3px solid #111;padding-bottom:8px} h2{font-size:14px;margin:18px 0 6px}
+      table{border-collapse:collapse;width:100%;margin-bottom:8px} th,td{border:1px solid #888;padding:4px 8px;text-align:left}
+      th{background:#f0f0f0} .meta{color:#444;margin-bottom:16px} .btn{position:fixed;top:10px;right:10px;padding:10px 18px;font-size:14px;cursor:pointer}
+      @media print{.btn{display:none}}
+    </style></head><body>
+      <button class="btn" onclick="window.print()">🖨️ PDF로 저장 (인쇄)</button>
+      <h1>${reportTitle}</h1>
+      <div class="meta">기간: <b>${range.label}</b> (한국시간 기준) · 발행일: ${issuedAt()}</div>
+      <h2>1. 매출 요약</h2>
+      ${tbl(['총 매출', '주문 건수', '객단가'], [[won(agg.totalSales), `${agg.count}건`, won(agg.avg)]])}
+      <h2>2. 메뉴별 판매</h2>
+      ${tbl(['순위', '메뉴', '수량', '매출액'], agg.menuRank.map(([n, v], i) => [i + 1, n, `${v.qty}개`, won(v.sales)]))}
+      <h2>3. 테이블별</h2>
+      ${tbl(['테이블', '주문 건수', '매출액'], agg.tableRank.map(([t, v]) => [t, `${v.count}건`, won(v.sales)]))}
+      <h2>4. 주문유형별</h2>
+      ${tbl(['유형', '건수', '매출액', '비중'], agg.typeRank.map(([t, v]) => [t, `${v.count}건`, won(v.sales), `${agg.totalSales ? Math.round(v.sales / agg.totalSales * 100) : 0}%`]))}
+      <h2>5. 자재 소요량</h2>
+      ${tbl(['자재', '총 소요량'], agg.materials.map(m => [m.name, `${Number(m.amount.toFixed(2)).toLocaleString()} ${m.unit}`]))}
+      <h2>6. 고객 현황</h2>
+      ${tbl(['신규 가입', '방문 회원', '재방문', '재방문율', '마케팅 동의'],
+        [[`${crm.newMembers}명`, `${crm.visitors}명`, `${crm.revisit}명`, `${crm.revisitRate}%`, `${crm.optIn}/${crm.total}명`]])}
+      ${tbl(['휴면 10~44일', '휴면 45~60일', '휴면 60일 초과', '상태: 전화번호만', '상태: 일부입력', '상태: 완료입력'],
+        [[`${crm.dormant.d10}명`, `${crm.dormant.d45}명`, `${crm.dormant.d60}명`, `${crm.statusDist.phone_member || 0}명`, `${crm.statusDist.profile_incomplete || 0}명`, `${crm.statusDist.profile_complete || 0}명`]])}
+    </body></html>`
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+  }
+
   return (
     <div style={{ padding: '0 4px' }}>
       {/* 기간 선택 */}
@@ -354,6 +419,21 @@ export default function StatsTab() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* ===== F-3: 제출용 리포트 ===== */}
+      <div style={{ ...box, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ fontWeight: 700, color: '#f0f0f0' }}>📄 제출용 리포트</div>
+        <span style={{ fontSize: 12, color: '#888' }}>위에서 선택한 기간({range.label})의 전체 항목이 자동 반영됩니다</span>
+        <span style={{ flex: 1 }} />
+        <button onClick={downloadExcel} style={{
+          padding: '10px 16px', background: '#1d6f42', color: '#fff', fontWeight: 700,
+          fontSize: 13, border: 'none', borderRadius: 10, cursor: 'pointer',
+        }}>📊 엑셀 다운로드</button>
+        <button onClick={openPdfReport} style={{
+          padding: '10px 16px', background: '#b91c1c', color: '#fff', fontWeight: 700,
+          fontSize: 13, border: 'none', borderRadius: 10, cursor: 'pointer',
+        }}>🖨️ PDF 보고서 열기</button>
       </div>
 
       {/* ===== F-2: 고객관리 통계 ===== */}
