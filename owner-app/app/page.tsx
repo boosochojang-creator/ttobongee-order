@@ -19,12 +19,6 @@ type Order = {
 
 const won = (n: number) => n.toLocaleString() + '원'
 
-function getGrade(visits: number) {
-  if (visits >= 10) return 'gold'
-  if (visits >= 5) return 'silver'
-  return 'bronze'
-}
-
 const GRADE_LABEL: Record<string, string> = {
   gold: '🥇 골드', silver: '🥈 실버', bronze: '🥉 브론즈'
 }
@@ -42,6 +36,52 @@ const STATUS_LABEL: Record<string, string> = {
   accepted: '접수', cooking: '조리중', done: '조리완료', served: '서빙완료', canceled: '취소'
 }
 
+// Phase 4-A CRM: 등급 라벨/색 + 휴면 계산 (휴면/휴면주의는 저장 안 하고 last_visit로 조회 시 계산 — D2)
+const CRM_COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served']
+const CRM_GRADE_LABEL: Record<string, string> = { new: '신규', normal: '일반', regular: '단골', vip: 'VIP' }
+const CRM_GRADE_COLOR: Record<string, string> = { new: '#8a8a8a', normal: '#4a90d9', regular: '#c8a900', vip: '#d98cff' }
+
+function daysSince(dateStr?: string | null) {
+  if (!dateStr) return null
+  const t = new Date(dateStr).getTime()
+  return isNaN(t) ? null : Math.floor((Date.now() - t) / 86400000)
+}
+// timestamptz → KST(UTC+9) 날짜 YYYY-MM-DD (집계의 방문일 기준과 표시를 일치시킴)
+function kstDay(iso?: string | null) {
+  if (!iso) return '-'
+  const t = new Date(iso).getTime()
+  return isNaN(t) ? '-' : new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10)
+}
+// 표시 등급: 주문 이력이 있고 오래 미방문이면 휴면/휴면주의를 우선 표시(주문기반 등급 위에 덧씌움)
+function crmDisplayGrade(customerGrade: string, lastVisit?: string | null, orderCount = 0) {
+  const days = daysSince(lastVisit)
+  if (orderCount > 0 && days !== null) {
+    if (days >= 60) return { label: '💤 휴면', color: '#e05555' }
+    if (days >= 30) return { label: '⚠️ 휴면주의', color: '#e0a03a' }
+  }
+  return { label: CRM_GRADE_LABEL[customerGrade] || '신규', color: CRM_GRADE_COLOR[customerGrade] || '#8a8a8a' }
+}
+const CRM_GRADE_EMOJI: Record<string, string> = { new: '🌱', normal: '🙂', regular: '🔥', vip: '👑' }
+
+// 상태 배지 (가입완료/정보부족/주소있음/생일있음/수신동의/수신거부) — '회원가입' 유도 문구는 쓰지 않음
+function Pill({ t, c }: { t: string; c: string }) {
+  return <span style={{ fontSize: 11, fontWeight: 700, color: c, background: c + '22', border: `1px solid ${c}55`, borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>{t}</span>
+}
+function MemberBadges({ m }: { m: any }) {
+  const hasAddr = !!(m.address_saved || m.address)
+  const hasBday = !!(m.birthday_saved || m.birthday)
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      {m.member_status === 'profile_complete'
+        ? <Pill t="가입완료" c="#4caf50" />
+        : <Pill t="정보부족" c="#888" />}
+      {hasAddr && <Pill t="주소있음" c="#4a90d9" />}
+      {hasBday && <Pill t="생일있음" c="#e08ab0" />}
+      {m.marketing_opt_in ? <Pill t="수신동의" c="#4caf50" /> : <Pill t="수신거부" c="#999" />}
+    </div>
+  )
+}
+
 function timeAgo(dt: string) {
   const diff = Math.floor((Date.now() - new Date(dt).getTime()) / 1000)
   if (diff < 60) return `${diff}초 전`
@@ -56,6 +96,9 @@ export default function OwnerDashboard() {
   const [orders, setOrders] = useState<Order[]>([])
   const [menus, setMenus] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
+  const [selectedMember, setSelectedMember] = useState<any | null>(null) // CRM 고객 상세
+  const [memberOrders, setMemberOrders] = useState<any[]>([])            // 상세: 주문이력
+  const [memberDetailLoading, setMemberDetailLoading] = useState(false)
   const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats'>('orders')
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
   const [hideDone, setHideDone] = useState(false)
@@ -225,8 +268,47 @@ export default function OwnerDashboard() {
   }
 
   const loadMembers = async () => {
-    const { data } = await supabase.from('users').select('phone, visit_count, total_spent, last_visit, grade').eq('store_id', 'baegun').order('visit_count', { ascending: false })
-    if (data) setMembers(data)
+    const { data: users } = await supabase.from('users')
+      .select('id, phone, nickname, created_at, last_visit, first_order_at, last_order_at, visit_count, total_order_count, total_spent, average_order_amount, customer_grade, grade, member_status, marketing_opt_in, address_saved, birthday_saved, birthday, address, email')
+      .eq('store_id', 'baegun')
+    if (!users) return
+
+    // 선호메뉴: 완료 주문의 order_items에서 회원별 최다 주문 메뉴(수량 기준) — favorite_menu_id는 integer라 미사용, 조회 시 계산
+    const { data: cntOrders } = await supabase.from('orders')
+      .select('id, user_id').in('status', CRM_COUNTED).not('user_id', 'is', null)
+    const orderUser = new Map((cntOrders || []).map(o => [o.id, o.user_id]))
+    const orderIds = (cntOrders || []).map(o => o.id)
+    const favByUser: Record<string, Record<string, number>> = {}
+    if (orderIds.length) {
+      const { data: items } = await supabase.from('order_items')
+        .select('order_id, name_snapshot, qty').in('order_id', orderIds)
+      for (const it of items || []) {
+        const uid = orderUser.get(it.order_id); if (!uid) continue
+        ;(favByUser[uid] ||= {})[it.name_snapshot] = (favByUser[uid][it.name_snapshot] || 0) + (it.qty || 0)
+      }
+    }
+    const favOf = (uid: string) => {
+      const m = favByUser[uid]; if (!m) return null
+      return Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+    }
+
+    const rows = users
+      .map(u => ({ ...u, favorite_menu: favOf(u.id) }))
+      .sort((a, b) => (b.total_order_count || 0) - (a.total_order_count || 0) || (b.total_spent || 0) - (a.total_spent || 0))
+    setMembers(rows)
+  }
+
+  // 상세 열기: 선택 + 해당 고객의 완료 주문 이력(항목 포함) 로드 (집계와 같은 CRM_COUNTED 기준)
+  const openMember = async (m: any) => {
+    setSelectedMember(m)
+    setMemberOrders([])
+    setMemberDetailLoading(true)
+    const { data } = await supabase.from('orders')
+      .select('id, created_at, final_amount, status, payment_method, order_items(name_snapshot, qty)')
+      .eq('user_id', m.id).in('status', CRM_COUNTED)
+      .order('created_at', { ascending: false })
+    setMemberOrders(data || [])
+    setMemberDetailLoading(false)
   }
 
   const updateStatus = async (orderId: string, status: string) => {
@@ -242,23 +324,8 @@ export default function OwnerDashboard() {
       setTimeout(() => setCallToast(null), 3500)
       return
     }
-    if (status === 'done') {
-      const order = orders.find(o => o.id === orderId)
-      if (order?.user_id && order?.is_member) {
-        const { data: user } = await supabase.from('users')
-          .select('visit_count, total_spent').eq('id', order.user_id).single()
-        if (user) {
-          const newVisits = (user.visit_count || 0) + 1
-          const newSpent = (user.total_spent || 0) + order.final_amount
-          await supabase.from('users').update({
-            visit_count: newVisits,
-            total_spent: newSpent,
-            grade: getGrade(newVisits),
-            last_visit: new Date().toISOString().slice(0, 10),
-          }).eq('id', order.user_id)
-        }
-      }
-    }
+    // 회원 방문/등급/누적 집계는 서버(/api/update-status)에서 서비스롤로 재계산한다.
+    // (기존 익명키 클라이언트 UPDATE는 RLS로 조용히 실패하던 B-2 버그 — 제거하고 서버로 이전)
     await loadOrders()
   }
 
@@ -1031,30 +1098,117 @@ export default function OwnerDashboard() {
       {/* 통계 (그룹 F-1) */}
       {tab === 'stats' && <StatsTab />}
 
-      {/* 회원 목록 */}
+      {/* 회원 목록 (Phase 4-A CRM) */}
       {tab === 'members' && (
         <div className="member-list">
-          {members.length === 0 && <div className="empty">등록된 단골이 없어요</div>}
-          {members.map((m, i) => (
-            <div key={i} className="member-row">
-              <div className="member-avatar" style={{ fontSize: 20 }}>
-                {(GRADE_LABEL[m.grade || 'bronze'] || '🥉').split(' ')[0]}
-              </div>
-              <div className="member-info">
-                <div className="member-phone">{m.phone}</div>
-                <div className="member-sub">
-                  <span style={{ color: GRADE_COLOR[m.grade || 'bronze'], fontWeight: 600 }}>
-                    {GRADE_LABEL[m.grade || 'bronze']}
-                  </span>
-                  {' · '}최근 {m.last_visit?.slice(0, 10) || '-'}
-                  {' · '}누적 {won(m.total_spent || 0)}
+          {members.length > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text2)', padding: '0 0 10px' }}>
+              총 {members.length}명 · 이름/전화 클릭 시 상세
+            </div>
+          )}
+          {members.length === 0 && <div className="empty">등록된 회원이 없어요</div>}
+          {members.map((m) => {
+            const g = crmDisplayGrade(m.customer_grade, m.last_visit, m.total_order_count)
+            const name = m.nickname || m.phone
+            return (
+              <div key={m.id} className="member-row" style={{ cursor: 'pointer', alignItems: 'flex-start' }} onClick={() => openMember(m)}>
+                <div className="member-avatar" style={{ fontSize: 20 }}>{CRM_GRADE_EMOJI[m.customer_grade] || '🌱'}</div>
+                <div className="member-info">
+                  <div className="member-phone">
+                    {name}
+                    <span style={{ color: g.color, fontWeight: 700, fontSize: 12, marginLeft: 6 }}>{g.label}</span>
+                  </div>
+                  <div className="member-sub">
+                    {name !== m.phone && <>{m.phone} · </>}
+                    가입 {kstDay(m.created_at)} · 최근방문 {m.last_visit?.slice(0, 10) || '-'}
+                  </div>
+                  <div className="member-sub" style={{ marginTop: 3 }}>
+                    방문 {m.visit_count || 0}회 · 주문 {m.total_order_count || 0}회 · 누적 {won(m.total_spent || 0)} · 평균 {won(m.average_order_amount || 0)}
+                  </div>
+                  {m.favorite_menu && <div className="member-sub" style={{ marginTop: 2 }}>선호 🍗 {m.favorite_menu}</div>}
+                  <div style={{ marginTop: 6 }}><MemberBadges m={m} /></div>
                 </div>
               </div>
-              <span className="visit-badge">{m.visit_count}회</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
+
+      {/* 고객 상세 (Stage 2: 기본정보+집계+배지 / 주문·방문 이력은 Stage 3에서 추가) */}
+      {selectedMember && (() => {
+        const m = selectedMember
+        const g = crmDisplayGrade(m.customer_grade, m.last_visit, m.total_order_count)
+        const name = m.nickname || m.phone
+        const vc = m.visit_count || 0
+        let interval = '-'
+        if (vc >= 2 && m.first_order_at && m.last_order_at) {
+          const span = (new Date(m.last_order_at).getTime() - new Date(m.first_order_at).getTime()) / 86400000
+          interval = `약 ${Math.max(1, Math.round(span / (vc - 1)))}일`
+        }
+        const Row = ({ k, v }: { k: string; v: any }) => (
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)', fontSize: 14 }}>
+            <span style={{ color: 'var(--text2)' }}>{k}</span>
+            <span style={{ fontWeight: 600, textAlign: 'right' }}>{v ?? '-'}</span>
+          </div>
+        )
+        return (
+          <div onClick={() => setSelectedMember(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 520, maxHeight: '88vh', overflowY: 'auto', background: 'var(--bg2)', borderRadius: '18px 18px 0 0', padding: '20px 18px 32px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ fontSize: 19, fontWeight: 900 }}>
+                  {CRM_GRADE_EMOJI[m.customer_grade] || '🌱'} {name}
+                  <span style={{ color: g.color, fontWeight: 700, fontSize: 13, marginLeft: 8 }}>{g.label}</span>
+                </div>
+                <button onClick={() => setSelectedMember(null)} style={{ background: 'none', border: 'none', color: 'var(--text2)', fontSize: 22, cursor: 'pointer' }}>✕</button>
+              </div>
+              <div style={{ marginBottom: 14 }}><MemberBadges m={m} /></div>
+
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', margin: '6px 0' }}>기본정보</div>
+              <Row k="이름/닉네임" v={m.nickname || '-'} />
+              <Row k="전화번호" v={m.phone} />
+              <Row k="생일" v={m.birthday || '-'} />
+              <Row k="주소" v={m.address || '-'} />
+              <Row k="이메일" v={m.email || '-'} />
+              <Row k="가입일" v={kstDay(m.created_at)} />
+
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', margin: '16px 0 6px' }}>주문 요약</div>
+              <Row k="총 주문횟수" v={`${m.total_order_count || 0}회`} />
+              <Row k="총 주문금액" v={won(m.total_spent || 0)} />
+              <Row k="평균 주문금액" v={won(m.average_order_amount || 0)} />
+              <Row k="선호 메뉴" v={m.favorite_menu || '-'} />
+
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', margin: '16px 0 6px' }}>방문 이력</div>
+              <Row k="첫 방문" v={kstDay(m.first_order_at)} />
+              <Row k="최근 방문" v={m.last_visit?.slice(0, 10) || '-'} />
+              <Row k="총 방문횟수" v={`${vc}회`} />
+              <Row k="평균 방문간격" v={interval} />
+
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', margin: '16px 0 6px' }}>주문 이력</div>
+              {memberDetailLoading ? (
+                <div style={{ color: 'var(--text2)', fontSize: 13, padding: '10px 0' }}>불러오는 중…</div>
+              ) : memberOrders.length === 0 ? (
+                <div style={{ color: 'var(--text2)', fontSize: 13, padding: '10px 0' }}>완료된 주문 이력이 없어요</div>
+              ) : (
+                memberOrders.map(o => (
+                  <div key={o.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700 }}>
+                      <span>{kstDay(o.created_at)}{' '}
+                        <span style={{ color: 'var(--text2)', fontWeight: 400 }}>{PAY_LABELS[o.payment_method] || o.payment_method || ''}</span>
+                      </span>
+                      <span style={{ color: 'var(--gold)' }}>{won(o.final_amount || 0)}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                      {(o.order_items || []).map((i: any) => `${i.name_snapshot}${i.qty > 1 ? ` x${i.qty}` : ''}`).join(', ') || '-'}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
