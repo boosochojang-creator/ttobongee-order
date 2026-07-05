@@ -77,12 +77,22 @@ function SplitContent() {
     if (session?.status === 'all_paid') setActiveOrder(session.table_order_id)
   }, [session?.status]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 예약한 몫 반납 (결제 실패/취소 시) → 슬롯이 즉시 풀려 다시 "내 몫 결제하기"를 눌러 새 예약을 받을 수 있다
+  const releaseShare = async (paymentId?: string) => {
+    if (!paymentId) return
+    await fetch('/api/split', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel', paymentId }),
+    }).catch(() => {})
+    await refresh()
+  }
+
   const payShare = async (pre?: { paymentId: string; amount: number }) => {
     if (!sid || loading) return
     setLoading(true); setError('')
+    let paymentId = pre?.paymentId
+    let amount = pre?.amount
     try {
-      let paymentId = pre?.paymentId
-      let amount = pre?.amount
       if (!paymentId) {
         const m = getMemberLocal()
         const claim = await fetch('/api/split', {
@@ -114,6 +124,7 @@ function SplitContent() {
       })
       if (pgResponse?.code !== undefined) {
         setError(pgResponse.message || '결제가 취소되었어요')
+        await releaseShare(paymentId) // 취소/실패 → 예약 반납 (재시도 시 새 예약 정상 발급)
         setLoading(false)
         return
       }
@@ -126,6 +137,7 @@ function SplitContent() {
       await refresh()
     } catch {
       setError('결제 처리 중 오류가 발생했어요')
+      await releaseShare(paymentId) // 예외 발생 시에도 예약 반납 (슬롯 누수 방지)
     } finally {
       setLoading(false)
     }

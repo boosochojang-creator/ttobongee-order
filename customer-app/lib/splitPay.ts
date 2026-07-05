@@ -51,18 +51,22 @@ export async function startSession(orderId: string, participantCount: number) {
   return { ok: true as const, sessionId: session.id }
 }
 
-// 몫 예약: 다음 순번을 원자적으로 배정 (마지막 순번 = 잔돈 포함 금액)
+// 몫 예약: 다음 순번을 원자적으로 배정 (잔돈은 활성 몫 중 딱 하나에만 부여)
 // 정책: 금액은 세션 시작 시점에 확정 — 합류자는 회원 여부와 무관하게 확정된 몫만 결제 (재계산 없음)
+// 취소 대응: 순번(share_index)은 취소분까지 포함해 단조 증가시킨다. 취소된 몫의 순번을 재사용하면
+//   unique(session_id, share_index) 충돌로 재예약이 막히므로, 항상 최대값+1로 새 순번을 발급한다.
 export async function claimShare(sessionId: string, memberUserId?: string | null) {
   const db = admin()
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const { data: s } = await db.from('split_payment_sessions').select('*').eq('id', sessionId).single()
     if (!s) return { ok: false as const, error: '세션 없음' }
     if (s.status === 'all_paid') return { ok: false as const, error: '이미 전원 결제가 끝났어요' }
 
-    const { data: shares } = await db.from('split_payment_shares')
-      .select('id, share_index, status, created_at').eq('session_id', sessionId).neq('status', 'canceled')
-    const active = shares || []
+    // 전체 몫(취소분 포함) 조회 — 순번 단조 증가 계산 + 활성 슬롯 점유 판정에 모두 사용
+    const { data: allShares } = await db.from('split_payment_shares')
+      .select('id, share_index, status, amount, created_at').eq('session_id', sessionId)
+    const shares = allShares || []
+    const active = shares.filter(sh => sh.status !== 'canceled') // pending + paid = 슬롯 점유
 
     if (active.length >= s.participant_count) {
       // 오래 방치된 미결제 예약이 있으면 취소하고 자리 재사용 (이탈자 대응)
@@ -75,9 +79,14 @@ export async function claimShare(sessionId: string, memberUserId?: string | null
       return { ok: false as const, error: '모든 몫이 결제 진행 중이에요. 잠시 후 다시 시도해주세요' }
     }
 
-    const index = Math.max(0, ...active.map(sh => sh.share_index)) + 1
-    const isLast = index === s.participant_count
+    // 잔돈(마지막 결제자 몫)은 활성 몫 중 아직 아무도 안 가졌고, 이번이 마지막 빈자리를 채울 때만 부여.
+    // 순번이 아니라 '활성 점유' 기준이라, 중간에 취소·재예약이 섞여도 잔돈은 항상 정확히 1건만 유지된다.
+    const hasRemainder = s.last_payer_amount !== s.amount_per_person
+    const remainderTaken = hasRemainder && active.some(sh => sh.amount === s.last_payer_amount)
+    const isLast = hasRemainder && !remainderTaken && active.length === s.participant_count - 1
     const amount = isLast ? s.last_payer_amount : s.amount_per_person
+
+    const index = Math.max(0, ...shares.map(sh => sh.share_index)) + 1
     const shareId = crypto.randomUUID()
     const { error } = await db.from('split_payment_shares').insert({
       id: shareId, session_id: sessionId, share_index: index, amount,
@@ -87,6 +96,18 @@ export async function claimShare(sessionId: string, memberUserId?: string | null
     return { ok: true as const, shareId, paymentId: `spl_${shareId}`, amount, isLast, index }
   }
   return { ok: false as const, error: '자리 배정에 실패했어요. 다시 시도해주세요' }
+}
+
+// 결제 실패/취소 시 예약한 몫을 반납 (pending → canceled) → 슬롯 재사용 가능
+// 가드: .eq('status','pending') 로 이미 결제 완료(paid)된 몫은 절대 건드리지 않는다 (완료자 불변 원칙)
+// 멱등: 이미 canceled/paid면 반영 0건(released:false)으로 조용히 통과
+export async function cancelShare(paymentId: string) {
+  const db = admin()
+  const { data: updated } = await db.from('split_payment_shares')
+    .update({ status: 'canceled' })
+    .eq('payment_id', paymentId).eq('status', 'pending')
+    .select('id')
+  return { ok: true as const, released: !!(updated && updated.length) }
 }
 
 // 결제 확정: 포트원 재조회 → 몫 금액 대조 → paid 처리 → 전원 완료 시 원 주문 paid (주방 신호)

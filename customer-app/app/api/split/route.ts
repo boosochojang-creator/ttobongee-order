@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  startSession, claimShare, confirmShare,
+  startSession, claimShare, confirmShare, cancelShare,
   getSessionState, findActiveSessionByTable,
 } from '../../../lib/splitPay'
 
-// Phase 3: 더치페이 API — action 하나로 통합 (start / claim / confirm)
+// Phase 3: 더치페이 API — action 하나로 통합 (start / claim / confirm / cancel)
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +16,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(await claimShare(body.sessionId, body.memberUserId))
       case 'confirm':
         return NextResponse.json(await confirmShare(body.paymentId))
+      case 'cancel':
+        return NextResponse.json(await cancelShare(body.paymentId))
       default:
         return NextResponse.json({ ok: false, error: '알 수 없는 action' }, { status: 400 })
     }
