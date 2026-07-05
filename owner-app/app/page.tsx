@@ -1120,7 +1120,7 @@ export default function OwnerDashboard() {
                   </div>
                   <div className="member-sub">
                     {name !== m.phone && <>{m.phone} · </>}
-                    가입 {kstDay(m.created_at)} · 최근방문 {m.last_visit?.slice(0, 10) || '-'}
+                    가입 {kstDay(m.created_at)} · 최근방문 {kstDay(m.last_visit)}
                   </div>
                   <div className="member-sub" style={{ marginTop: 3 }}>
                     방문 {m.visit_count || 0}회 · 주문 {m.total_order_count || 0}회 · 누적 {won(m.total_spent || 0)} · 평균 {won(m.average_order_amount || 0)}
@@ -1181,7 +1181,7 @@ export default function OwnerDashboard() {
 
               <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)', margin: '16px 0 6px' }}>방문 이력</div>
               <Row k="첫 방문" v={kstDay(m.first_order_at)} />
-              <Row k="최근 방문" v={m.last_visit?.slice(0, 10) || '-'} />
+              <Row k="최근 방문" v={kstDay(m.last_visit)} />
               <Row k="총 방문횟수" v={`${vc}회`} />
               <Row k="평균 방문간격" v={interval} />
 
