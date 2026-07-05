@@ -43,6 +43,15 @@ export default function MenuPage() {
   // (isMember는 3시간짜리 장바구니 상태라, 시간이 지난 회원에게 가입 배너가 재노출되던 허점 보완)
   const [isJoined, setIsJoined] = useState(false)
   useEffect(() => { setIsJoined(!!getMemberLocal()) }, [])
+
+  // Phase 3 방식 B: 이 테이블에 진행 중인 더치페이가 있으면 참여 배너 노출
+  const [splitSession, setSplitSession] = useState<{ id: string; paid_count: number; participant_count: number } | null>(null)
+  useEffect(() => {
+    if (!tableNo || tableNo === '0') return
+    fetch(`/api/split?table=${tableNo}`).then(x => x.json())
+      .then(r => { if (r?.ok && r.session) setSplitSession(r.session) })
+      .catch(() => {})
+  }, [tableNo])
   const catRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const headerRef = useRef<HTMLDivElement>(null)
   const [headerH, setHeaderH] = useState(114)
@@ -182,6 +191,25 @@ export default function MenuPage() {
           <div style={{fontSize:12, color:'#555', marginTop:2}}>
             📱 카카오 로그인은 준비 중이에요 (곧 추가될 예정)
           </div>
+        </div>
+      )}
+
+      {/* 진행 중인 더치페이 참여 배너 (방식 B: 각자 폰으로 합류) */}
+      {splitSession && (
+        <div
+          onClick={() => router.push(`/store/baegun/split?sid=${splitSession.id}`)}
+          style={{
+            background: '#101820', border: '1px solid #7fd4ff66', borderRadius: 12,
+            padding: '14px 16px', margin: '12px 16px 0', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}
+        >
+          <span style={{ fontSize: 24 }}>🍗</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#7fd4ff' }}>이 테이블에 진행 중인 더치페이가 있어요!</div>
+            <div style={{ fontSize: 12, color: '#888' }}>{splitSession.paid_count}/{splitSession.participant_count}명 결제 완료 · 눌러서 참여하기</div>
+          </div>
+          <span style={{ color: '#7fd4ff' }}>›</span>
         </div>
       )}
 

@@ -37,6 +37,44 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // ===== Phase 3: 더치페이 (홀 주문 전용) =====
+  const [splitModal, setSplitModal] = useState(false)
+  const [splitN, setSplitN] = useState('')
+  const [splitLoading, setSplitLoading] = useState(false)
+
+  const handleSplitStart = async () => {
+    const n = Math.floor(Number(splitN))
+    if (!n || n < 2 || n > 20) { setError('인원수는 2~20명으로 입력해주세요'); return }
+    if (!items.length || splitLoading) return
+    setSplitLoading(true); setError('')
+    try {
+      // 원 주문 생성 (결제 전 pending — 전원 결제 완료 시에만 주방으로 넘어감)
+      const { data: order, error: orderErr } = await supabase.from('orders').insert({
+        store_id: 'baegun', table_no: Number(tableNo), order_type: 'dine_in', status: 'pending',
+        total_amount: totalAmount, discount_amount: discountAmount, final_amount: finalAmount,
+        payment_method: 'split', user_id: userId, is_member: isMember,
+      }).select('id').single()
+      if (orderErr || !order) throw orderErr
+      const orderItems = items.map(i => ({
+        order_id: order.id, menu_id: i.id, name_snapshot: i.name,
+        price_snapshot: i.price, qty: i.qty, subtotal: i.price * i.qty,
+      }))
+      const { error: itemErr } = await supabase.from('order_items').insert(orderItems)
+      if (itemErr) throw itemErr
+
+      const r = await fetch('/api/split', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start', orderId: order.id, participantCount: n }),
+      }).then(x => x.json())
+      if (!r.ok) throw new Error(r.error)
+      clearCart()
+      router.push(`/store/baegun/split?sid=${r.sessionId}`)
+    } catch (e: any) {
+      setError(e?.message || '더치페이 시작에 실패했어요. 다시 시도해주세요')
+      setSplitLoading(false)
+    }
+  }
+
   // ===== Phase 2: 배달 주문 =====
   const [isDelivery, setIsDelivery] = useState(false)
   const [addr, setAddr] = useState('')            // 도로명주소
@@ -50,6 +88,7 @@ export default function CheckoutPage() {
 
   // 최종 결제금액 = 장바구니 총액 + 배달료
   const payTotal = finalAmount + (isDelivery && deliveryFee ? deliveryFee : 0)
+  const canSplit = !isDelivery && orderType === 'dine_in' // 더치페이는 홀 주문 전용 (포장/배달 제외)
 
   // 배달료 계산 (실주행거리 기반, 서버 API)
   const calcDeliveryFee = async (roadAddr: string) => {
@@ -367,6 +406,20 @@ export default function CheckoutPage() {
           동의한 것으로 간주됩니다.
         </div>
 
+        {/* 더치페이 (홀 주문 전용 — 포장/배달에는 노출 안 함) */}
+        {canSplit && (
+          <button
+            onClick={() => { setSplitModal(true); setError('') }}
+            style={{
+              width: '100%', marginTop: 16, padding: '13px',
+              background: 'none', color: '#FFD700', fontSize: 14, fontWeight: 700,
+              border: '1px solid #7a6400', borderRadius: 10, cursor: 'pointer',
+            }}
+          >
+            🍗 더치페이로 나눠 내기 (n분의 1)
+          </button>
+        )}
+
         <div style={{ height: 12 }} />
         <button className="btn-primary" onClick={handleOrder} disabled={loading}>
           {loading
@@ -376,6 +429,31 @@ export default function CheckoutPage() {
 
         <LegalFooter />
       </div>
+
+      {/* 더치페이 인원수 입력 */}
+      {splitModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ width: '100%', maxWidth: 320, background: '#1c1c1c', border: '1px solid #c8a900', borderRadius: 18, padding: '26px 22px', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🍗</div>
+            <div style={{ fontSize: 17, fontWeight: 900, color: '#f0f0f0', marginBottom: 14 }}>몇 분이서 나누실까요?</div>
+            <input
+              type="number" inputMode="numeric" min={2} max={20} placeholder="인원수 (2~20)"
+              value={splitN} onChange={e => setSplitN(e.target.value)}
+              style={{ width: '100%', background: '#111', border: '1px solid #444', borderRadius: 10, padding: '12px 14px', color: '#f0f0f0', fontSize: 16, outline: 'none', textAlign: 'center' }}
+            />
+            {error && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{error}</div>}
+            <button className="btn-primary" style={{ marginTop: 14 }} onClick={handleSplitStart} disabled={splitLoading}>
+              {splitLoading ? '시작하는 중...' : '더치페이 시작'}
+            </button>
+            <button
+              onClick={() => setSplitModal(false)}
+              style={{ width: '100%', marginTop: 8, padding: '10px', background: 'none', color: '#888', fontSize: 13, border: 'none', cursor: 'pointer' }}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 20km 초과 안내 (확정 문구 — 주문 차단 아님, 확인 후 계속 진행) */}
       {farNotice && (

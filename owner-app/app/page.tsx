@@ -33,7 +33,7 @@ const GRADE_COLOR: Record<string, string> = {
 }
 
 const PAY_LABELS: Record<string, string> = {
-  card: '💳 카드', kakao: '💛 카카오', toss: '💙 토스', cash: '💵 현금'
+  card: '💳 카드', kakao: '💛 카카오', toss: '💙 토스', cash: '💵 현금', split: '🍗 더치페이'
 }
 
 const STATUS_LABEL: Record<string, string> = {
