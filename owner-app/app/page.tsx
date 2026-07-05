@@ -47,7 +47,7 @@ function daysSince(dateStr?: string | null) {
   return isNaN(t) ? null : Math.floor((Date.now() - t) / 86400000)
 }
 // timestamptz → KST(UTC+9) 날짜 YYYY-MM-DD (집계의 방문일 기준과 표시를 일치시킴)
-function kstDay(iso?: string | null) {
+function kstDay(iso?: string | Date | null) {
   if (!iso) return '-'
   const t = new Date(iso).getTime()
   return isNaN(t) ? '-' : new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10)
@@ -159,7 +159,7 @@ export default function OwnerDashboard() {
   }
 
   const loadOrders = useCallback(async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     const { data } = await supabase
       .from('orders')
       .select(`*,
@@ -169,7 +169,7 @@ export default function OwnerDashboard() {
       .neq('status', 'canceled')
       // pending = 손님이 결제창만 열고 아직 결제 안 한 상태(취소·이탈 포함) → 확정 전이므로 점주 화면에서 제외
       .neq('status', 'pending')
-      .gte('created_at', `${today}T00:00:00`)
+      .gte('created_at', `${today}T00:00:00+09:00`)
       .order('created_at', { ascending: false })
 
     if (!data) return
@@ -364,14 +364,14 @@ export default function OwnerDashboard() {
   }
 
   const loadTodayReport = async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     const { data } = await supabase.from('daily_reports').select('*')
       .eq('store_id', 'baegun').eq('date', today).maybeSingle()
     setTodayReport(data || null)
   }
 
   const startBusiness = async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     await supabase.from('daily_reports').upsert(
       { store_id: 'baegun', date: today, start_time: new Date().toISOString() },
       { onConflict: 'store_id,date' }
@@ -380,10 +380,10 @@ export default function OwnerDashboard() {
   }
 
   const closeBusiness = async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     const { data: raw } = await supabase.from('orders')
       .select('final_amount, payment_method').eq('store_id', 'baegun').eq('status', 'done')
-      .gte('created_at', `${today}T00:00:00`)
+      .gte('created_at', `${today}T00:00:00+09:00`)
     const list = raw || []
     const total = list.reduce((s: number, o: any) => s + o.final_amount, 0)
     const byM = (m: string) => list.filter((o: any) => o.payment_method === m).reduce((s: number, o: any) => s + o.final_amount, 0)
