@@ -441,6 +441,11 @@ export default function CheckoutPage() {
               value={splitN} onChange={e => setSplitN(e.target.value)}
               style={{ width: '100%', background: '#111', border: '1px solid #444', borderRadius: 10, padding: '12px 14px', color: '#f0f0f0', fontSize: 16, outline: 'none', textAlign: 'center' }}
             />
+            {/* [인원수 안내] — 확정 문구 (2026-07-05 지시) */}
+            <div style={{ fontSize: 12, color: '#aaa', lineHeight: 1.8, marginTop: 10, textAlign: 'left' }}>
+              이 화면은 정확히 인원수만큼 나눠서 결제돼요.<br />
+              누군가 더 내주고 싶으시면, 결제 다 끝난 뒤 현금이나 계좌이체로 따로 정산해주세요 :)
+            </div>
             {error && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{error}</div>}
             <button className="btn-primary" style={{ marginTop: 14 }} onClick={handleSplitStart} disabled={splitLoading}>
               {splitLoading ? '시작하는 중...' : '더치페이 시작'}

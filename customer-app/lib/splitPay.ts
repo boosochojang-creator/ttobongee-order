@@ -51,36 +51,8 @@ export async function startSession(orderId: string, participantCount: number) {
   return { ok: true as const, sessionId: session.id }
 }
 
-// 방식 B: 나중에 합류한 회원이 있으면, 아무도 결제하기 전까지만 회원가(5%) 재적용
-export async function applyMemberPricing(sessionId: string, userId: string) {
-  const db = admin()
-  const { data: s } = await db.from('split_payment_sessions').select('*').eq('id', sessionId).single()
-  if (!s) return { ok: false as const, error: '세션 없음' }
-  if (s.is_member_pricing_applied) return { ok: true as const, applied: false } // 이미 적용됨
-  if (s.paid_count > 0) return { ok: true as const, applied: false }            // 결제 시작 후엔 금액 변경 불가
-
-  const { data: user } = await db.from('users').select('id').eq('id', userId).single()
-  if (!user) return { ok: false as const, error: '회원 정보를 찾을 수 없어요' }
-
-  const { data: order } = await db.from('orders')
-    .select('id, total_amount, status').eq('id', s.table_order_id).single()
-  if (!order || order.status !== 'pending') return { ok: true as const, applied: false }
-
-  const discount = Math.round(order.total_amount * 0.05)
-  const newFinal = order.total_amount - discount
-  const { per, last } = splitAmounts(newFinal, s.participant_count)
-
-  await db.from('orders').update({
-    discount_amount: discount, final_amount: newFinal, is_member: true, user_id: userId,
-  }).eq('id', order.id).eq('status', 'pending')
-  await db.from('split_payment_sessions').update({
-    total_amount: newFinal, amount_per_person: per, last_payer_amount: last,
-    is_member_pricing_applied: true,
-  }).eq('id', sessionId).eq('paid_count', 0)
-  return { ok: true as const, applied: true }
-}
-
 // 몫 예약: 다음 순번을 원자적으로 배정 (마지막 순번 = 잔돈 포함 금액)
+// 정책: 금액은 세션 시작 시점에 확정 — 합류자는 회원 여부와 무관하게 확정된 몫만 결제 (재계산 없음)
 export async function claimShare(sessionId: string, memberUserId?: string | null) {
   const db = admin()
   for (let attempt = 0; attempt < 3; attempt++) {

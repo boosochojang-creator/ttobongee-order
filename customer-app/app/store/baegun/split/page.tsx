@@ -1,5 +1,6 @@
 'use client'
-// Phase 3: 더치페이 세션 화면 — 방식 A(폰 1대 돌아가며)와 방식 B(각자 폰) 공용.
+// Phase 3: 더치페이 세션 화면 — 각자 폰으로 테이블 QR을 찍고 합류해 자기 몫만 결제.
+// 금액은 세션 시작 시점에 확정(합류자 재계산 없음). 이 폰에서 결제를 마치면 버튼을 숨긴다.
 // 4초 폴링으로 결제 현황 실시간 표시. 전원 결제 완료 시에만 주방 신호(원 주문 paid)가 나간다.
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -32,8 +33,16 @@ function SplitContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [lastPopup, setLastPopup] = useState<null | { shareId: string; paymentId: string; amount: number }>(null)
+  const [devicePaid, setDevicePaid] = useState(false) // 이 폰에서 결제 완료 여부 (버튼 숨김용)
   const confirmedRef = useRef(false)
-  const memberAppliedRef = useRef(false)
+
+  useEffect(() => {
+    if (sid) try { setDevicePaid(localStorage.getItem(`ttobongee-split-paid-${sid}`) === '1') } catch {}
+  }, [sid])
+  const markDevicePaid = () => {
+    setDevicePaid(true)
+    try { localStorage.setItem(`ttobongee-split-paid-${sid}`, '1') } catch {}
+  }
 
   const refresh = async () => {
     if (!sid) return
@@ -56,21 +65,12 @@ function SplitContent() {
     fetch('/api/split', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'confirm', paymentId: returnedPaymentId }),
-    }).then(x => x.json()).then(r => { if (!r.ok) setError(r.error || '결제 확인 실패'); refresh() })
+    }).then(x => x.json()).then(r => {
+      if (!r.ok) setError(r.error || '결제 확인 실패')
+      else markDevicePaid()
+      refresh()
+    })
   }, [returnedPaymentId, returnedCode]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 회원이 이 화면에 들어오면(방식 B 합류 포함) 결제 시작 전까지 회원가 자동 적용
-  useEffect(() => {
-    if (!sid || !session || memberAppliedRef.current) return
-    if (session.is_member_pricing_applied || session.paid_count > 0) return
-    const m = getMemberLocal()
-    if (!m) return
-    memberAppliedRef.current = true
-    fetch('/api/split', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'apply_member', sessionId: sid, userId: m.userId }),
-    }).then(() => refresh())
-  }, [sid, session]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 전원 완료 → 주문 추적 시작 (접수/조리완료 팝업은 기존 감시자가 담당)
   useEffect(() => {
@@ -122,6 +122,7 @@ function SplitContent() {
         body: JSON.stringify({ action: 'confirm', paymentId: pgResponse?.paymentId ?? paymentId }),
       }).then(x => x.json())
       if (!r.ok) setError(r.error || '결제 확인 실패')
+      else markDevicePaid()
       await refresh()
     } catch {
       setError('결제 처리 중 오류가 발생했어요')
@@ -156,10 +157,10 @@ function SplitContent() {
           </div>
         ) : (
           <>
-            {/* [더치페이 시작] — 확정 문구 */}
+            {/* [더치페이 시작] — 확정 문구 (각자 폰 합류 안내) */}
             <div style={{ background: 'var(--bg2)', borderRadius: 12, padding: '16px', fontSize: 14, color: '#e0e0e0', lineHeight: 1.8 }}>
               오늘은 다 같이 {n}분의 1! 🍗<br />
-              각자 폰으로 들어오셔도 되고, 한 분 폰으로 돌아가면서 결제하셔도 돼요.<br />
+              각자 폰으로 테이블 QR을 찍고 들어오면, 메뉴 화면 위에 뜨는 참여 배너로 합류할 수 있어요.<br />
               다 같이 결제가 끝나야 주방으로 주문이 들어가니, 서두르지 않으셔도 괜찮아요 :)
             </div>
 
@@ -186,9 +187,17 @@ function SplitContent() {
 
             {error && <div style={{ color: 'var(--red)', fontSize: 14 }}>❌ {error}</div>}
 
-            <button className="btn-primary" onClick={() => payShare()} disabled={loading}>
-              {loading ? '처리 중...' : '💳 내 몫 결제하기'}
-            </button>
+            {devicePaid ? (
+              /* 이 폰의 몫은 결제 완료 — 각자 폰 합류만 안내 (버튼 재노출 없음) */
+              <div style={{ background: '#0d1a0d', border: '1px solid #2e5c2e', borderRadius: 12, padding: '16px', textAlign: 'center', fontSize: 14, color: '#8fd48f', lineHeight: 1.8 }}>
+                ✅ 내 몫 결제 완료!<br />
+                <span style={{ color: '#aaa', fontSize: 13 }}>아직 결제 안 하신 분들은 각자 폰으로 테이블 QR을 찍고 참여해주세요.</span>
+              </div>
+            ) : (
+              <button className="btn-primary" onClick={() => payShare()} disabled={loading}>
+                {loading ? '처리 중...' : '💳 내 몫 결제하기'}
+              </button>
+            )}
           </>
         )}
       </div>
