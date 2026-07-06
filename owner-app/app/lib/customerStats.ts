@@ -4,7 +4,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // '완료 주문'으로 카운트하는 상태 (미결제 pending/cash_pending, canceled, verification_failed 제외) — D5
-const COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served']
+const COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served', 'out_for_delivery', 'delivered']
 
 // KST(UTC+9) 기준 날짜 문자열 YYYY-MM-DD — '같은 날 여러 주문 = 방문 1회' 판정용
 function kstDate(iso: string) {

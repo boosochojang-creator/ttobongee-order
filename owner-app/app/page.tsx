@@ -13,6 +13,7 @@ type Order = {
   payment_method: string
   is_member: boolean
   created_at: string
+  rider_id?: string | null
   items?: { name_snapshot: string; qty: number; subtotal: number }[]
   member_info?: { visit_count: number; grade: string } | null
 }
@@ -33,11 +34,15 @@ const PAY_LABELS: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   pending: '신규', paid: '신규', cash_pending: '현금대기',
   verification_failed: '⚠️ 결제확인필요',
-  accepted: '접수', cooking: '조리중', done: '조리완료', served: '서빙완료', canceled: '취소'
+  accepted: '접수', cooking: '조리중', done: '조리완료', served: '서빙완료', canceled: '취소',
+  out_for_delivery: '🛵 배달출발', delivered: '✅ 배달완료',
 }
+// Phase 5-1-a: 매출 확정으로 카운트하는 상태 (배달은 done을 지나 배달출발/완료로 가므로 함께 포함)
+const SALES_STATUSES = ['done', 'out_for_delivery', 'delivered']
+const CUSTOMER_APP_BASE = 'https://ttobongee-order-5izk.vercel.app' // 라이더 화면(/rider)이 있는 손님앱 도메인
 
 // Phase 4-A CRM: 등급 라벨/색 + 휴면 계산 (휴면/휴면주의는 저장 안 하고 last_visit로 조회 시 계산 — D2)
-const CRM_COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served']
+const CRM_COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served', 'out_for_delivery', 'delivered']
 const CRM_GRADE_LABEL: Record<string, string> = { new: '신규', normal: '일반', regular: '단골', vip: 'VIP' }
 const CRM_GRADE_COLOR: Record<string, string> = { new: '#8a8a8a', normal: '#4a90d9', regular: '#c8a900', vip: '#d98cff' }
 
@@ -157,6 +162,9 @@ export default function OwnerDashboard() {
   const [bizSubTab, setBizSubTab] = useState<'daily' | 'monthly' | 'yearly'>('daily')
   const [todayReport, setTodayReport] = useState<any>(null)
   const [issuedPopup, setIssuedPopup] = useState<{ who: string; label: string; discount: number }[] | null>(null) // 오늘 자동발급 쿠폰
+  const [riders, setRiders] = useState<any[]>([])          // Phase 5-1-a 라이더
+  const [riderModal, setRiderModal] = useState(false)
+  const [riderForm, setRiderForm] = useState({ name: '', phone: '' })
   const [monthlyReports, setMonthlyReports] = useState<any[]>([])
   const [yearlyReports, setYearlyReports] = useState<any[]>([])
   const [closingConfirm, setClosingConfirm] = useState(false)
@@ -387,6 +395,24 @@ export default function OwnerDashboard() {
     await loadOrders()
   }
 
+  // ===== Phase 5-1-a: 라이더 =====
+  const loadRiders = async () => {
+    const { data } = await supabase.from('riders').select('*').eq('store_id', 'baegun').eq('is_active', true).order('created_at')
+    if (data) setRiders(data)
+  }
+  const addRider = async () => {
+    if (!riderForm.name.trim()) return
+    await fetch('/api/rider/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(riderForm) }).catch(() => {})
+    setRiderForm({ name: '', phone: '' })
+    await loadRiders()
+  }
+  const assignRider = async (orderId: string, riderId: string) => {
+    await fetch('/api/rider/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: orderId, rider_id: riderId }) }).catch(() => {})
+    await loadOrders()
+  }
+  const riderName = (id?: string | null) => riders.find(r => r.id === id)?.name || '미배정'
+  useEffect(() => { loadRiders() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggleMenu = async (id: string, cur: boolean) => {
     await fetch('/api/toggle-menu', {
       method: 'POST',
@@ -443,7 +469,7 @@ export default function OwnerDashboard() {
   const closeBusiness = async () => {
     const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     const { data: raw } = await supabase.from('orders')
-      .select('final_amount, payment_method').eq('store_id', 'baegun').eq('status', 'done')
+      .select('final_amount, payment_method').eq('store_id', 'baegun').in('status', SALES_STATUSES)
       .gte('created_at', `${today}T00:00:00+09:00`)
     const list = raw || []
     const total = list.reduce((s: number, o: any) => s + o.final_amount, 0)
@@ -511,7 +537,7 @@ export default function OwnerDashboard() {
   const newOrders = orders.filter(o => ['pending', 'paid', 'cash_pending', 'verification_failed'].includes(o.status))
   const acceptedOrders = orders.filter(o => o.status === 'accepted')
   const cookingOrders = orders.filter(o => o.status === 'cooking')
-  const doneOrders = orders.filter(o => o.status === 'done')
+  const doneOrders = orders.filter(o => o.status === 'done' || o.status === 'out_for_delivery') // 배달출발도 완료칸에 유지
 
   const OrderCard = ({ order }: { order: Order }) => (
     <div className={`order-card ${order.status === 'pending' || order.status === 'paid' ? 'new-order' : order.status === 'cash_pending' || order.status === 'verification_failed' ? 'cash_pending' : order.status === 'accepted' ? 'accepted' : order.status === 'cooking' ? 'cooking' : 'done-card'}`}>
@@ -529,6 +555,7 @@ export default function OwnerDashboard() {
             {(order as any).delivery_distance_m ? ` · 약 ${(((order as any).delivery_distance_m) / 1000).toFixed(1)}km` : ''}
           </div>
           <div>☎ <a href={`tel:${(order as any).customer_phone || ''}`} style={{ color: '#7fd4ff' }}>{(order as any).customer_phone || '-'}</a></div>
+          {order.rider_id && <div>🛵 라이더: {riderName(order.rider_id)}</div>}
         </div>
       )}
       <span className={`pay-badge ${order.payment_method}`}>
@@ -560,10 +587,28 @@ export default function OwnerDashboard() {
         {order.status === 'cooking' && (
           <button className="action-btn btn-done" onClick={() => updateStatus(order.id, 'done')}>🛎️ 조리완료</button>
         )}
-        {order.status === 'done' && (
+        {order.status === 'done' && order.order_type !== 'delivery' && (
           <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'served')}>✔️ 서빙완료</button>
         )}
-        {order.status !== 'done' && (
+        {order.status === 'done' && order.order_type === 'delivery' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+            <select value={order.rider_id || ''} onChange={e => assignRider(order.id, e.target.value)}
+              style={{ padding: '8px', borderRadius: 8, background: '#111', color: '#eee', border: '1px solid #444', fontSize: 13 }}>
+              <option value="">라이더 선택…</option>
+              {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            <button className="action-btn btn-cooking" disabled={!order.rider_id}
+              onClick={() => updateStatus(order.id, 'out_for_delivery')}
+              style={!order.rider_id ? { opacity: 0.5 } : undefined}>🛵 배달출발</button>
+          </div>
+        )}
+        {order.status === 'out_for_delivery' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+            <div style={{ fontSize: 12, color: '#7fd4ff' }}>🛵 {riderName(order.rider_id)} 배달 중</div>
+            <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'delivered')}>✅ 배달완료</button>
+          </div>
+        )}
+        {['pending', 'paid', 'cash_pending', 'accepted', 'cooking', 'verification_failed'].includes(order.status) && (
           <button className="action-btn btn-cancel" onClick={() => updateStatus(order.id, 'canceled')}>취소</button>
         )}
       </div>
@@ -616,6 +661,10 @@ export default function OwnerDashboard() {
 
       {/* 주문 칸반 */}
       {tab === 'orders' && (
+        <>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 4px 8px' }}>
+          <button onClick={() => setRiderModal(true)} style={{ fontSize: 12, color: '#c8a900', background: '#242424', border: '1px solid #3a3320', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>🛵 라이더 관리</button>
+        </div>
         <div className="kanban">
           <div className="kanban-col">
             <h3 style={{ color: '#e84040' }}>🔴 신규 ({newOrders.length})</h3>
@@ -645,6 +694,7 @@ export default function OwnerDashboard() {
             {!doneOrders.length && <div className="empty">완료 없음</div>}
           </div>
         </div>
+        </>
       )}
 
       {/* 메뉴 관리 */}
@@ -804,7 +854,7 @@ export default function OwnerDashboard() {
       {/* 매출 내역 */}
       {tab === 'sales' && (() => {
         const salesOrders = orders
-          .filter(o => o.status === 'done')
+          .filter(o => SALES_STATUSES.includes(o.status))
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         const byMethod: Record<string, number> = {}
         salesOrders.forEach(o => {
@@ -875,7 +925,7 @@ export default function OwnerDashboard() {
           : '-'
 
         // 오늘 실시간 (orders state 기준)
-        const todaySales = orders.filter(o => o.status === 'done')
+        const todaySales = orders.filter(o => SALES_STATUSES.includes(o.status))
         const todaySalesTotal = todaySales.reduce((s, o) => s + o.final_amount, 0)
         const todayCount = todaySales.length
 
@@ -1315,6 +1365,40 @@ export default function OwnerDashboard() {
               style={{ width: '100%', marginTop: 16, padding: 12, background: '#c8a900', color: '#111', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
               확인
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🛵 라이더 관리 (등록 + 접속링크) */}
+      {riderModal && (
+        <div onClick={() => setRiderModal(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 420, maxHeight: '85vh', overflowY: 'auto', background: '#1c1c1c', border: '1px solid #3a3320', borderRadius: 16, padding: '22px 18px' }}>
+            <div style={{ fontSize: 17, fontWeight: 900, color: '#f0f0f0', marginBottom: 12 }}>🛵 라이더 관리</div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <input placeholder="이름" value={riderForm.name} onChange={e => setRiderForm({ ...riderForm, name: e.target.value })}
+                style={{ flex: 1, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '9px 10px', color: '#eee', fontSize: 14 }} />
+              <input placeholder="전화(선택)" value={riderForm.phone} onChange={e => setRiderForm({ ...riderForm, phone: e.target.value })}
+                inputMode="numeric" style={{ flex: 1, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '9px 10px', color: '#eee', fontSize: 14 }} />
+              <button onClick={addRider} style={{ background: '#c8a900', color: '#111', border: 'none', borderRadius: 8, padding: '0 14px', fontWeight: 700, cursor: 'pointer' }}>추가</button>
+            </div>
+            {riders.length === 0 && <div style={{ color: '#888', fontSize: 13, padding: '10px 0', textAlign: 'center' }}>등록된 라이더가 없어요</div>}
+            {riders.map(r => {
+              const link = `${CUSTOMER_APP_BASE}/rider?token=${r.access_token}`
+              return (
+                <div key={r.id} style={{ padding: '10px 0', borderBottom: '1px solid #2a2a2a' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#eee' }}>{r.name} {r.phone ? <span style={{ color: '#888', fontWeight: 400, fontSize: 12 }}>· {r.phone}</span> : null}</div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center' }}>
+                    <input readOnly value={link} style={{ flex: 1, background: '#0f0f0f', border: '1px solid #333', borderRadius: 6, padding: '6px 8px', color: '#7fd4ff', fontSize: 11 }} />
+                    <button onClick={() => navigator.clipboard?.writeText(link)} style={{ background: '#242424', color: '#c8a900', border: '1px solid #3a3320', borderRadius: 6, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}>복사</button>
+                  </div>
+                </div>
+              )
+            })}
+            <div style={{ fontSize: 11, color: '#666', marginTop: 10 }}>* 라이더 접속 화면(/rider)은 다음 단계(5-1-b)에서 열립니다. 링크는 그때부터 동작해요.</div>
+            <button onClick={() => setRiderModal(false)}
+              style={{ width: '100%', marginTop: 14, padding: 12, background: '#2a2a2a', color: '#aaa', border: '1px solid #333', borderRadius: 10, fontSize: 14, cursor: 'pointer' }}>닫기</button>
           </div>
         </div>
       )}

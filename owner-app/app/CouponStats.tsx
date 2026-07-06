@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 
-const COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served']
+const COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served', 'out_for_delivery', 'delivered']
 const TYPES = ['signup', 'birthday', 'winback', 'vip_thanks'] as const
 const TYPE_LABEL: Record<string, string> = { signup: '신규가입', birthday: '생일', winback: '재방문', vip_thanks: '단골감사' }
 const won = (n: number) => (n || 0).toLocaleString() + '원'
