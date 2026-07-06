@@ -63,6 +63,50 @@ function crmDisplayGrade(customerGrade: string, lastVisit?: string | null, order
 }
 const CRM_GRADE_EMOJI: Record<string, string> = { new: '🌱', normal: '🙂', regular: '🔥', vip: '👑' }
 
+// Phase 4-B: 세그먼트 자동 분류 (전부 read-time 계산 — 저장 안 함)
+const SEGMENT_META: { key: string; label: string; color: string }[] = [
+  { key: 'new', label: '신규', color: '#8a8a8a' },
+  { key: 'normal', label: '일반', color: '#4a90d9' },
+  { key: 'regular', label: '단골', color: '#c8a900' },
+  { key: 'vip', label: 'VIP', color: '#d98cff' },
+  { key: 'dormant_warn', label: '휴면주의', color: '#e0a03a' },
+  { key: 'dormant', label: '휴면', color: '#e05555' },
+  { key: 'birthday_soon', label: '생일예정', color: '#e08ab0' },
+  { key: 'coupon_unused', label: '쿠폰미사용', color: '#43b581' },
+  { key: 'delivery', label: '배달가능', color: '#4a90d9' },
+  { key: 'marketing', label: '수신동의', color: '#4caf50' },
+]
+const SEGMENT_LABEL: Record<string, { label: string; color: string }> =
+  Object.fromEntries(SEGMENT_META.map(s => [s.key, { label: s.label, color: s.color }]))
+
+// 생일(월·일)이 오늘부터 within일 이내인지 (KST 기준, 연도 무관) — 생일 미입력자는 false
+function birthdayWithin(bday: string | null | undefined, within: number) {
+  if (!bday) return false
+  const d = new Date(bday); if (isNaN(d.getTime())) return false
+  const bkey = (d.getUTCMonth() + 1) * 100 + d.getUTCDate() // birthday는 date형(시분 없음) → UTC 파트가 곧 달력값
+  const now = new Date(Date.now() + 9 * 3600 * 1000)         // KST 오늘
+  for (let i = 0; i <= within; i++) {
+    const t = new Date(now.getTime() + i * 86400000)
+    if ((t.getUTCMonth() + 1) * 100 + t.getUTCDate() === bkey) return true
+  }
+  return false
+}
+
+// 회원 1명의 세그먼트 태그 배열
+function computeSegments(m: any, ctx: { couponUsers: Set<string>; deliveryUsers: Set<string> }) {
+  const segs: string[] = [m.customer_grade || 'new'] // 등급(신규/일반/단골/VIP)
+  const days = daysSince(m.last_visit)
+  if ((m.total_order_count || 0) > 0 && days !== null) {
+    if (days >= 60) segs.push('dormant')
+    else if (days >= 30) segs.push('dormant_warn')
+  }
+  if (birthdayWithin(m.birthday, 7)) segs.push('birthday_soon')
+  if (ctx.couponUsers.has(m.id)) segs.push('coupon_unused')
+  if (ctx.deliveryUsers.has(m.id)) segs.push('delivery')
+  if (m.marketing_opt_in) segs.push('marketing')
+  return segs
+}
+
 // 상태 배지 (가입완료/정보부족/주소있음/생일있음/수신동의/수신거부) — '회원가입' 유도 문구는 쓰지 않음
 function Pill({ t, c }: { t: string; c: string }) {
   return <span style={{ fontSize: 11, fontWeight: 700, color: c, background: c + '22', border: `1px solid ${c}55`, borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>{t}</span>
@@ -97,6 +141,7 @@ export default function OwnerDashboard() {
   const [menus, setMenus] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
   const [selectedMember, setSelectedMember] = useState<any | null>(null) // CRM 고객 상세
+  const [segFilter, setSegFilter] = useState<string | null>(null)        // 세그먼트 필터
   const [memberOrders, setMemberOrders] = useState<any[]>([])            // 상세: 주문이력
   const [memberDetailLoading, setMemberDetailLoading] = useState(false)
   const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats'>('orders')
@@ -292,8 +337,20 @@ export default function OwnerDashboard() {
       return Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] || null
     }
 
+    // 세그먼트용 보조 데이터: 유효 쿠폰(미사용·미만료) 보유자 + 배달 이력 보유자
+    const nowIso = new Date().toISOString()
+    const { data: coup } = await supabase.from('coupons').select('user_id').eq('status', 'active').gt('expires_at', nowIso)
+    const couponUsers = new Set((coup || []).map(c => c.user_id))
+    const { data: delo } = await supabase.from('orders').select('user_id')
+      .eq('order_type', 'delivery').not('delivery_address', 'is', null).not('user_id', 'is', null)
+    const deliveryUsers = new Set((delo || []).map(o => o.user_id))
+
     const rows = users
-      .map(u => ({ ...u, favorite_menu: favOf(u.id) }))
+      .map(u => {
+        const r: any = { ...u, favorite_menu: favOf(u.id) }
+        r.segments = computeSegments(r, { couponUsers, deliveryUsers })
+        return r
+      })
       .sort((a, b) => (b.total_order_count || 0) - (a.total_order_count || 0) || (b.total_spent || 0) - (a.total_spent || 0))
     setMembers(rows)
   }
@@ -1098,41 +1155,63 @@ export default function OwnerDashboard() {
       {/* 통계 (그룹 F-1) */}
       {tab === 'stats' && <StatsTab />}
 
-      {/* 회원 목록 (Phase 4-A CRM) */}
-      {tab === 'members' && (
-        <div className="member-list">
-          {members.length > 0 && (
-            <div style={{ fontSize: 12, color: 'var(--text2)', padding: '0 0 10px' }}>
-              총 {members.length}명 · 이름/전화 클릭 시 상세
+      {/* 회원 목록 (Phase 4-A CRM + 4-B 세그먼트) */}
+      {tab === 'members' && (() => {
+        const visible = segFilter ? members.filter(m => (m.segments || []).includes(segFilter)) : members
+        const segCount = (key: string) => members.filter(m => (m.segments || []).includes(key)).length
+        const chip = (active: boolean, color: string) => ({
+          fontSize: 12, fontWeight: 700 as const, padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+          border: `1px solid ${active ? color : '#333'}`, background: active ? color + '22' : 'transparent',
+          color: active ? color : '#aaa', whiteSpace: 'nowrap' as const,
+        })
+        return (
+          <div className="member-list">
+            {/* 세그먼트 필터 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingBottom: 10 }}>
+              <button onClick={() => setSegFilter(null)} style={chip(!segFilter, '#c8a900')}>전체 {members.length}</button>
+              {SEGMENT_META.map(s => (
+                <button key={s.key} onClick={() => setSegFilter(segFilter === s.key ? null : s.key)} style={chip(segFilter === s.key, s.color)}>
+                  {s.label} {segCount(s.key)}
+                </button>
+              ))}
             </div>
-          )}
-          {members.length === 0 && <div className="empty">등록된 회원이 없어요</div>}
-          {members.map((m) => {
-            const g = crmDisplayGrade(m.customer_grade, m.last_visit, m.total_order_count)
-            const name = m.nickname || m.phone
-            return (
-              <div key={m.id} className="member-row" style={{ cursor: 'pointer', alignItems: 'flex-start' }} onClick={() => openMember(m)}>
-                <div className="member-avatar" style={{ fontSize: 20 }}>{CRM_GRADE_EMOJI[m.customer_grade] || '🌱'}</div>
-                <div className="member-info">
-                  <div className="member-phone">
-                    {name}
-                    <span style={{ color: g.color, fontWeight: 700, fontSize: 12, marginLeft: 6 }}>{g.label}</span>
+            <div style={{ fontSize: 12, color: 'var(--text2)', padding: '0 0 10px' }}>
+              {visible.length}명{segFilter ? ` · ${SEGMENT_LABEL[segFilter]?.label} 필터` : ''} · 이름/전화 클릭 시 상세
+            </div>
+            {visible.length === 0 && <div className="empty">{segFilter ? '해당 세그먼트 회원이 없어요' : '등록된 회원이 없어요'}</div>}
+            {visible.map((m) => {
+              const g = crmDisplayGrade(m.customer_grade, m.last_visit, m.total_order_count)
+              const name = m.nickname || m.phone
+              const extraSegs = (m.segments || []).filter((k: string) => ['birthday_soon', 'coupon_unused', 'delivery'].includes(k))
+              return (
+                <div key={m.id} className="member-row" style={{ cursor: 'pointer', alignItems: 'flex-start' }} onClick={() => openMember(m)}>
+                  <div className="member-avatar" style={{ fontSize: 20 }}>{CRM_GRADE_EMOJI[m.customer_grade] || '🌱'}</div>
+                  <div className="member-info">
+                    <div className="member-phone">
+                      {name}
+                      <span style={{ color: g.color, fontWeight: 700, fontSize: 12, marginLeft: 6 }}>{g.label}</span>
+                    </div>
+                    <div className="member-sub">
+                      {name !== m.phone && <>{m.phone} · </>}
+                      가입 {kstDay(m.created_at)} · 최근방문 {kstDay(m.last_visit)}
+                    </div>
+                    <div className="member-sub" style={{ marginTop: 3 }}>
+                      방문 {m.visit_count || 0}회 · 주문 {m.total_order_count || 0}회 · 누적 {won(m.total_spent || 0)} · 평균 {won(m.average_order_amount || 0)}
+                    </div>
+                    {m.favorite_menu && <div className="member-sub" style={{ marginTop: 2 }}>선호 🍗 {m.favorite_menu}</div>}
+                    <div style={{ marginTop: 6 }}><MemberBadges m={m} /></div>
+                    {extraSegs.length > 0 && (
+                      <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {extraSegs.map((k: string) => <Pill key={k} t={SEGMENT_LABEL[k].label} c={SEGMENT_LABEL[k].color} />)}
+                      </div>
+                    )}
                   </div>
-                  <div className="member-sub">
-                    {name !== m.phone && <>{m.phone} · </>}
-                    가입 {kstDay(m.created_at)} · 최근방문 {kstDay(m.last_visit)}
-                  </div>
-                  <div className="member-sub" style={{ marginTop: 3 }}>
-                    방문 {m.visit_count || 0}회 · 주문 {m.total_order_count || 0}회 · 누적 {won(m.total_spent || 0)} · 평균 {won(m.average_order_amount || 0)}
-                  </div>
-                  {m.favorite_menu && <div className="member-sub" style={{ marginTop: 2 }}>선호 🍗 {m.favorite_menu}</div>}
-                  <div style={{ marginTop: 6 }}><MemberBadges m={m} /></div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* 고객 상세 (Stage 2: 기본정보+집계+배지 / 주문·방문 이력은 Stage 3에서 추가) */}
       {selectedMember && (() => {
