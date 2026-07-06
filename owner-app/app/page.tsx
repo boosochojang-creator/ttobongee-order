@@ -156,6 +156,7 @@ export default function OwnerDashboard() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [bizSubTab, setBizSubTab] = useState<'daily' | 'monthly' | 'yearly'>('daily')
   const [todayReport, setTodayReport] = useState<any>(null)
+  const [issuedPopup, setIssuedPopup] = useState<{ who: string; label: string; discount: number }[] | null>(null) // 오늘 자동발급 쿠폰
   const [monthlyReports, setMonthlyReports] = useState<any[]>([])
   const [yearlyReports, setYearlyReports] = useState<any[]>([])
   const [closingConfirm, setClosingConfirm] = useState(false)
@@ -434,6 +435,9 @@ export default function OwnerDashboard() {
       { onConflict: 'store_id,date' }
     )
     await loadTodayReport()
+    // 쿠폰 자동발급 실행 → 오늘 발급분 팝업 (확인용, 승인 불필요)
+    const r = await fetch('/api/coupons/run', { method: 'POST' }).then(x => x.json()).catch(() => null)
+    if (r?.ok) setIssuedPopup(r.todayIssued || [])
   }
 
   const closeBusiness = async () => {
@@ -1288,6 +1292,32 @@ export default function OwnerDashboard() {
           </div>
         )
       })()}
+
+      {/* 영업시작 시 오늘 자동발급된 쿠폰 (확인용 · 승인 불필요) */}
+      {issuedPopup && (
+        <div onClick={() => setIssuedPopup(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 380, maxHeight: '80vh', overflowY: 'auto', background: '#1c1c1c', border: '1px solid #c8a900', borderRadius: 16, padding: '22px 18px' }}>
+            <div style={{ fontSize: 17, fontWeight: 900, color: '#f0f0f0', marginBottom: 4 }}>🎟️ 오늘 자동발급된 쿠폰</div>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 14 }}>조건 충족 회원에게 자동 발급됐어요 (확인용)</div>
+            {issuedPopup.length === 0 ? (
+              <div style={{ color: '#888', fontSize: 14, padding: '12px 0', textAlign: 'center' }}>오늘 자동발급된 쿠폰이 없어요</div>
+            ) : (
+              issuedPopup.map((c, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid #2a2a2a', fontSize: 14 }}>
+                  <span style={{ color: '#ddd' }}>{c.who}</span>
+                  <span style={{ color: '#c8a900', fontWeight: 700 }}>{c.label} · {won(c.discount)}</span>
+                </div>
+              ))
+            )}
+            <button onClick={() => setIssuedPopup(null)}
+              style={{ width: '100%', marginTop: 16, padding: 12, background: '#c8a900', color: '#111', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
