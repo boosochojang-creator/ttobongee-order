@@ -94,7 +94,7 @@ export default function CheckoutPage() {
     fetch(`/api/coupons/best?userId=${userId}&amount=${finalAmount}`)
       .then(x => x.json()).then(r => setCoupon(r?.ok ? (r.coupon || null) : null)).catch(() => {})
   }, [userId, finalAmount])
-  const couponDiscount = coupon && payMethod !== 'cash' ? coupon.discount : 0 // 현금결제는 이번 단계 제외
+  const couponDiscount = coupon ? coupon.discount : 0 // 카드/전자결제 + 현금 모두 적용 (현금은 점주 접수 시 used 처리)
 
   // 최종 결제금액 = (회원가 상품금액 − 쿠폰) + 배달료
   const payTotal = finalAmount - couponDiscount + (isDelivery && deliveryFee ? deliveryFee : 0)
@@ -352,13 +352,11 @@ export default function CheckoutPage() {
                 <span>단골 할인 5%</span><span>-{won(discountAmount)}</span>
               </div>
             )}
-            {couponDiscount > 0 && coupon ? (
+            {couponDiscount > 0 && coupon && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--green)' }}>
                 <span>🎟️ {coupon.label} 쿠폰할인</span><span>-{won(couponDiscount)}</span>
               </div>
-            ) : coupon ? (
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>🎟️ {coupon.label} 쿠폰은 카드·간편결제 시 자동 적용돼요</div>
-            ) : null}
+            )}
             {isDelivery && deliveryFee !== null && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--text2)' }}>
                 <span>🛵 배달료</span><span>+{won(deliveryFee)}</span>
