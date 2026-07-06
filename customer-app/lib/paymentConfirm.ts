@@ -27,7 +27,7 @@ export async function confirmPayment(orderId: string, paymentId?: string): Promi
   const pid = paymentId || orderId
 
   const { data: order } = await db.from('orders')
-    .select('status, final_amount').eq('id', orderId).single()
+    .select('status, final_amount, coupon_id').eq('id', orderId).single()
   if (!order) return { result: 'order_missing' }
 
   // 주방 흐름(그룹 C)에 들어간 주문은 어떤 경우에도 되돌리지 않는다
@@ -78,6 +78,14 @@ export async function confirmPayment(orderId: string, paymentId?: string): Promi
         pg_status: 'PAID',
       })
     } catch {}
+    // Phase 4-B: 자동적용된 쿠폰이 있으면 결제 성공 시점에만 사용됨 처리 (실패/취소 시엔 active 유지 → 원복 불필요)
+    if (order.coupon_id) {
+      try {
+        await db.from('coupons')
+          .update({ status: 'used', used_at: new Date().toISOString(), used_order_id: orderId })
+          .eq('id', order.coupon_id).eq('status', 'active')
+      } catch {}
+    }
   }
   return { result: 'paid' }
 }

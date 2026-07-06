@@ -86,8 +86,18 @@ export default function CheckoutPage() {
   const [calcError, setCalcError] = useState('')
   const [farNotice, setFarNotice] = useState(false) // 20km 초과 안내 (차단 아님)
 
-  // 최종 결제금액 = 장바구니 총액 + 배달료
-  const payTotal = finalAmount + (isDelivery && deliveryFee ? deliveryFee : 0)
+  // ===== Phase 4-B: 쿠폰 자동적용 (카드/전자결제만, 회원 로그인 시) =====
+  const [coupon, setCoupon] = useState<{ id: string; label: string; discount: number } | null>(null)
+  useEffect(() => {
+    if (!userId) { setCoupon(null); return }
+    // 최소주문 기준 = finalAmount(회원가 적용 후 상품금액). 서버가 유효·최소충족 중 할인 최대 1개 선택
+    fetch(`/api/coupons/best?userId=${userId}&amount=${finalAmount}`)
+      .then(x => x.json()).then(r => setCoupon(r?.ok ? (r.coupon || null) : null)).catch(() => {})
+  }, [userId, finalAmount])
+  const couponDiscount = coupon && payMethod !== 'cash' ? coupon.discount : 0 // 현금결제는 이번 단계 제외
+
+  // 최종 결제금액 = (회원가 상품금액 − 쿠폰) + 배달료
+  const payTotal = finalAmount - couponDiscount + (isDelivery && deliveryFee ? deliveryFee : 0)
   const canSplit = !isDelivery && orderType === 'dine_in' // 더치페이는 홀 주문 전용 (포장/배달 제외)
 
   // 배달료 계산 (실주행거리 기반, 서버 API)
@@ -160,11 +170,12 @@ export default function CheckoutPage() {
       order_type: isDelivery ? 'delivery' : orderType,
       status,
       total_amount: totalAmount,
-      discount_amount: discountAmount,
-      final_amount: payTotal, // 배달이면 배달료 포함 (결제 검증도 이 금액 기준)
+      discount_amount: discountAmount + couponDiscount, // 회원 5% + 쿠폰
+      final_amount: payTotal, // 회원가−쿠폰+배달료 (결제 검증도 이 금액 기준)
       payment_method: payMethod,
       user_id: userId,
       is_member: isMember,
+      ...(couponDiscount > 0 && coupon ? { coupon_id: coupon.id } : {}),
       ...(isDelivery ? {
         delivery_address: `${addr.trim()} ${addrDetail.trim()}`.trim(),
         delivery_fee: deliveryFee,
@@ -247,7 +258,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           orderId: order.id,
           paymentId: pgResponse?.paymentId ?? order.id,
-          expectedAmount: finalAmount,
+          expectedAmount: payTotal, // 서버는 DB금액으로 검증하나, 표기 일관성 위해 payTotal로 전달
         }),
       })
 
@@ -341,6 +352,13 @@ export default function CheckoutPage() {
                 <span>단골 할인 5%</span><span>-{won(discountAmount)}</span>
               </div>
             )}
+            {couponDiscount > 0 && coupon ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--green)' }}>
+                <span>🎟️ {coupon.label} 쿠폰할인</span><span>-{won(couponDiscount)}</span>
+              </div>
+            ) : coupon ? (
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>🎟️ {coupon.label} 쿠폰은 카드·간편결제 시 자동 적용돼요</div>
+            ) : null}
             {isDelivery && deliveryFee !== null && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--text2)' }}>
                 <span>🛵 배달료</span><span>+{won(deliveryFee)}</span>
