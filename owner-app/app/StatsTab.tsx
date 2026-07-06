@@ -5,6 +5,7 @@
 // 집계 대상: canceled / pending / verification_failed 제외 (금액이 확정되지 않은 주문 제외)
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
+import CouponStats from './CouponStats'
 
 type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -493,6 +494,8 @@ export default function StatsTab() {
       </div>
       </>
       )}
+
+      <CouponStats />
     </div>
   )
 }
