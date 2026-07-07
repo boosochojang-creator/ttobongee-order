@@ -40,6 +40,9 @@ const STATUS_LABEL: Record<string, string> = {
 // Phase 5-1-a: 매출 확정으로 카운트하는 상태 (배달은 done을 지나 배달출발/완료로 가므로 함께 포함)
 const SALES_STATUSES = ['done', 'out_for_delivery', 'delivered']
 const CUSTOMER_APP_BASE = 'https://ttobongee-order-5izk.vercel.app' // 라이더 화면(/rider)이 있는 손님앱 도메인
+// 5-1 보류(배달대행 API 확인 중): 라이더 UI 숨김. true로 바꾸면 라이더 관리/배차 UI 즉시 복원.
+// 코드·API·DB(riders/018)는 그대로 유지 — 화면 노출만 차단.
+const SHOW_RIDER_MANAGEMENT = false
 
 // Phase 4-A CRM: 등급 라벨/색 + 휴면 계산 (휴면/휴면주의는 저장 안 하고 last_visit로 조회 시 계산 — D2)
 const CRM_COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served', 'out_for_delivery', 'delivered']
@@ -592,19 +595,21 @@ export default function OwnerDashboard() {
         )}
         {order.status === 'done' && order.order_type === 'delivery' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-            <select value={order.rider_id || ''} onChange={e => assignRider(order.id, e.target.value)}
-              style={{ padding: '8px', borderRadius: 8, background: '#111', color: '#eee', border: '1px solid #444', fontSize: 13 }}>
-              <option value="">라이더 선택…</option>
-              {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-            <button className="action-btn btn-cooking" disabled={!order.rider_id}
+            {SHOW_RIDER_MANAGEMENT && (
+              <select value={order.rider_id || ''} onChange={e => assignRider(order.id, e.target.value)}
+                style={{ padding: '8px', borderRadius: 8, background: '#111', color: '#eee', border: '1px solid #444', fontSize: 13 }}>
+                <option value="">라이더 선택…</option>
+                {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            )}
+            <button className="action-btn btn-cooking" disabled={SHOW_RIDER_MANAGEMENT && !order.rider_id}
               onClick={() => updateStatus(order.id, 'out_for_delivery')}
-              style={!order.rider_id ? { opacity: 0.5 } : undefined}>🛵 배달출발</button>
+              style={SHOW_RIDER_MANAGEMENT && !order.rider_id ? { opacity: 0.5 } : undefined}>🛵 배달출발</button>
           </div>
         )}
         {order.status === 'out_for_delivery' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-            <div style={{ fontSize: 12, color: '#7fd4ff' }}>🛵 {riderName(order.rider_id)} 배달 중</div>
+            {order.rider_id && <div style={{ fontSize: 12, color: '#7fd4ff' }}>🛵 {riderName(order.rider_id)} 배달 중</div>}
             <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'delivered')}>✅ 배달완료</button>
           </div>
         )}
@@ -662,9 +667,11 @@ export default function OwnerDashboard() {
       {/* 주문 칸반 */}
       {tab === 'orders' && (
         <>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 4px 8px' }}>
-          <button onClick={() => setRiderModal(true)} style={{ fontSize: 12, color: '#c8a900', background: '#242424', border: '1px solid #3a3320', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>🛵 라이더 관리</button>
-        </div>
+        {SHOW_RIDER_MANAGEMENT && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 4px 8px' }}>
+            <button onClick={() => setRiderModal(true)} style={{ fontSize: 12, color: '#c8a900', background: '#242424', border: '1px solid #3a3320', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>🛵 라이더 관리</button>
+          </div>
+        )}
         <div className="kanban">
           <div className="kanban-col">
             <h3 style={{ color: '#e84040' }}>🔴 신규 ({newOrders.length})</h3>
@@ -1369,8 +1376,8 @@ export default function OwnerDashboard() {
         </div>
       )}
 
-      {/* 🛵 라이더 관리 (등록 + 접속링크) */}
-      {riderModal && (
+      {/* 🛵 라이더 관리 (등록 + 접속링크) — 5-1 보류로 SHOW_RIDER_MANAGEMENT 플래그로 숨김 */}
+      {SHOW_RIDER_MANAGEMENT && riderModal && (
         <div onClick={() => setRiderModal(false)}
           style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()}
