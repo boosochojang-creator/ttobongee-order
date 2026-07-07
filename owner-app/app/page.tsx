@@ -154,6 +154,9 @@ export default function OwnerDashboard() {
   const [memberDetailLoading, setMemberDetailLoading] = useState(false)
   const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats' | 'content'>('orders')
   const [games, setGames] = useState<any[]>([]) // Phase 5-2-c 오락실 게임
+  const [tracks, setTracks] = useState<any[]>([]) // Phase 5-2-d 음악
+  const [musicTitle, setMusicTitle] = useState('')
+  const [musicUploading, setMusicUploading] = useState(false)
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
   const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
@@ -426,6 +429,23 @@ export default function OwnerDashboard() {
     await fetch('/api/arcade/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) }).catch(() => {})
     await loadGames()
   }
+  // ===== Phase 5-2-d: 음악 관리 =====
+  const loadTracks = async () => {
+    const r = await fetch('/api/music/list').then(x => x.json()).catch(() => null)
+    if (r?.ok) setTracks(r.tracks)
+  }
+  const uploadMusic = async (file: File) => {
+    if (!musicTitle.trim() || !file || musicUploading) return
+    setMusicUploading(true)
+    const fd = new FormData(); fd.append('file', file); fd.append('title', musicTitle.trim())
+    const r = await fetch('/api/music/upload', { method: 'POST', body: fd }).then(x => x.json()).catch(() => null)
+    setMusicUploading(false)
+    if (r?.ok) { setMusicTitle(''); loadTracks() } else alert(r?.error || '업로드 실패')
+  }
+  const updateTrack = async (id: string, patch: any) => {
+    await fetch('/api/music/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) }).catch(() => {})
+    await loadTracks()
+  }
 
   const toggleMenu = async (id: string, cur: boolean) => {
     await fetch('/api/toggle-menu', {
@@ -673,7 +693,7 @@ export default function OwnerDashboard() {
         <button className={tab === 'sales' ? 'active' : ''} onClick={() => setTab('sales')}>매출</button>
         <button className={tab === 'business' ? 'active' : ''} onClick={() => setTab('business')}>영업</button>
         <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>통계</button>
-        <button className={tab === 'content' ? 'active' : ''} onClick={() => { setTab('content'); loadGames() }}>콘텐츠</button>
+        <button className={tab === 'content' ? 'active' : ''} onClick={() => { setTab('content'); loadGames(); loadTracks() }}>콘텐츠</button>
       </div>
 
       {/* 주문 칸반 */}
@@ -1247,6 +1267,35 @@ export default function OwnerDashboard() {
             </div>
           ))}
           <div style={{ fontSize: 11, color: '#666', marginTop: 12 }}>* 이름은 입력 후 다른 곳을 누르면 저장돼요. 새 게임 추가는 파일 등록이 필요해 개발쪽에서 반영합니다.</div>
+
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', margin: '28px 0 4px' }}>🎵 음악감상실 관리</div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>곡 업로드·노출·순서·삭제 (손님 음악감상실에 반영)</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+            <input placeholder="곡 제목" value={musicTitle} onChange={e => setMusicTitle(e.target.value)}
+              style={{ flex: 1, minWidth: 140, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '9px 10px', color: '#eee', fontSize: 14 }} />
+            <label style={{ background: musicUploading ? '#555' : '#c8a900', color: '#111', borderRadius: 8, padding: '9px 14px', fontWeight: 700, fontSize: 13, cursor: musicUploading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+              {musicUploading ? '업로드 중…' : '＋ 업로드'}
+              <input type="file" accept="audio/*" style={{ display: 'none' }} disabled={musicUploading}
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadMusic(f); e.target.value = '' }} />
+            </label>
+          </div>
+          {tracks.length === 0 && <div style={{ color: '#888', padding: 14, textAlign: 'center' }}>등록된 음악이 없어요</div>}
+          {tracks.map((t, i) => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 0', borderBottom: '1px solid #2a2a2a' }}>
+              <span style={{ fontSize: 18 }}>🎵</span>
+              <input defaultValue={t.title} maxLength={40}
+                onBlur={e => { const v = e.target.value.trim(); if (v && v !== t.title) updateTrack(t.id, { title: v }) }}
+                style={{ flex: 1, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '7px 10px', color: '#eee', fontSize: 14 }} />
+              <button onClick={() => i > 0 && updateTrack(t.id, { sort_order: tracks[i - 1].sort_order - 1 })} title="위로"
+                style={{ background: '#242424', border: '1px solid #333', color: '#aaa', borderRadius: 6, padding: '6px 8px', cursor: 'pointer' }}>▲</button>
+              <button onClick={() => updateTrack(t.id, { is_active: !t.is_active })}
+                style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${t.is_active ? '#3ac47d' : '#555'}`, background: t.is_active ? '#12301f' : '#242424', color: t.is_active ? '#3ac47d' : '#888', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                {t.is_active ? 'ON' : '숨김'}
+              </button>
+              <button onClick={() => { if (confirm('이 곡을 삭제할까요?')) updateTrack(t.id, { action: 'delete' }) }}
+                style={{ background: '#2a1414', border: '1px solid #5c2e2e', color: '#e05555', borderRadius: 6, padding: '6px 8px', fontSize: 12, cursor: 'pointer' }}>삭제</button>
+            </div>
+          ))}
         </div>
       )}
 
