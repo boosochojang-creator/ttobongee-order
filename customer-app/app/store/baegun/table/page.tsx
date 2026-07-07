@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
-import { useBgm } from '../../../lib/BgmContext'
 import LegalFooter from '../../../lib/LegalFooter'
 
 const TABLES = [
@@ -28,7 +27,6 @@ function stripEmoji(text: string) {
 export default function TablePage() {
   const router = useRouter()
   const { setTableNo, setOrderType, clearItems, isMember, phone, grade, visitCount } = useCart()
-  const { startBGM } = useBgm()
   const [showPopup, setShowPopup] = useState(false)
   const [greetingText, setGreetingText] = useState<string | null>(null)
 
@@ -55,7 +53,7 @@ export default function TablePage() {
   function closePopup() {
     sessionStorage.setItem('music-popup-closed', '1')
     setShowPopup(false)
-    startBGM()
+    // 배경음악 자동재생 제거 (5-2-b) — 음악은 음악감상실에서만 재생
 
     if (isMember && phone) {
       showGreetingToast(`${phone.slice(-4)}님, 다시 오셨군요! 반갑습니다`)
