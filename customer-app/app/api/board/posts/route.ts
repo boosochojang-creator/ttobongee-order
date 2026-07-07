@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { randomUUID } from 'crypto'
 import { checkContent, generateNickname } from '../../../../lib/contentFilter'
+import { hashSecret } from '../../../../lib/secretPw'
 
 // Phase 5-2-c-2: 통합 게시글 (source=music/arcade/board). 서비스롤 — RLS 차단 + 비밀글 가림 + 필터 처리.
 // 비밀글/사진은 자유게시판(board) 전용 — 5-2-e에서 확장. 여기선 공개글 경로.
@@ -63,9 +65,31 @@ export async function POST(req: NextRequest) {
         authorName = generateNickname() // 비회원 닉네임 = 1회성 자동생성
       }
     }
+    // 비밀글·사진은 자유게시판(board) 전용
+    const isSecret = source === 'board' && !!b.is_secret
+    let secretHash: string | null = null
+    let imageKey: string | null = null
+    if (isSecret) {
+      const pw = String(b.secret_pw || '')
+      if (pw.length < 2) return NextResponse.json({ ok: false, error: '비밀번호를 입력해주세요 (2자 이상)' }, { status: 400 })
+      secretHash = hashSecret(pw)
+      // 사진 첨부 (비밀글만): 클라이언트가 압축한 data URL → post-images 비공개 버킷
+      if (typeof b.image === 'string' && b.image.startsWith('data:image/')) {
+        const m = b.image.match(/^data:(image\/[\w+.-]+);base64,(.+)$/)
+        if (m) {
+          const ext = (m[1].split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+          const bytes = Buffer.from(m[2], 'base64')
+          const key = `post-${randomUUID()}.${ext}`
+          const { error: upErr } = await db.storage.from('post-images').upload(key, bytes, { contentType: m[1], upsert: false })
+          if (!upErr) imageKey = key
+        }
+      }
+    }
+
     const { data, error } = await db.from('posts').insert({
       store_id: 'baegun', source, user_id: b.userId || null,
       author_name: authorName, is_anonymous: anonymous, content,
+      is_secret: isSecret, secret_pw_hash: secretHash, image_url: imageKey,
     }).select('id').single()
     if (error) throw error
     return NextResponse.json({ ok: true, id: data.id })
