@@ -157,6 +157,10 @@ export default function OwnerDashboard() {
   const [tracks, setTracks] = useState<any[]>([]) // Phase 5-2-d 음악
   const [musicTitle, setMusicTitle] = useState('')
   const [musicUploading, setMusicUploading] = useState(false)
+  const [boardPosts, setBoardPosts] = useState<any[]>([]) // Phase 5-2-e-2 통합조회
+  const [boardSource, setBoardSource] = useState('all')
+  const [boardOpenId, setBoardOpenId] = useState<string | null>(null)
+  const [boardComments, setBoardComments] = useState<any[]>([])
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
   const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
@@ -446,6 +450,17 @@ export default function OwnerDashboard() {
     await fetch('/api/music/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) }).catch(() => {})
     await loadTracks()
   }
+  // ===== Phase 5-2-e-2: 게시글 통합조회 =====
+  const loadBoardPosts = async (src = boardSource) => {
+    const r = await fetch(`/api/board/list?source=${src}`).then(x => x.json()).catch(() => null)
+    if (r?.ok) setBoardPosts(r.posts)
+  }
+  const openBoardComments = async (id: string) => {
+    if (boardOpenId === id) { setBoardOpenId(null); return }
+    setBoardOpenId(id); setBoardComments([])
+    const r = await fetch(`/api/board/comments?postId=${id}`).then(x => x.json())
+    if (r.ok) setBoardComments(r.comments)
+  }
 
   const toggleMenu = async (id: string, cur: boolean) => {
     await fetch('/api/toggle-menu', {
@@ -693,7 +708,7 @@ export default function OwnerDashboard() {
         <button className={tab === 'sales' ? 'active' : ''} onClick={() => setTab('sales')}>매출</button>
         <button className={tab === 'business' ? 'active' : ''} onClick={() => setTab('business')}>영업</button>
         <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>통계</button>
-        <button className={tab === 'content' ? 'active' : ''} onClick={() => { setTab('content'); loadGames(); loadTracks() }}>콘텐츠</button>
+        <button className={tab === 'content' ? 'active' : ''} onClick={() => { setTab('content'); loadGames(); loadTracks(); loadBoardPosts() }}>콘텐츠</button>
       </div>
 
       {/* 주문 칸반 */}
@@ -1294,6 +1309,42 @@ export default function OwnerDashboard() {
               </button>
               <button onClick={() => { if (confirm('이 곡을 삭제할까요?')) updateTrack(t.id, { action: 'delete' }) }}
                 style={{ background: '#2a1414', border: '1px solid #5c2e2e', color: '#e05555', borderRadius: 6, padding: '6px 8px', fontSize: 12, cursor: 'pointer' }}>삭제</button>
+            </div>
+          ))}
+
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', margin: '28px 0 4px' }}>📋 게시글 모아보기</div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>음악·오락실·게시판 글 통합 (비밀글 내용도 점주는 바로 열람)</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+            {([['all', '전체'], ['music', '🎵 음악'], ['arcade', '🎮 오락실'], ['board', '📝 게시판']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => { setBoardSource(k); loadBoardPosts(k) }}
+                style={{ fontSize: 12, fontWeight: 700, padding: '5px 10px', borderRadius: 20, cursor: 'pointer', border: `1px solid ${boardSource === k ? '#c8a900' : '#333'}`, background: boardSource === k ? '#332b00' : 'transparent', color: boardSource === k ? '#FFD700' : '#aaa' }}>{l}</button>
+            ))}
+          </div>
+          {boardPosts.length === 0 && <div style={{ color: '#888', padding: 14, textAlign: 'center' }}>글이 없어요</div>}
+          {boardPosts.map(p => (
+            <div key={p.id} style={{ padding: '12px 0', borderBottom: '1px solid #2a2a2a' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#7fd4ff', background: '#10202a', border: '1px solid #23404f', borderRadius: 6, padding: '2px 6px' }}>
+                  {p.source === 'music' ? '🎵 음악' : p.source === 'arcade' ? '🎮 오락실' : '📝 게시판'}
+                </span>
+                {p.is_secret && <span style={{ fontSize: 11, color: '#e0a03a' }}>🔒 비밀글</span>}
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#c8a900' }}>{p.author_name}</span>
+                <span style={{ fontSize: 11, color: '#666', marginLeft: 'auto' }}>{kstDay(p.created_at)}</span>
+              </div>
+              <div style={{ fontSize: 14, color: '#ddd', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{p.content}</div>
+              {p.image_url && <img src={p.image_url} alt="첨부" style={{ maxWidth: '100%', borderRadius: 8, marginTop: 6 }} />}
+              <button onClick={() => openBoardComments(p.id)} style={{ marginTop: 6, background: 'none', border: 'none', color: '#7fd4ff', fontSize: 12, cursor: 'pointer', padding: 0 }}>💬 댓글 {p.comment_count}{boardOpenId === p.id ? ' · 접기' : ''}</button>
+              {boardOpenId === p.id && (
+                <div style={{ marginTop: 6, borderTop: '1px solid #2a2a2a', paddingTop: 6 }}>
+                  {boardComments.length === 0 && <div style={{ color: '#666', fontSize: 12 }}>댓글 없음</div>}
+                  {boardComments.map(c => (
+                    <div key={c.id} style={{ padding: '4px 0', fontSize: 13 }}>
+                      <span style={{ color: '#c8a900', fontWeight: 700, marginRight: 6 }}>{c.author_name}</span>
+                      <span style={{ color: '#ddd' }}>{c.content}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

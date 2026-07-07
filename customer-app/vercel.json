@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/payment/reconcile", "schedule": "0 18 * * *" }
+    { "path": "/api/payment/reconcile", "schedule": "0 18 * * *" },
+    { "path": "/api/board/purge-images", "schedule": "30 18 * * *" }
   ]
 }
