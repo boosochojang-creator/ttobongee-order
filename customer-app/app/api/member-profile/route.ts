@@ -30,13 +30,15 @@ export async function POST(req: NextRequest) {
       const birthday = (body.birthday || '').trim()
       const address = (body.address || '').trim()
       const email = (body.email || '').trim()
+      const nickname = (body.nickname || '').trim().slice(0, 12) // 게시판 표시명(실명 아님)
       const marketingOptIn = !!body.marketingOptIn
-      const status = computeStatus(birthday, address, email)
+      const status = computeStatus(birthday, address, email) // 닉네임은 프로필 완성도에 미포함
 
       const { error } = await db.from('users').update({
         birthday: birthday || null,
         address: address || null,
         email: email || null,
+        nickname: nickname || null,
         marketing_opt_in: marketingOptIn,
         birthday_saved: !!birthday,
         address_saved: !!address,

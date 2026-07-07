@@ -9,6 +9,7 @@ import { getMemberLocal, updateMemberLocal } from '../../../lib/memberState'
 
 export default function ProfilePage() {
   const router = useRouter()
+  const [nickname, setNickname] = useState('')
   const [birthday, setBirthday] = useState('')
   const [address, setAddress] = useState('')
   const [email, setEmail] = useState('')
@@ -22,10 +23,11 @@ export default function ProfilePage() {
     const m = getMemberLocal()
     if (!m) { router.replace('/store/baegun/login'); return }
     supabase.from('users')
-      .select('birthday, address, email, marketing_opt_in')
+      .select('nickname, birthday, address, email, marketing_opt_in')
       .eq('id', m.userId).single()
       .then(({ data }) => {
         if (data) {
+          setNickname(data.nickname || '')
           setBirthday(data.birthday || '')
           setAddress(data.address || '')
           setEmail(data.email || '')
@@ -46,7 +48,7 @@ export default function ProfilePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'save', userId: m.userId,
-        birthday, address, email, marketingOptIn: marketing,
+        nickname, birthday, address, email, marketingOptIn: marketing,
       }),
     }).catch(() => null)
     const data = res ? await res.json().catch(() => null) : null
@@ -74,6 +76,11 @@ export default function ProfilePage() {
           <div style={{ color: '#888', fontSize: 14, textAlign: 'center', padding: 30 }}>불러오는 중…</div>
         ) : (
         <>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: '#aaa' }}>
+          🙋 닉네임 <span style={{ color: '#666', fontSize: 12 }}>· 오락실·음악감상실·게시판 글쓰기에 쓰여요 (실명 아님, 최대 12자)</span>
+          <input type="text" placeholder="예: 치킨러버" value={nickname} maxLength={12}
+            onChange={e => setNickname(e.target.value)} style={inputStyle} />
+        </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: '#aaa' }}>
           🎂 생일
           <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
