@@ -37,7 +37,7 @@ export function hasPhoneNumber(text: string): boolean {
   return /01[016789]\d{7,8}/.test(digits)
 }
 
-export type FilterResult = { ok: true } | { ok: false; reason: string }
+export type FilterResult = { ok: boolean; reason?: string }
 
 export function checkContent(text: string): FilterResult {
   if (!text || !text.trim()) return { ok: false, reason: '내용을 입력해주세요' }

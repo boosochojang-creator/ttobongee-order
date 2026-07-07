@@ -2,6 +2,7 @@
 // Phase 5-2-c-1: 오락실 — 활성 게임 목록에서 골라 iframe으로 플레이 (독립형 HTML/Canvas, 외부 에셋 없음)
 import { useEffect, useState } from 'react'
 import BackToOrder from '../../../lib/BackToOrder'
+import HanmadiSection from '../../../lib/HanmadiSection'
 
 const backBtn: React.CSSProperties = {
   background: '#1c1c1c', border: '1px solid #c8a900', color: '#FFD700',
@@ -45,7 +46,9 @@ export default function ArcadePage() {
             </button>
           ))}
         </div>
-        <div style={{ marginTop: 24, fontSize: 12, color: '#555', textAlign: 'center' }}>💬 한마디 남기기는 곧 열려요</div>
+        <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid #2a2a2a' }}>
+          <HanmadiSection source="arcade" />
+        </div>
       </div>
     </main>
   )
