@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>갤러그 - Galaga (1981) 오마주</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden; }
+  body {
+    background:#000; color:#fff; font-family:'Courier New', monospace;
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    min-height:100vh; user-select:none; -webkit-user-select:none; touch-action:none;
+  }
+  h1 { color:#29b6f6; margin:5px 0 1px; letter-spacing:5px; font-size:21px; text-shadow:2px 2px 0 #d500f9; }
+  #info { color:#bbb; font-size:11px; margin-bottom:3px; text-align:center; }
+  #wrap { position:relative; border:3px solid #333; background:#000; box-shadow:0 0 24px #29b6f655; max-width:100vw; }
+  canvas { display:block; background:#000; image-rendering:pixelated; max-width:100vw; height:auto; }
+
+  #overlay {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; background:rgba(0,0,0,0.9); text-align:center; padding:16px;
+  }
+  #overlay h2 { color:#ffeb3b; font-size:30px; margin-bottom:14px; letter-spacing:4px; }
+  #overlay p { margin:5px 0; font-size:13px; line-height:1.6; color:#ddd; }
+  #overlay button {
+    margin-top:18px; padding:12px 34px; background:#d500f9; color:#fff; border:none;
+    font-size:18px; font-family:inherit; cursor:pointer; letter-spacing:2px;
+    box-shadow:3px 3px 0 #7b0099; border-radius:4px;
+  }
+  #overlay button:active { transform:translate(2px,2px); box-shadow:1px 1px 0 #7b0099; }
+  .hidden { display:none !important; }
+
+  /* 모바일 컨트롤 — 작게(좌우만) */
+  #touch {
+    display:none; width:100%; max-width:520px; margin-top:8px;
+    justify-content:space-between; align-items:center; padding:0 18px 14px; gap:14px;
+  }
+  #touch.show { display:flex; }
+  #move { display:flex; gap:14px; }
+  #act { display:flex; gap:14px; align-items:center; }
+  .pad {
+    width:62px; height:62px; background:#1a1a2e; border:2px solid #444; color:#29b6f6;
+    font-size:26px; display:flex; align-items:center; justify-content:center; border-radius:10px;
+  }
+  .pad:active, .pad.active { background:#d500f9; border-color:#ff80ff; color:#fff; }
+  #pFire {
+    width:72px; height:72px; border-radius:50%; background:#b71c1c; border:3px solid #ff8a80;
+    color:#fff; font-size:15px; font-weight:bold; letter-spacing:1px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #pFire:active, #pFire.active { background:#ff5252; border-color:#fff; }
+  #mute { width:58px; height:42px; border-radius:8px; background:#222; border:2px solid #555;
+          color:#fff; font-size:13px; display:flex; align-items:center; justify-content:center; }
+  #mute:active { background:#444; }
+</style>
+</head>
+<body>
+  <h1>갤 러 그</h1>
+  <div id="info">GALAGA · 1981 NAMCO (오마주 리메이크)</div>
+
+  <div id="wrap">
+    <canvas id="game" width="480" height="720"></canvas>
+    <div id="overlay">
+      <h2>GALAGA</h2>
+      <p><b>목표</b> : 편대를 이룬 외계 곤충을 모두 격추!</p>
+      <p>좌우로 조준·회피하고 <b>발사 버튼</b>으로 쏘세요!</p>
+      <p>PC : ← → 이동 &nbsp;|&nbsp; Space·Z 발사 &nbsp;|&nbsp; M 음소거</p>
+      <p>모바일 : 하단 ◀ ▶ 이동 &nbsp;|&nbsp; FIRE 발사</p>
+      <p style="color:#ffeb3b">⚠ 급강하 공격과 적 탄환을 피하세요!</p>
+      <button id="startBtn">START</button>
+    </div>
+  </div>
+
+  <!-- 모바일 컨트롤(좌우만, 작게) -->
+  <div id="touch">
+    <div id="move">
+      <div class="pad" id="pLeft">◀</div>
+      <div class="pad" id="pRight">▶</div>
+    </div>
+    <div id="act">
+      <div id="pFire">FIRE</div>
+      <div id="mute">🔊</div>
+    </div>
+  </div>
+
+<script>
+/* ===== 갤러그 (Galaga) 오마주 =====
+   - 격자 편대 진입(스워밍) 후 정렬, 주기적 급강하 공격 + 적 탄환
+   - 플레이어 자동발사(좌우 조작만), 라이프/점수/스테이지
+   - 보스(초록) 격추 시 보너스, WebAudio 8비트 사운드 + BGM
+   - PC 키보드 + 모바일 터치(좌우) 겸용
+*/
+(() => {
+const cvs = document.getElementById('game');
+const ctx = cvs.getContext('2d');
+const W = cvs.width, H = cvs.height;
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+
+// ===== 사운드 =====
+let AC=null, muted=false;
+function ac(){ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); return AC; }
+function tone(freq,dur=0.08,type='square',vol=0.15,when=0){
+  if(muted||!AC) return;
+  const a=AC, t=a.currentTime+when;
+  const o=a.createOscillator(), g=a.createGain();
+  o.type=type; o.frequency.value=freq; g.gain.setValueAtTime(vol,t);
+  o.connect(g); g.connect(a.destination); o.start(t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.stop(t+dur);
+}
+function noise(dur=0.18,vol=0.18,when=0){
+  if(muted||!AC) return;
+  const a=AC, t=a.currentTime+when, n=Math.floor(a.sampleRate*dur);
+  const buf=a.createBuffer(1,n,a.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+  const s=a.createBufferSource(); s.buffer=buf;
+  const g=a.createGain(); g.gain.value=vol;
+  s.connect(g); g.connect(a.destination); s.start(t); s.stop(t+dur);
+}
+function sfx(name){
+  if(muted) return; ac();
+  if(name==='shoot'){ tone(880,0.05,'square',0.10); tone(1320,0.04,'square',0.08,0.02); }
+  if(name==='hit'){ noise(0.12,0.16); tone(140,0.10,'sawtooth',0.14); }
+  if(name==='boss'){ [1046,784,659,523].forEach((f,i)=>tone(f,0.06,'square',0.16,i*0.04)); }
+  if(name==='dive'){ tone(1200,0.18,'sawtooth',0.10); tone(400,0.18,'sawtooth',0.10,0.05); }
+  if(name==='die'){ noise(0.4,0.25); [330,262,196,130].forEach((f,i)=>tone(f,0.2,'triangle',0.2,i*0.14)); }
+  if(name==='clear'){ [523,659,784,1046,1318,1568].forEach((f,i)=>tone(f,0.14,'square',0.2,i*0.11)); }
+  if(name==='efire'){ tone(220,0.10,'square',0.08); }
+}
+
+// ===== BGM(갤러그풍 8비트 루프) =====
+let bgmTimer=null, bgmIdx=0;
+const bgmSeq=[
+  [659,1],[0,1],[523,1],[659,1],[784,1],[0,1],[659,1],[0,1],
+  [880,1],[0,1],[784,1],[659,1],[587,2],[0,1],[523,1],
+  [440,1],[0,1],[523,1],[659,1],[523,1],[440,1],[392,2],[0,2]
+];
+function startBGM(){
+  if(bgmTimer) return; bgmIdx=0; const step=170;
+  bgmTimer=setInterval(()=>{
+    if(muted||!AC) return;
+    const [f,len]=bgmSeq[bgmIdx%bgmSeq.length];
+    if(f>0) tone(f,(step*len)/1000*0.85,'square',0.045);
+    if(bgmIdx%2===0) tone(f>0?f/2:98,step/1000*0.7,'triangle',0.05);
+    bgmIdx++;
+  },step);
+}
+function stopBGM(){ if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; } }
+
+// ===== 별 배경 =====
+const stars=[];
+for(let i=0;i<70;i++) stars.push({x:Math.random()*W, y:Math.random()*H, s:Math.random()*1.6+0.4, sp:Math.random()*1.2+0.4});
+
+// ===== 상태 =====
+let state={ score:0, hi:0, lives:3, stage:1, gameover:false, cleared:false, flashTimer:0,
+  enemies:[], bullets:[], ebullets:[], booms:[], fireCd:0, spawnQ:[], entering:0 };
+
+const player={ x:W/2-14, y:H-70, w:28, h:24, vx:0, facing:0, alive:true, respawn:0 };
+
+const keys={};
+function setKey(k,v){ keys[k]=v; }
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase(); keys[k]=true;
+  if(['arrowleft','arrowright',' ','arrowup','arrowdown'].includes(k)) e.preventDefault();
+  if(k==='m'){ muted=!muted; updateMute(); }
+});
+window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
+
+// 모바일
+const touchBar=document.getElementById('touch');
+const muteBtn=document.getElementById('mute');
+function updateMute(){ muteBtn.textContent = muted?'🔇':'🔊'; }
+function bindPad(id,key){
+  const el=document.getElementById(id);
+  const on=e=>{ e.preventDefault(); setKey(key,true); el.classList.add('active'); };
+  const off=e=>{ e.preventDefault(); setKey(key,false); el.classList.remove('active'); };
+  el.addEventListener('touchstart',on,{passive:false});
+  el.addEventListener('touchend',off,{passive:false});
+  el.addEventListener('touchcancel',off,{passive:false});
+  el.addEventListener('mousedown',on); el.addEventListener('mouseup',off); el.addEventListener('mouseleave',off);
+}
+bindPad('pLeft','arrowleft'); bindPad('pRight','arrowright'); bindPad('pFire','fire');
+muteBtn.addEventListener('click',()=>{ muted=!muted; updateMute(); });
+if('ontouchstart' in window || navigator.maxTouchPoints>0){ touchBar.classList.add('show'); }
+window.addEventListener('touchstart',()=>touchBar.classList.add('show'),{once:true});
+
+// ===== 충돌 =====
+function hit(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
+
+// ===== 편대 구성 =====
+const COLS=8, GAP_X=44, GAP_Y=40, GRID_LEFT=W/2-(COLS-1)*GAP_X/2, GRID_TOP=80;
+function homePos(col,row){ return { x: GRID_LEFT+col*GAP_X-14, y: GRID_TOP+row*GAP_Y }; }
+
+function buildStage(){
+  state.enemies=[]; state.bullets=[]; state.ebullets=[]; state.booms=[];
+  state.cleared=false; state.fireCd=0; state.spawnQ=[]; state.entering=0;
+  const rows=Math.min(5, 3+Math.floor(state.stage/2));
+  let id=0;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<COLS;c++){
+      const type = r===0 ? 'boss' : (r<=1 ? 'red' : 'bee');
+      const home=homePos(c, r);
+      // 진입 경로: 화면 밖에서 곡선으로 들어옴
+      const side = (c%2===0)?-1:1;
+      state.spawnQ.push({
+        id:id++, col:c, row:r, type, hx:home.x, hy:home.y,
+        x: side<0 ? -40 : W+40, y: 60+Math.random()*40,
+        w:26, h:22, state:'enter', t:Math.random()*0.6, side,
+        diveT:0, alive:true, hp: type==='boss'?2:1, angle:0
+      });
+    }
+  }
+  // 진입을 순차적으로
+  state.enterIdx=0; state.entering=state.spawnQ.length;
+}
+
+function spawnNextWave(dt){
+  // 일정 간격으로 편대 진입
+  if(state.enterIdx<state.spawnQ.length){
+    state.enterTimer=(state.enterTimer||0)+dt;
+    if(state.enterTimer>0.12){
+      state.enterTimer=0;
+      state.enemies.push(state.spawnQ[state.enterIdx]);
+      state.enterIdx++;
+    }
+  }
+}
+
+// ===== 적 행동 =====
+let swayT=0;
+function updateEnemies(dt){
+  swayT+=dt;
+  const sway=Math.sin(swayT*1.2)*16;
+  let aliveFormation=0;
+
+  for(const e of state.enemies){
+    if(!e.alive) continue;
+    if(e.state==='enter'){
+      // 홈 위치로 곡선 이동
+      const tx=e.hx+sway, ty=e.hy;
+      e.x += (tx-e.x)*Math.min(1, dt*3.5);
+      e.y += (ty-e.y)*Math.min(1, dt*3.5);
+      e.angle = Math.atan2(ty-e.y, tx-e.x);
+      if(Math.abs(e.x-tx)<3 && Math.abs(e.y-ty)<3){ e.state='form'; e.angle=0; }
+    } else if(e.state==='form'){
+      e.x = e.hx+sway; e.y = e.hy; e.angle=0; aliveFormation++;
+      // 급강하 트리거
+      e.diveT -= dt;
+    } else if(e.state==='dive'){
+      // 플레이어 향해 곡선 하강
+      e.diveProg += dt;
+      const targetX = e.diveTargetX;
+      e.x += Math.sin(e.diveProg*3)*3 + (targetX-e.x)*0.02;
+      e.y += (160+state.stage*12)*dt;
+      e.angle = Math.PI/2 + Math.sin(e.diveProg*3)*0.4;
+      // 적 탄환
+      e.shootT -= dt;
+      if(e.shootT<=0 && e.y<H-120){
+        e.shootT=0.5;
+        state.ebullets.push({x:e.x+e.w/2-2, y:e.y+e.h, w:4, h:10, vy:200+state.stage*8});
+        sfx('efire');
+      }
+      if(e.y>H+30){
+        // 화면 아래로 빠지면 위에서 재진입 후 복귀
+        e.y=-30; e.x=e.hx; e.state='return';
+      }
+    } else if(e.state==='return'){
+      e.x += (e.hx+sway-e.x)*Math.min(1,dt*3);
+      e.y += (e.hy-e.y)*Math.min(1,dt*3);
+      e.angle=0;
+      if(Math.abs(e.y-e.hy)<3){ e.state='form'; }
+    }
+  }
+
+  // 급강하 디스패치: 편대가 안정되면 가끔 한 마리씩
+  if(state.enterIdx>=state.spawnQ.length){
+    state.diveCd=(state.diveCd||1.5)-dt;
+    if(state.diveCd<=0){
+      state.diveCd = Math.max(0.6, 1.8 - state.stage*0.1);
+      const forming = state.enemies.filter(e=>e.alive && e.state==='form');
+      if(forming.length){
+        const e=forming[Math.floor(Math.random()*forming.length)];
+        e.state='dive'; e.diveProg=0; e.shootT=0.3;
+        e.diveTargetX = player.x;
+        sfx('dive');
+      }
+    }
+  }
+
+  // 클리어 체크
+  const aliveCount=state.enemies.filter(e=>e.alive).length;
+  if(state.enterIdx>=state.spawnQ.length && aliveCount===0 && !state.cleared){
+    state.cleared=true; sfx('clear');
+    state.score += 500;
+    setTimeout(()=>{ state.stage++; buildStage(); }, 2000);
+  }
+}
+
+// ===== 플레이어 / 발사 =====
+function updatePlayer(dt){
+  if(!player.alive){
+    player.respawn-=dt;
+    if(player.respawn<=0){ player.alive=true; player.x=W/2-14; }
+    return;
+  }
+  let mv=0;
+  if(keys['arrowleft']) mv=-1;
+  if(keys['arrowright']) mv=1;
+  player.vx=mv*320;
+  player.x += player.vx*dt;
+  if(player.x<8) player.x=8;
+  if(player.x>W-8-player.w) player.x=W-8-player.w;
+
+  // 발사(버튼/키 누르고 있는 동안 연사)
+  state.fireCd-=dt;
+  const firing = keys['fire']||keys[' ']||keys['z'];
+  if(firing && state.fireCd<=0){
+    state.fireCd=0.22;
+    state.bullets.push({x:player.x+player.w/2-2, y:player.y, w:4, h:12, vy:-560});
+    sfx('shoot');
+  }
+}
+
+function updateBullets(dt){
+  for(const b of state.bullets){ b.y += b.vy*dt; }
+  state.bullets=state.bullets.filter(b=>b.y>-20);
+  for(const b of state.ebullets){ b.y += b.vy*dt; }
+  state.ebullets=state.ebullets.filter(b=>b.y<H+20);
+
+  // 내 총알 vs 적
+  for(const b of state.bullets){
+    for(const e of state.enemies){
+      if(e.alive && hit(b,e)){
+        b.dead=true; e.hp--;
+        if(e.hp<=0){
+          e.alive=false;
+          const pts = e.type==='boss'?(e.state!=='form'?400:150) : e.type==='red'?80:50;
+          state.score+=pts;
+          sfx(e.type==='boss'?'boss':'hit');
+          boom(e.x+e.w/2, e.y+e.h/2, e.type==='boss'?'#69f0ae':'#ff5252');
+        } else { sfx('hit'); }
+        break;
+      }
+    }
+  }
+  state.bullets=state.bullets.filter(b=>!b.dead);
+
+  if(player.alive){
+    // 적 탄환 vs 나
+    for(const b of state.ebullets){
+      if(hit(b,player)){ b.dead=true; die(); return; }
+    }
+    state.ebullets=state.ebullets.filter(b=>!b.dead);
+    // 급강하 적 충돌
+    for(const e of state.enemies){
+      if(e.alive && e.state!=='form' && hit(e,player)){ die(); return; }
+    }
+  }
+}
+
+function boom(x,y,color){
+  for(let i=0;i<10;i++){
+    const a=Math.random()*Math.PI*2, sp=40+Math.random()*120;
+    state.booms.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0.5,color});
+  }
+}
+function updateBooms(dt){
+  for(const p of state.booms){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt; }
+  state.booms=state.booms.filter(p=>p.life>0);
+}
+
+function die(){
+  sfx('die');
+  state.lives--;
+  state.flashTimer=30;
+  boom(player.x+player.w/2, player.y+player.h/2, '#29b6f6');
+  player.alive=false; player.respawn=1.2;
+  if(state.lives<=0){
+    state.gameover=true; stopBGM();
+    setTimeout(showGameOver, 1300);
+  }
+}
+
+function showGameOver(){
+  if(state.score>state.hi) state.hi=state.score;
+  overlay.classList.remove('hidden');
+  overlay.innerHTML =
+    '<h2 style="color:#ff5252">GAME OVER</h2>'+
+    '<p>최종 점수 : <b>'+state.score+'</b></p>'+
+    '<p>도달 스테이지 : '+state.stage+'</p>'+
+    '<button id="restartBtn">RESTART</button>';
+  document.getElementById('restartBtn').onclick=()=>location.reload();
+}
+
+// ===== 렌더 =====
+function drawStars(dt){
+  for(const s of stars){
+    s.y += s.sp*dt*60;
+    if(s.y>H){ s.y=0; s.x=Math.random()*W; }
+    ctx.fillStyle = s.s>1.2?'#fff':'#5c6bc0';
+    ctx.fillRect(s.x,s.y,s.s,s.s);
+  }
+}
+function drawShip(){
+  if(!player.alive) return;
+  if(state.flashTimer>0 && Math.floor(state.flashTimer/3)%2===0) return;
+  const x=player.x, y=player.y;
+  ctx.fillStyle='#fff'; ctx.fillRect(x+12,y,4,8);            // 노즈
+  ctx.fillStyle='#29b6f6'; ctx.fillRect(x+10,y+8,8,8);
+  ctx.fillRect(x+4,y+14,20,6);
+  ctx.fillRect(x,y+18,28,6);
+  ctx.fillStyle='#fff'; ctx.fillRect(x+2,y+16,4,4); ctx.fillRect(x+22,y+16,4,4);
+  ctx.fillStyle='#ffeb3b'; ctx.fillRect(x+12,y+8,4,4);
+}
+function drawEnemy(e){
+  ctx.save();
+  ctx.translate(e.x+e.w/2, e.y+e.h/2);
+  if(e.angle) ctx.rotate(e.angle);
+  const x=-e.w/2, y=-e.h/2;
+  if(e.type==='boss'){
+    ctx.fillStyle='#69f0ae'; ctx.fillRect(x+6,y,14,8);
+    ctx.fillStyle='#7c4dff'; ctx.fillRect(x+2,y+8,22,8);
+    ctx.fillStyle='#fff'; ctx.fillRect(x+6,y+10,4,4); ctx.fillRect(x+16,y+10,4,4);
+    ctx.fillStyle='#69f0ae'; ctx.fillRect(x,y+14,6,8); ctx.fillRect(x+20,y+14,6,8); // 날개
+  } else if(e.type==='red'){
+    ctx.fillStyle='#ff5252'; ctx.fillRect(x+4,y+2,18,10);
+    ctx.fillStyle='#ffeb3b'; ctx.fillRect(x+8,y+4,10,4);
+    ctx.fillStyle='#ff5252'; ctx.fillRect(x,y+10,6,8); ctx.fillRect(x+20,y+10,6,8);
+    ctx.fillStyle='#fff'; ctx.fillRect(x+8,y+12,3,3); ctx.fillRect(x+15,y+12,3,3);
+  } else {
+    ctx.fillStyle='#40c4ff'; ctx.fillRect(x+4,y+2,18,10);
+    ctx.fillStyle='#fff'; ctx.fillRect(x+8,y+4,3,3); ctx.fillRect(x+15,y+4,3,3);
+    ctx.fillStyle='#40c4ff'; ctx.fillRect(x,y+10,6,8); ctx.fillRect(x+20,y+10,6,8);
+    ctx.fillStyle='#0288d1'; ctx.fillRect(x+10,y+10,6,8);
+  }
+  ctx.restore();
+}
+function drawHUD(){
+  ctx.textAlign='left'; ctx.fillStyle='#ff5252'; ctx.font='bold 12px monospace';
+  ctx.fillText('SCORE', 12, 16);
+  ctx.fillStyle='#fff'; ctx.font='bold 18px monospace';
+  ctx.fillText(String(state.score).padStart(6,'0'), 12, 36);
+  ctx.fillStyle='#ff5252'; ctx.font='bold 12px monospace'; ctx.textAlign='center';
+  ctx.fillText('HI-SCORE', W/2, 16);
+  ctx.fillStyle='#fff'; ctx.font='bold 16px monospace';
+  ctx.fillText(String(Math.max(state.hi,state.score)).padStart(6,'0'), W/2, 34);
+  ctx.textAlign='right'; ctx.fillStyle='#29b6f6'; ctx.font='bold 14px monospace';
+  ctx.fillText('STAGE '+state.stage, W-12, 16);
+  // 라이프
+  for(let i=0;i<state.lives;i++){
+    const lx=W-28-i*26, ly=24;
+    ctx.fillStyle='#29b6f6'; ctx.fillRect(lx+6,ly,4,5); ctx.fillRect(lx+2,ly+5,12,4);
+  }
+  ctx.textAlign='left';
+  if(muted){ ctx.fillStyle='#ff5252'; ctx.font='11px monospace'; ctx.fillText('MUTED', 12, H-8); }
+}
+
+function render(dt){
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  drawStars(dt);
+  state.enemies.forEach(e=>{ if(e.alive) drawEnemy(e); });
+  // 총알
+  ctx.fillStyle='#fff'; state.bullets.forEach(b=>ctx.fillRect(b.x,b.y,b.w,b.h));
+  ctx.fillStyle='#ff80ab'; state.ebullets.forEach(b=>ctx.fillRect(b.x,b.y,b.w,b.h));
+  drawShip();
+  // 폭발
+  state.booms.forEach(p=>{ ctx.globalAlpha=Math.max(0,p.life*2); ctx.fillStyle=p.color; ctx.fillRect(p.x-2,p.y-2,4,4); });
+  ctx.globalAlpha=1;
+  drawHUD();
+  if(state.flashTimer>0) state.flashTimer--;
+
+  if(state.cleared){
+    ctx.fillStyle='#ffeb3b'; ctx.font='bold 30px monospace'; ctx.textAlign='center';
+    ctx.fillText('STAGE CLEAR!', W/2, H/2);
+    ctx.textAlign='left';
+  }
+}
+
+// ===== 업데이트 =====
+function update(dt){
+  if(state.gameover) return;
+  if(!state.cleared){
+    spawnNextWave(dt);
+    updateEnemies(dt);
+    updatePlayer(dt);
+    updateBullets(dt);
+  }
+  updateBooms(dt);
+}
+
+// ===== 루프 =====
+let lastTime=0;
+function loop(t){
+  const dt=Math.min((t-lastTime)/1000,0.05); lastTime=t;
+  update(dt); render(dt);
+  requestAnimationFrame(loop);
+}
+
+startBtn.addEventListener('click',()=>{
+  overlay.classList.add('hidden');
+  ac(); if(AC.state==='suspended') AC.resume();
+  updateMute(); startBGM(); buildStage();
+  lastTime=performance.now();
+  requestAnimationFrame(loop);
+});
+
+// 초기 화면
+ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+drawStars(0.5);
+})();
+</script>
+</body>
+</html>

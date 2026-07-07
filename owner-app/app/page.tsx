@@ -152,7 +152,8 @@ export default function OwnerDashboard() {
   const [segFilter, setSegFilter] = useState<string | null>(null)        // 세그먼트 필터
   const [memberOrders, setMemberOrders] = useState<any[]>([])            // 상세: 주문이력
   const [memberDetailLoading, setMemberDetailLoading] = useState(false)
-  const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats'>('orders')
+  const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats' | 'content'>('orders')
+  const [games, setGames] = useState<any[]>([]) // Phase 5-2-c 오락실 게임
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
   const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
@@ -416,6 +417,16 @@ export default function OwnerDashboard() {
   const riderName = (id?: string | null) => riders.find(r => r.id === id)?.name || '미배정'
   useEffect(() => { loadRiders() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ===== Phase 5-2-c: 오락실 게임 관리 =====
+  const loadGames = async () => {
+    const r = await fetch('/api/arcade/list').then(x => x.json()).catch(() => null)
+    if (r?.ok) setGames(r.games)
+  }
+  const updateGame = async (id: string, patch: any) => {
+    await fetch('/api/arcade/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) }).catch(() => {})
+    await loadGames()
+  }
+
   const toggleMenu = async (id: string, cur: boolean) => {
     await fetch('/api/toggle-menu', {
       method: 'POST',
@@ -662,6 +673,7 @@ export default function OwnerDashboard() {
         <button className={tab === 'sales' ? 'active' : ''} onClick={() => setTab('sales')}>매출</button>
         <button className={tab === 'business' ? 'active' : ''} onClick={() => setTab('business')}>영업</button>
         <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>통계</button>
+        <button className={tab === 'content' ? 'active' : ''} onClick={() => { setTab('content'); loadGames() }}>콘텐츠</button>
       </div>
 
       {/* 주문 칸반 */}
@@ -1215,6 +1227,28 @@ export default function OwnerDashboard() {
 
       {/* 통계 (그룹 F-1) */}
       {tab === 'stats' && <StatsTab />}
+
+      {/* 콘텐츠 관리 (Phase 5-2) — 오락실 게임 (음악·게시판은 다음 단계에서 이 탭에 추가) */}
+      {tab === 'content' && (
+        <div style={{ padding: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', marginBottom: 4 }}>🎮 오락실 게임 관리</div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 14 }}>온/오프·이름 관리 (손님 오락실 화면에 즉시 반영)</div>
+          {games.length === 0 && <div style={{ color: '#888', padding: 20, textAlign: 'center' }}>등록된 게임이 없어요</div>}
+          {games.map(g => (
+            <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0', borderBottom: '1px solid #2a2a2a' }}>
+              <span style={{ fontSize: 20 }}>🕹️</span>
+              <input defaultValue={g.name} maxLength={20}
+                onBlur={e => { const v = e.target.value.trim(); if (v && v !== g.name) updateGame(g.id, { name: v }) }}
+                style={{ flex: 1, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '8px 10px', color: '#eee', fontSize: 14 }} />
+              <button onClick={() => updateGame(g.id, { is_active: !g.is_active })}
+                style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${g.is_active ? '#3ac47d' : '#555'}`, background: g.is_active ? '#12301f' : '#242424', color: g.is_active ? '#3ac47d' : '#888', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                {g.is_active ? '노출 ON' : '숨김'}
+              </button>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: '#666', marginTop: 12 }}>* 이름은 입력 후 다른 곳을 누르면 저장돼요. 새 게임 추가는 파일 등록이 필요해 개발쪽에서 반영합니다.</div>
+        </div>
+      )}
 
       {/* 회원 목록 (Phase 4-A CRM + 4-B 세그먼트) */}
       {tab === 'members' && (() => {

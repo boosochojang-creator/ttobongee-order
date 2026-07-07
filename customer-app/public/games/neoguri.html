@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>너구리 - Ponpoko (1982) 오마주</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; overflow-x:hidden; }
+  body {
+    background:#000;
+    color:#fff;
+    font-family: 'Courier New', monospace;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    min-height:100vh;
+    padding:10px 0;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+  h1 {
+    color:#ffeb3b;
+    margin-bottom:8px;
+    letter-spacing:4px;
+    text-shadow:2px 2px 0 #f44336;
+    font-size:26px;
+  }
+  #info {
+    color:#ccc;
+    font-size:13px;
+    margin-bottom:10px;
+    text-align:center;
+  }
+  #wrap {
+    position:relative;
+    border:4px solid #444;
+    background:#000;
+    box-shadow:0 0 30px #ffeb3b40;
+    width:640px;
+    max-width:calc(100vw - 16px);
+  }
+  canvas { display:block; background:#000; image-rendering:pixelated; width:100%; height:auto; }
+  #overlay {
+    position:absolute; left:0; top:0; width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.85);
+    flex-direction:column;
+    text-align:center;
+    color:#fff;
+  }
+  #overlay h2 { color:#ffeb3b; font-size:32px; margin-bottom:18px; letter-spacing:3px; }
+  #overlay p { margin:6px 0; font-size:14px; line-height:1.6; }
+  #overlay button {
+    margin-top:20px;
+    padding:12px 30px;
+    background:#f44336;
+    color:#fff;
+    border:none;
+    font-size:18px;
+    font-family:inherit;
+    cursor:pointer;
+    letter-spacing:2px;
+    box-shadow:3px 3px 0 #b71c1c;
+  }
+  #overlay button:hover { background:#ff5722; }
+  .hidden { display:none !important; }
+  #ctrl { color:#888; font-size:12px; margin-top:8px; text-align:center; }
+
+  /* ===== 모바일 터치 컨트롤 ===== */
+  #touch {
+    display:none;
+    width:100%;
+    max-width:640px;
+    margin-top:14px;
+    padding:0 10px;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  }
+  .pad { display:grid; gap:8px; }
+  .pad-dir {
+    grid-template-columns:repeat(3, 56px);
+    grid-template-rows:repeat(3, 56px);
+  }
+  .pad-act { grid-template-columns:1fr; }
+  .tbtn {
+    background:#222;
+    color:#ffeb3b;
+    border:2px solid #555;
+    border-radius:10px;
+    font-family:inherit;
+    font-size:22px;
+    font-weight:bold;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 3px 0 #000;
+    touch-action:none;
+    user-select:none;
+  }
+  .tbtn:active, .tbtn.on { background:#f44336; color:#fff; transform:translateY(2px); box-shadow:0 1px 0 #000; }
+  #bUp    { grid-column:2; grid-row:1; }
+  #bLeft  { grid-column:1; grid-row:2; }
+  #bRight { grid-column:3; grid-row:2; }
+  #bDown  { grid-column:2; grid-row:3; }
+  #bJump  { width:90px; height:90px; border-radius:50%; font-size:16px; background:#b71c1c; border-color:#ff5722; }
+  #bMute  { width:90px; height:44px; font-size:14px; margin-top:10px; }
+  /* 터치 지원 기기에서만 표시 */
+  @media (hover:none) and (pointer:coarse) {
+    #touch { display:flex; }
+    #pcinfo { display:none; }
+  }
+  body.touch-on #touch { display:flex; }
+</style>
+</head>
+<body>
+  <h1>너 구 리</h1>
+  <div id="info">PONPOKO - 1982 SIGMA ENTERPRISES (오마주 리메이크)</div>
+
+  <div id="wrap">
+    <canvas id="game" width="640" height="540"></canvas>
+    <div id="overlay">
+      <h2>NEOGURI</h2>
+      <p><b>PC</b> : ← → 이동 / ↑↓ 사다리 / Space·Z 점프 / M 음소거</p>
+      <p><b>모바일</b> : 왼쪽 방향패드 이동·사다리 / 오른쪽 JUMP·MUTE 버튼</p>
+      <p>제한시간 내에 모든 과일/야채를 먹으세요!</p>
+      <p>애벌레, 뱀을 피하고 ? 주머니는 점수 또는 함정!</p>
+      <button id="startBtn">START</button>
+    </div>
+  </div>
+
+  <!-- 모바일 터치 컨트롤 -->
+  <div id="touch">
+    <div class="pad pad-dir">
+      <button class="tbtn" id="bUp">▲</button>
+      <button class="tbtn" id="bLeft">◀</button>
+      <button class="tbtn" id="bRight">▶</button>
+      <button class="tbtn" id="bDown">▼</button>
+    </div>
+    <div class="pad pad-act">
+      <button class="tbtn" id="bJump">JUMP</button>
+      <button class="tbtn" id="bMute">MUTE</button>
+    </div>
+  </div>
+
+  <div id="ctrl"><span id="pcinfo">PC: 키보드</span> 모바일: 화면 터치 버튼 지원</div>
+
+<script>
+/* ====== 너구리 (Ponpoko) 오마주 ======
+   - 4층 플랫폼 + 사다리
+   - 적: 애벌레(가로 순찰), 뱀(? 주머니에서 등장 가능)
+   - 아이템: 스테이지별 과일/야채 + ? 주머니
+   - 타이머, 점수, 라이프, 사운드(WebAudio)
+*/
+(() => {
+const cvs = document.getElementById('game');
+const ctx = cvs.getContext('2d');
+const W = cvs.width, H = cvs.height;
+
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+
+// ===== 사운드 (WebAudio) =====
+let AC = null;
+let muted = false;
+function ac(){ if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); return AC; }
+function beep(freq, dur=0.08, type='square', vol=0.15){
+  if(muted) return;
+  const a = ac();
+  const o = a.createOscillator();
+  const g = a.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.value = vol;
+  o.connect(g); g.connect(a.destination);
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime+dur);
+  o.stop(a.currentTime+dur);
+}
+function sfx(name){
+  if(muted) return;
+  if(name==='eat')  beep(880,0.06,'square',0.18);
+  if(name==='jump') beep(600,0.10,'triangle',0.18);
+  if(name==='die')  { beep(300,0.2,'sawtooth',0.25); setTimeout(()=>beep(150,0.3,'sawtooth',0.25),180); }
+  if(name==='clear'){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,0.15,'square',0.2),i*120)); }
+  if(name==='bag')  beep(1200,0.05,'square',0.18);
+  if(name==='snake')beep(120,0.3,'sawtooth',0.2);
+}
+
+// BGM: 8비트풍 루프
+let bgmTimer = null;
+const bgmNotes = [523,587,659,698,784,698,659,587, 523,659,784,1046,784,659,523,440];
+let bgmIdx = 0;
+function startBGM(){
+  if(bgmTimer) return;
+  bgmIdx = 0;
+  bgmTimer = setInterval(()=>{
+    if(muted){ return; }
+    const a = ac();
+    const o = a.createOscillator();
+    const g = a.createGain();
+    o.type='square';
+    o.frequency.value = bgmNotes[bgmIdx % bgmNotes.length];
+    g.gain.value = 0.06;
+    o.connect(g); g.connect(a.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime+0.18);
+    o.stop(a.currentTime+0.2);
+    bgmIdx++;
+  }, 220);
+}
+function stopBGM(){ if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; } }
+
+// ===== 레벨 / 플랫폼 =====
+const floors = [
+  {y: 120},
+  {y: 240},
+  {y: 360},
+  {y: 480}
+];
+const PLATFORM_H = 14;
+const GRAVITY = 0.6;
+
+// 사다리: top/bot 은 floors 인덱스 (top=위층, bot=아래층)
+const ladders = [
+  {x: 90,  top:0, bot:1},
+  {x: 300, top:0, bot:1},
+  {x: 540, top:0, bot:1},
+  {x: 180, top:1, bot:2},
+  {x: 420, top:1, bot:2},
+  {x: 100, top:2, bot:3},
+  {x: 320, top:2, bot:3},
+  {x: 540, top:2, bot:3},
+];
+const LADDER_W = 22;
+
+const stages = [
+  {name:'당근',     color:'#ff6f00', score:10},
+  {name:'앵두',     color:'#e53935', score:20},
+  {name:'버섯',     color:'#f06292', score:30},
+  {name:'감',       color:'#ff7043', score:50},
+  {name:'옥수수',   color:'#fdd835', score:100},
+  {name:'파인애플', color:'#fbc02d', score:200},
+  {name:'수박',     color:'#43a047', score:300},
+  {name:'가지',     color:'#7b1fa2', score:500},
+  {name:'멜론',     color:'#aed581', score:1000},
+  {name:'밤',       color:'#5d4037', score:2000},
+];
+
+let state = {
+  stage: 0, score: 0, lives: 3, time: 60,
+  fruits: [], bags: [], enemies: [], snakes: [],
+  paused: false, gameover: false, cleared: false, flashTimer: 0,
+};
+
+const player = {
+  x: 60, y: 0, w: 28, h: 28,
+  vx:0, vy:0,
+  onGround:false, onLadder:false,
+  facing:1, jumping:false, animFrame:0,
+};
+
+const keys = {};
+window.addEventListener('keydown', e=>{
+  keys[e.key.toLowerCase()] = true;
+  if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault();
+  if(e.key.toLowerCase()==='m'){ muted = !muted; }
+});
+window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
+
+// ===== 모바일 터치 컨트롤 =====
+function bindBtn(id, key){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const press = (ev)=>{ ev.preventDefault(); keys[key] = true; el.classList.add('on'); };
+  const release = (ev)=>{ if(ev) ev.preventDefault(); keys[key] = false; el.classList.remove('on'); };
+  el.addEventListener('touchstart', press, {passive:false});
+  el.addEventListener('touchend', release, {passive:false});
+  el.addEventListener('touchcancel', release, {passive:false});
+  // 데스크톱 마우스로도 조작 가능
+  el.addEventListener('mousedown', press);
+  el.addEventListener('mouseup', release);
+  el.addEventListener('mouseleave', release);
+}
+bindBtn('bUp', 'arrowup');
+bindBtn('bDown', 'arrowdown');
+bindBtn('bLeft', 'arrowleft');
+bindBtn('bRight', 'arrowright');
+bindBtn('bJump', ' ');
+
+const bMute = document.getElementById('bMute');
+if(bMute){
+  const toggleMute = (ev)=>{ ev.preventDefault(); muted = !muted; bMute.classList.toggle('on', muted); };
+  bMute.addEventListener('touchstart', toggleMute, {passive:false});
+  bMute.addEventListener('click', (ev)=>{ if(ev.detail) toggleMute(ev); });
+}
+
+// 터치 입력이 한 번이라도 감지되면 컨트롤 강제 표시
+window.addEventListener('touchstart', ()=>{ document.body.classList.add('touch-on'); }, {once:true});
+
+function buildStage(){
+  state.fruits = []; state.bags = []; state.enemies = []; state.snakes = [];
+  state.time = 60; state.cleared = false;
+
+  // 과일 배치: 각 층에 몇 개씩
+  const positions = [];
+  for(let f=0; f<floors.length; f++){
+    const count = 3;
+    for(let i=0;i<count;i++){
+      const x = 60 + (W-120) * (i/(count-1));
+      positions.push({x:x, y: floors[f].y - 28});
+    }
+  }
+  positions.forEach(p=>{
+    state.fruits.push({x:p.x, y:p.y, w:18, h:18, eaten:false});
+  });
+
+  const bagSpots = [
+    {floor:0, xr:0.3},
+    {floor:1, xr:0.7},
+    {floor:2, xr:0.25},
+    {floor:3, xr:0.8},
+  ];
+  bagSpots.forEach((b,i)=>{
+    const fy = floors[b.floor].y - 22;
+    state.bags.push({
+      x: 40 + (W-80)*b.xr, y:fy, w:20, h:20, opened:false,
+      isSnake: (i % 3 === 2)
+    });
+  });
+
+  const enemyFloors = [1,2,3];
+  enemyFloors.forEach((f,i)=>{
+    state.enemies.push({
+      x: 200 + i*120, y: floors[f].y - 22,
+      w:24, h:22,
+      vx: (1 + state.stage*0.2) * (i%2===0?1:-1),
+      floor: f
+    });
+  });
+
+  player.x = 40;
+  player.y = floors[0].y - player.h;
+  player.vx = 0; player.vy = 0;
+  player.onGround = true; player.onLadder = false;
+}
+
+function rectHit(a,b){
+  return a.x < b.x + b.w && a.x + a.w > b.x &&
+         a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// 플레이어 중심이 사다리 범위 안에 있고, 두 층 사이의 세로 구간에 있으면 사다리 반환
+function ladderAt(px, py, ph){
+  const cx = px + player.w/2;
+  for(const L of ladders){
+    if(cx > L.x - 2 && cx < L.x + LADDER_W + 2){
+      const topY = floors[L.top].y;
+      const botY = floors[L.bot].y;
+      const feetY = py + ph;
+      if(feetY >= topY - 6 && feetY <= botY + 6){
+        return L;
+      }
+    }
+  }
+  return null;
+}
+
+let lastTime = 0;
+let timeAccum = 0;
+
+function update(dt){
+  if(state.gameover) return;
+  if(state.cleared){
+    // 클리어 연출 중에는 적/플레이어 정지
+    return;
+  }
+
+  // 타이머
+  timeAccum += dt;
+  if(timeAccum >= 1){
+    timeAccum = 0;
+    state.time--;
+    if(state.time <= 0){ state.time = 0; die(); return; }
+  }
+
+  // ===== 플레이어 입력 =====
+  const left  = keys['arrowleft'];
+  const right = keys['arrowright'];
+  const up    = keys['arrowup'];
+  const down  = keys['arrowdown'];
+  const jump  = keys[' '] || keys['z'];
+
+  const L = ladderAt(player.x, player.y, player.h);
+
+  // 사다리 진입
+  if(L && (up || down)){
+    player.onLadder = true;
+    player.x = L.x + LADDER_W/2 - player.w/2;
+    player.vx = 0;
+    player.vy = 0;
+  }
+
+  if(player.onLadder){
+    player.vx = 0;
+    player.vy = 0;
+    if(up)   player.y -= 2.2;
+    if(down) player.y += 2.2;
+    // 사다리 위 끝/아래 끝 도달 처리
+    if(!ladderAt(player.x, player.y, player.h)){
+      player.onLadder = false;
+    }
+    if(left || right) player.onLadder = false;
+  } else {
+    // 좌우 이동
+    player.vx = 0;
+    if(left){  player.vx = -3; player.facing = -1; }
+    if(right){ player.vx =  3; player.facing =  1; }
+
+    // 점프
+    if(jump && player.onGround){
+      player.vy = -10;
+      player.onGround = false;
+      player.jumping = true;
+      sfx('jump');
+    }
+
+    // 중력
+    player.vy += GRAVITY;
+    if(player.vy > 12) player.vy = 12;
+  }
+
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // 좌우 경계
+  if(player.x < 0) player.x = 0;
+  if(player.x + player.w > W) player.x = W - player.w;
+
+  // 바닥(플랫폼) 충돌
+  if(!player.onLadder){
+    player.onGround = false;
+    for(let i=0;i<floors.length;i++){
+      const fy = floors[i].y;
+      const feetY = player.y + player.h;
+      if(player.vy >= 0 && feetY >= fy && feetY <= fy + PLATFORM_H + player.vy){
+        player.y = fy - player.h;
+        player.vy = 0;
+        player.onGround = true;
+        player.jumping = false;
+        break;
+      }
+    }
+    if(player.y + player.h > H){ die(); return; }
+  }
+
+  player.animFrame += Math.abs(player.vx)*0.2 + (player.onLadder?0.1:0);
+
+  // ===== 과일 먹기 =====
+  for(const fr of state.fruits){
+    if(!fr.eaten && rectHit(player, fr)){
+      fr.eaten = true;
+      state.score += stages[state.stage % stages.length].score;
+      sfx('eat');
+    }
+  }
+  if(state.fruits.length && state.fruits.every(f=>f.eaten)){
+    if(!state.cleared){
+      state.cleared = true;
+      sfx('clear');
+      state.score += state.time * 10;
+      setTimeout(()=>{ state.stage++; buildStage(); }, 1500);
+    }
+  }
+
+  // ===== 주머니 =====
+  for(const b of state.bags){
+    if(!b.opened && rectHit(player, b)){
+      b.opened = true;
+      if(b.isSnake){
+        sfx('snake');
+        state.snakes.push({
+          x: b.x, y: b.y, w: 26, h: 18,
+          vx: (player.x < b.x ? -1.5 : 1.5)
+        });
+      } else {
+        sfx('bag');
+        state.score += 500;
+      }
+    }
+  }
+
+  // ===== 적 (애벌레) =====
+  for(const e of state.enemies){
+    e.x += e.vx;
+    if(e.x < 10 || e.x + e.w > W-10) e.vx *= -1;
+    if(rectHit(player, e)){ die(); return; }
+  }
+  // ===== 뱀 =====
+  for(const s of state.snakes){
+    s.x += s.vx;
+    if(s.x < 0 || s.x + s.w > W) s.vx *= -1;
+    if(rectHit(player, s)){ die(); return; }
+  }
+}
+
+function die(){
+  sfx('die');
+  state.lives--;
+  state.flashTimer = 30;
+  if(state.lives <= 0){
+    state.gameover = true;
+    stopBGM();
+    setTimeout(()=>{
+      overlay.classList.remove('hidden');
+      overlay.innerHTML = `<h2>GAME OVER</h2>
+        <p>최종 점수: ${state.score}</p>
+        <p>도달 스테이지: ${state.stage+1}</p>
+        <button id="restartBtn">RESTART</button>`;
+      document.getElementById('restartBtn').onclick = ()=> location.reload();
+    }, 1200);
+  } else {
+    setTimeout(()=>{
+      player.x = 40;
+      player.y = floors[0].y - player.h;
+      player.vx=0; player.vy=0; player.onLadder=false;
+      state.snakes = [];
+    }, 800);
+  }
+}
+
+// ===== 그리기 =====
+function drawRaccoon(x,y,facing){
+  ctx.save();
+  ctx.translate(x+14, y+14);
+  if(facing<0) ctx.scale(-1,1);
+  // 몸통
+  ctx.fillStyle='#9e9e9e';
+  ctx.fillRect(-12,-8,24,20);
+  // 배
+  ctx.fillStyle='#e0e0e0';
+  ctx.fillRect(-7,-2,14,12);
+  // 머리
+  ctx.fillStyle='#bdbdbd';
+  ctx.fillRect(-10,-14,20,10);
+  // 귀
+  ctx.fillStyle='#616161';
+  ctx.fillRect(-10,-18,6,5);
+  ctx.fillRect(4,-18,6,5);
+  // 눈 (너구리 마스크)
+  ctx.fillStyle='#000';
+  ctx.fillRect(-8,-12,5,4);
+  ctx.fillRect(3,-12,5,4);
+  ctx.fillStyle='#fff';
+  ctx.fillRect(-6,-11,2,2);
+  ctx.fillRect(5,-11,2,2);
+  // 코
+  ctx.fillStyle='#000';
+  ctx.fillRect(-2,-7,4,3);
+  ctx.restore();
+}
+
+function drawFruit(fr){
+  const st = stages[state.stage % stages.length];
+  ctx.fillStyle = st.color;
+  ctx.beginPath();
+  ctx.arc(fr.x + fr.w/2, fr.y + fr.h/2, fr.w/2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#2e7d32';
+  ctx.fillRect(fr.x + fr.w/2 - 1, fr.y - 4, 3, 6);
+}
+
+function drawBag(b){
+  if(b.opened){
+    if(!b.isSnake){
+      ctx.fillStyle='#ffd54f';
+      ctx.font='14px monospace';
+      ctx.fillText('+500', b.x-6, b.y);
+    }
+    return;
+  }
+  ctx.fillStyle='#8d6e63';
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.fillStyle='#ffeb3b';
+  ctx.font='bold 16px monospace';
+  ctx.textAlign='center';
+  ctx.fillText('?', b.x + b.w/2, b.y + b.h - 4);
+  ctx.textAlign='left';
+}
+
+function drawEnemy(e){
+  ctx.fillStyle='#4caf50';
+  ctx.fillRect(e.x, e.y, e.w, e.h);
+  ctx.fillStyle='#1b5e20';
+  for(let i=0;i<3;i++) ctx.fillRect(e.x + 4 + i*7, e.y+4, 4, e.h-8);
+  ctx.fillStyle='#000';
+  ctx.fillRect(e.x + (e.vx>0?e.w-6:2), e.y+4, 3, 3);
+}
+
+function drawSnake(s){
+  ctx.fillStyle='#ab47bc';
+  ctx.fillRect(s.x, s.y, s.w, s.h);
+  ctx.fillStyle='#000';
+  ctx.fillRect(s.x + (s.vx>0?s.w-5:2), s.y+4, 3, 3);
+  ctx.fillStyle='#f44336';
+  ctx.fillRect(s.x + (s.vx>0?s.w:-4), s.y+s.h/2, 4, 2);
+}
+
+function drawHUD(){
+  ctx.fillStyle='#fff';
+  ctx.font='16px monospace';
+  ctx.textAlign='left';
+  ctx.fillText('SCORE ' + state.score, 12, 24);
+  ctx.fillText('STAGE ' + (state.stage+1) + ' (' + stages[state.stage%stages.length].name + ')', 200, 24);
+  ctx.fillStyle = state.time<=10 ? '#f44336' : '#fff';
+  ctx.fillText('TIME ' + state.time, 480, 24);
+  // 라이프
+  for(let i=0;i<state.lives;i++){
+    ctx.fillStyle='#9e9e9e';
+    ctx.fillRect(12 + i*20, 32, 14, 10);
+  }
+}
+
+function render(){
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,W,H);
+
+  // 플랫폼
+  for(const f of floors){
+    ctx.fillStyle='#5d4037';
+    ctx.fillRect(0, f.y, W, PLATFORM_H);
+    ctx.fillStyle='#8d6e63';
+    ctx.fillRect(0, f.y, W, 3);
+  }
+  // 사다리
+  for(const L of ladders){
+    const topY = floors[L.top].y;
+    const botY = floors[L.bot].y + PLATFORM_H;
+    ctx.fillStyle='#ffb74d';
+    ctx.fillRect(L.x, topY, 3, botY-topY);
+    ctx.fillRect(L.x + LADDER_W - 3, topY, 3, botY-topY);
+    for(let y=topY+6; y<botY; y+=12){
+      ctx.fillRect(L.x, y, LADDER_W, 3);
+    }
+  }
+
+  state.fruits.forEach(fr=>{ if(!fr.eaten) drawFruit(fr); });
+  state.bags.forEach(drawBag);
+  state.enemies.forEach(drawEnemy);
+  state.snakes.forEach(drawSnake);
+
+  // 피격 깜빡임
+  if(state.flashTimer>0){
+    state.flashTimer--;
+    if(Math.floor(state.flashTimer/4)%2===0){
+      drawRaccoon(player.x, player.y, player.facing);
+    }
+  } else {
+    drawRaccoon(player.x, player.y, player.facing);
+  }
+
+  drawHUD();
+
+  if(state.cleared){
+    ctx.fillStyle='rgba(0,0,0,0.6)';
+    ctx.fillRect(0,200,W,160);
+    ctx.fillStyle='#ffeb3b';
+    ctx.font='bold 40px monospace';
+    ctx.textAlign='center';
+    ctx.fillText('STAGE CLEAR!', W/2, 280);
+    ctx.font='20px monospace';
+    ctx.fillStyle='#fff';
+    ctx.fillText('TIME BONUS x10', W/2, 320);
+    ctx.textAlign='left';
+  }
+
+  if(muted){
+    ctx.fillStyle='#888';
+    ctx.font='12px monospace';
+    ctx.textAlign='right';
+    ctx.fillText('MUTED', W-10, H-10);
+    ctx.textAlign='left';
+  }
+}
+
+function loop(t){
+  const dt = (t - lastTime)/1000;
+  lastTime = t;
+  update(Math.min(dt, 0.05));
+  render();
+  requestAnimationFrame(loop);
+}
+
+startBtn.addEventListener('click', ()=>{
+  overlay.classList.add('hidden');
+  const a = ac();
+  if(a.state === 'suspended') a.resume();
+  startBGM();
+  buildStage();
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+});
+
+ctx.fillStyle='#000';
+ctx.fillRect(0,0,W,H);
+
+})();
+</script>
+</body>
+</html>
