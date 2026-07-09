@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { getMemberLocal } from './memberState'
 import { BOARD_WARNING } from '../../lib/contentFilter'
 
-type Post = { id: string; author_name: string; created_at: string; is_secret: boolean; comment_count: number; content: string | null; has_image: boolean }
+type Post = { id: string; author_name: string; created_at: string; is_secret: boolean; comment_count: number; content: string | null; has_image: boolean; image_url: string | null; is_mine: boolean }
 
 function timeAgo(iso: string) {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
@@ -54,8 +54,42 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
   const [revealErr, setRevealErr] = useState<Record<string, string>>({})
 
   const userId = getMemberLocal()?.userId || null
-  const load = () => fetch(`/api/board/posts?source=${source}`).then(x => x.json()).then(r => { if (r.ok) setPosts(r.posts) }).catch(() => {})
+  const uidQ = userId ? `&userId=${userId}` : ''
+  const load = () => fetch(`/api/board/posts?source=${source}${uidQ}`).then(x => x.json()).then(r => { if (r.ok) setPosts(r.posts) }).catch(() => {})
   useEffect(() => { load() }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // [8] 본인 글/댓글 수정·삭제
+  const [editingPost, setEditingPost] = useState<{ id: string; content: string } | null>(null)
+  const [editingComment, setEditingComment] = useState<{ id: string; content: string } | null>(null)
+  const savePostEdit = async () => {
+    if (!editingPost || !editingPost.content.trim()) return
+    const r = await fetch('/api/board/posts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postId: editingPost.id, userId, content: editingPost.content }) }).then(x => x.json()).catch(() => null)
+    if (!r?.ok) { setErr(r?.error || '수정 실패'); return }
+    setEditingPost(null); load()
+  }
+  const deletePost = async (id: string) => {
+    if (!confirm('이 글을 삭제할까요? (댓글도 함께 삭제돼요)')) return
+    const r = await fetch('/api/board/posts', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postId: id, userId }) }).then(x => x.json()).catch(() => null)
+    if (!r?.ok) { setErr(r?.error || '삭제 실패'); return }
+    if (openId === id) setOpenId(null)
+    load()
+  }
+  const reloadComments = async (postId: string) => {
+    const r = await fetch(`/api/board/comments?postId=${postId}${uidQ}`).then(x => x.json())
+    if (r.ok) setComments(r.comments)
+  }
+  const saveCommentEdit = async (postId: string) => {
+    if (!editingComment || !editingComment.content.trim()) return
+    const r = await fetch('/api/board/comments', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commentId: editingComment.id, userId, content: editingComment.content }) }).then(x => x.json()).catch(() => null)
+    if (!r?.ok) { setCErr(r?.error || '수정 실패'); return }
+    setEditingComment(null); await reloadComments(postId)
+  }
+  const deleteComment = async (postId: string, commentId: string) => {
+    if (!confirm('이 댓글을 삭제할까요?')) return
+    const r = await fetch('/api/board/comments', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commentId, userId }) }).then(x => x.json()).catch(() => null)
+    if (!r?.ok) { setCErr(r?.error || '삭제 실패'); return }
+    await reloadComments(postId); load()
+  }
 
   const pickImage = async (file?: File) => {
     if (!file) return
@@ -67,7 +101,8 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
     if (board && secret && secretPw.trim().length < 2) { setErr('비밀번호를 2자 이상 입력해주세요'); return }
     setBusy(true); setErr('')
     const body: any = { source, content, anonymous: anon, userId }
-    if (board && secret) { body.is_secret = true; body.secret_pw = secretPw; if (imageData) body.image = imageData }
+    if (board && secret) { body.is_secret = true; body.secret_pw = secretPw }
+    if (board && imageData) body.image = imageData // [9] 공개글/비밀글 모두 사진 첨부 가능
     const r = await fetch('/api/board/posts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json()).catch(() => null)
     setBusy(false)
     if (!r?.ok) { setErr(r?.error || '등록에 실패했어요'); return }
@@ -83,8 +118,8 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
 
   const openComments = async (id: string) => {
     if (openId === id) { setOpenId(null); return }
-    setOpenId(id); setComments([]); setCContent(''); setCErr('')
-    const r = await fetch(`/api/board/comments?postId=${id}`).then(x => x.json())
+    setOpenId(id); setComments([]); setCContent(''); setCErr(''); setEditingComment(null)
+    const r = await fetch(`/api/board/comments?postId=${id}${uidQ}`).then(x => x.json())
     if (r.ok) setComments(r.comments)
   }
   const submitComment = async () => {
@@ -93,7 +128,7 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
     const r = await fetch('/api/board/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postId: openId, content: cContent, anonymous: cAnon, userId }) }).then(x => x.json()).catch(() => null)
     if (!r?.ok) { setCErr(r?.error || '등록 실패'); return }
     setCContent('')
-    const rr = await fetch(`/api/board/comments?postId=${openId}`).then(x => x.json())
+    const rr = await fetch(`/api/board/comments?postId=${openId}${uidQ}`).then(x => x.json())
     if (rr.ok) setComments(rr.comments)
     load()
   }
@@ -113,21 +148,22 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
             <input type="checkbox" checked={secret} onChange={e => setSecret(e.target.checked)} style={{ accentColor: '#c8a900' }} /> 🔒 비밀글로 쓰기 (점주만 열람, 나는 비번으로 재조회)
           </label>
           {secret && (
-            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input type="password" placeholder="비밀번호 (2자 이상)" value={secretPw} onChange={e => setSecretPw(e.target.value)} style={inp} />
-              <label style={{ fontSize: 13, color: '#aaa', cursor: 'pointer' }}>
-                📷 사진 첨부 (선택)
-                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickImage(e.target.files?.[0])} />
-                <span style={{ color: '#7fd4ff', marginLeft: 8 }}>{imageData ? '사진 선택됨' : '파일 선택'}</span>
-              </label>
-              {imageData && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <img src={imageData} alt="첨부" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />
-                  <button onClick={() => setImageData(null)} style={{ background: 'none', border: '1px solid #555', color: '#aaa', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>사진 제거</button>
-                </div>
-              )}
-            </div>
+            <input type="password" placeholder="비밀번호 (2자 이상)" value={secretPw} onChange={e => setSecretPw(e.target.value)} style={{ ...inp, marginTop: 8, width: '100%' }} />
           )}
+          {/* [9] 사진 첨부 — 공개글/비밀글 모두 가능 */}
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label style={{ fontSize: 13, color: '#aaa', cursor: 'pointer' }}>
+              📷 사진 첨부 (선택)
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickImage(e.target.files?.[0])} />
+              <span style={{ color: '#7fd4ff', marginLeft: 8 }}>{imageData ? '사진 선택됨' : '파일 선택'}</span>
+            </label>
+            {imageData && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <img src={imageData} alt="첨부" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8 }} />
+                <button onClick={() => setImageData(null)} style={{ background: 'none', border: '1px solid #555', color: '#aaa', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>사진 제거</button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -163,8 +199,24 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
                 <div style={{ fontSize: 14, color: '#eee', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
                   {rv ? rv.content : p.content}
                   {rv?.imageUrl && <img src={rv.imageUrl} alt="첨부" style={{ display: 'block', maxWidth: '100%', borderRadius: 10, marginTop: 8 }} />}
+                  {!p.is_secret && p.image_url && <img src={p.image_url} alt="첨부" style={{ display: 'block', maxWidth: '100%', borderRadius: 10, marginTop: 8 }} />}
                 </div>
               )}
+              {/* [8] 본인 글 수정·삭제 */}
+              {p.is_mine && (editingPost?.id === p.id ? (
+                <div style={{ marginTop: 8 }}>
+                  <textarea value={editingPost.content} onChange={e => setEditingPost({ id: p.id, content: e.target.value })} rows={2} style={{ ...inp, width: '100%', resize: 'vertical' }} />
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                    <button onClick={savePostEdit} style={{ background: '#c8a900', color: '#111', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>저장</button>
+                    <button onClick={() => setEditingPost(null)} style={{ background: 'none', color: '#888', border: '1px solid #444', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}>취소</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                  {(!p.is_secret || rv) && <button onClick={() => setEditingPost({ id: p.id, content: (rv?.content ?? p.content) || '' })} style={{ background: 'none', border: 'none', color: '#888', fontSize: 12, cursor: 'pointer', padding: 0 }}>✏️ 수정</button>}
+                  <button onClick={() => deletePost(p.id)} style={{ background: 'none', border: 'none', color: '#e0776b', fontSize: 12, cursor: 'pointer', padding: 0 }}>🗑️ 삭제</button>
+                </div>
+              ))}
               <button onClick={() => openComments(p.id)} style={{ marginTop: 6, background: 'none', border: 'none', color: '#7fd4ff', fontSize: 12, cursor: 'pointer', padding: 0 }}>
                 💬 댓글 {p.comment_count}{openId === p.id ? ' · 접기' : ''}
               </button>
@@ -172,8 +224,24 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
                 <div style={{ marginTop: 8, borderTop: '1px solid #2a2a2a', paddingTop: 8 }}>
                   {comments.map(c => (
                     <div key={c.id} style={{ padding: '5px 0', fontSize: 13 }}>
-                      <span style={{ color: '#c8a900', fontWeight: 700, marginRight: 6 }}>{c.author_name}</span>
-                      <span style={{ color: '#ddd' }}>{c.content}</span>
+                      <span style={{ color: c.author_name === '🍗 사장님' ? '#3ac47d' : '#c8a900', fontWeight: 700, marginRight: 6 }}>{c.author_name}</span>
+                      {editingComment?.id === c.id ? (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                          <input value={editingComment.content} onChange={e => setEditingComment({ id: c.id, content: e.target.value })} style={{ ...inp, flex: 1, padding: '6px 8px', fontSize: 13 }} />
+                          <button onClick={() => saveCommentEdit(p.id)} style={{ background: '#c8a900', color: '#111', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>저장</button>
+                          <button onClick={() => setEditingComment(null)} style={{ background: 'none', color: '#888', border: '1px solid #444', borderRadius: 6, padding: '5px 8px', fontSize: 12, cursor: 'pointer' }}>취소</button>
+                        </div>
+                      ) : (
+                        <>
+                          <span style={{ color: '#ddd' }}>{c.content}</span>
+                          {c.is_mine && (
+                            <span style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
+                              <button onClick={() => setEditingComment({ id: c.id, content: c.content })} style={{ background: 'none', border: 'none', color: '#888', fontSize: 11, cursor: 'pointer', padding: 0, marginRight: 6 }}>수정</button>
+                              <button onClick={() => deleteComment(p.id, c.id)} style={{ background: 'none', border: 'none', color: '#e0776b', fontSize: 11, cursor: 'pointer', padding: 0 }}>삭제</button>
+                            </span>
+                          )}
+                        </>
+                      )}
                     </div>
                   ))}
                   {comments.length === 0 && <div style={{ color: '#666', fontSize: 12 }}>첫 댓글을 남겨보세요</div>}

@@ -161,6 +161,7 @@ export default function OwnerDashboard() {
   const [boardSource, setBoardSource] = useState('all')
   const [boardOpenId, setBoardOpenId] = useState<string | null>(null)
   const [boardComments, setBoardComments] = useState<any[]>([])
+  const [boardReply, setBoardReply] = useState('') // [6] 사장님 답글 입력
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
   const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
@@ -465,9 +466,22 @@ export default function OwnerDashboard() {
   }
   const openBoardComments = async (id: string) => {
     if (boardOpenId === id) { setBoardOpenId(null); return }
-    setBoardOpenId(id); setBoardComments([])
+    setBoardOpenId(id); setBoardComments([]); setBoardReply('')
     const r = await fetch(`/api/board/comments?postId=${id}`).then(x => x.json())
     if (r.ok) setBoardComments(r.comments)
+  }
+  // [6] 사장님 답글 등록 → 댓글목록·건수 갱신
+  const submitBoardReply = async (postId: string) => {
+    if (!boardReply.trim()) return
+    const r = await fetch('/api/board/comments', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId, content: boardReply }),
+    }).then(x => x.json()).catch(() => null)
+    if (!r?.ok) { alert(r?.error || '답글 등록 실패'); return }
+    setBoardReply('')
+    const rr = await fetch(`/api/board/comments?postId=${postId}`).then(x => x.json())
+    if (rr.ok) setBoardComments(rr.comments)
+    await loadBoardPosts()
   }
 
   const toggleMenu = async (id: string, cur: boolean) => {
@@ -705,11 +719,12 @@ export default function OwnerDashboard() {
       </div>
 
       {/* 요약 */}
+      {/* [5] 요약카드 클릭 연동 — 오늘매출→매출탭, 그 외→주문탭 */}
       <div className="summary-bar">
-        <div className="stat-card"><div className="label">오늘 주문</div><div className="value">{summary.count}건</div></div>
-        <div className="stat-card"><div className="label">오늘 매출</div><div className="value">{won(summary.sales)}</div></div>
-        <div className="stat-card"><div className="label">신규 주문</div><div className="value" style={{ color: newOrders.length ? '#e84040' : 'var(--gold)' }}>{newOrders.length}건</div></div>
-        <div className="stat-card"><div className="label">조리중</div><div className="value" style={{ color: '#f09000' }}>{cookingOrders.length}건</div></div>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setTab('orders')}><div className="label">오늘 주문</div><div className="value">{summary.count}건</div></div>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setTab('sales')}><div className="label">오늘 매출 ›</div><div className="value">{won(summary.sales)}</div></div>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setTab('orders')}><div className="label">신규 주문</div><div className="value" style={{ color: newOrders.length ? '#e84040' : 'var(--gold)' }}>{newOrders.length}건</div></div>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setTab('orders')}><div className="label">조리중</div><div className="value" style={{ color: '#f09000' }}>{cookingOrders.length}건</div></div>
       </div>
 
       {/* 탭 */}
@@ -1351,10 +1366,19 @@ export default function OwnerDashboard() {
                   {boardComments.length === 0 && <div style={{ color: '#666', fontSize: 12 }}>댓글 없음</div>}
                   {boardComments.map(c => (
                     <div key={c.id} style={{ padding: '4px 0', fontSize: 13 }}>
-                      <span style={{ color: '#c8a900', fontWeight: 700, marginRight: 6 }}>{c.author_name}</span>
+                      <span style={{ color: c.author_name === '🍗 사장님' ? '#3ac47d' : '#c8a900', fontWeight: 700, marginRight: 6 }}>{c.author_name}</span>
                       <span style={{ color: '#ddd' }}>{c.content}</span>
                     </div>
                   ))}
+                  {/* [6] 사장님 답글 입력 */}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <input value={boardReply} onChange={e => setBoardReply(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && submitBoardReply(p.id)}
+                      placeholder="🍗 사장님 답글 달기"
+                      style={{ flex: 1, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '8px 10px', color: '#eee', fontSize: 13 }} />
+                    <button onClick={() => submitBoardReply(p.id)}
+                      style={{ background: '#12301f', border: '1px solid #3ac47d', color: '#3ac47d', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>등록</button>
+                  </div>
                 </div>
               )}
             </div>
