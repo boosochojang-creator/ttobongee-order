@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import { setActiveOrder } from '../../../lib/activeOrder'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
+import { validateSplitCount, splitPerPerson } from '../../../lib/splitInfo'
 
 type PayMethod = 'card' | 'kakao' | 'toss' | 'cash'
 const won = (n: number) => n.toLocaleString() + '원'
@@ -47,44 +48,17 @@ export default function CheckoutPage() {
     return () => { alive = false; clearInterval(t) }
   }, [])
 
-  // ===== Phase 3: 더치페이 (홀 주문 전용) =====
+  // ===== 더치페이 (재설계): 결제자 1명이 전액을 일반 단일결제로 결제, 1/N은 안내숫자만 표시 =====
+  // 예전 "각자 폰으로 각자 몫 결제" 세션 방식 폐기 → 결제건 1개만 생성(부분결제 사각지대 등 구조적 버그 제거).
   const [splitModal, setSplitModal] = useState(false)
   const [splitN, setSplitN] = useState('')
-  const [splitLoading, setSplitLoading] = useState(false)
 
-  const handleSplitStart = async () => {
+  // 인원수 확정 → 선택한 결제수단으로 전체 금액을 그대로 결제(일반 주문 흐름). 나머지 정산은 참여자끼리.
+  const handleSplitConfirm = () => {
     const n = Math.floor(Number(splitN))
-    if (!n || n < 2 || n > 20) { setError('인원수는 2~20명으로 입력해주세요'); return }
-    if (!items.length || splitLoading) return
-    // [2] 마감 중이면 더치페이 시작도 차단
-    if (await fetchStoreClosed()) { setStoreClosed(true); setError('지금은 영업 준비 중이라 주문을 받을 수 없어요.'); return }
-    setSplitLoading(true); setError('')
-    try {
-      // 원 주문 생성 (결제 전 pending — 전원 결제 완료 시에만 주방으로 넘어감)
-      const { data: order, error: orderErr } = await supabase.from('orders').insert({
-        store_id: 'baegun', table_no: Number(tableNo), order_type: 'dine_in', status: 'pending',
-        total_amount: totalAmount, discount_amount: discountAmount, final_amount: finalAmount,
-        payment_method: 'split', user_id: userId, is_member: isMember,
-      }).select('id').single()
-      if (orderErr || !order) throw orderErr
-      const orderItems = items.map(i => ({
-        order_id: order.id, menu_id: i.id, name_snapshot: i.name,
-        price_snapshot: i.price, qty: i.qty, subtotal: i.price * i.qty,
-      }))
-      const { error: itemErr } = await supabase.from('order_items').insert(orderItems)
-      if (itemErr) throw itemErr
-
-      const r = await fetch('/api/split', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'start', orderId: order.id, participantCount: n }),
-      }).then(x => x.json())
-      if (!r.ok) throw new Error(r.error)
-      clearCart()
-      router.push(`/store/baegun/split?sid=${r.sessionId}`)
-    } catch (e: any) {
-      setError(e?.message || '더치페이 시작에 실패했어요. 다시 시도해주세요')
-      setSplitLoading(false)
-    }
+    if (!validateSplitCount(n)) { setError('인원수는 2~20명으로 입력해주세요'); return }
+    setSplitModal(false)
+    handleOrder()
   }
 
   // ===== Phase 2: 배달 주문 =====
@@ -460,7 +434,7 @@ export default function CheckoutPage() {
               border: '1px solid #7a6400', borderRadius: 10, cursor: 'pointer',
             }}
           >
-            🍗 더치페이로 나눠 내기 (n분의 1)
+            🍗 더치페이 — 1/N 계산해서 전액 결제
           </button>
         )}
 
@@ -484,17 +458,27 @@ export default function CheckoutPage() {
             <div style={{ fontSize: 17, fontWeight: 900, color: '#f0f0f0', marginBottom: 14 }}>몇 분이서 나누실까요?</div>
             <input
               type="number" inputMode="numeric" min={2} max={20} placeholder="인원수 (2~20)"
-              value={splitN} onChange={e => setSplitN(e.target.value)}
+              value={splitN} onChange={e => { setSplitN(e.target.value); setError('') }}
               style={{ width: '100%', background: '#111', border: '1px solid #444', borderRadius: 10, padding: '12px 14px', color: '#f0f0f0', fontSize: 16, outline: 'none', textAlign: 'center' }}
             />
-            {/* [인원수 안내] — 확정 문구 (2026-07-05 지시) */}
+            {(() => {
+              const num = Math.floor(Number(splitN))
+              if (!validateSplitCount(num)) return null
+              return (
+                <div style={{ marginTop: 12, fontSize: 15, color: '#f0f0f0' }}>
+                  1인당 약 <strong style={{ color: '#FFD700' }}>{won(splitPerPerson(payTotal, num))}</strong>
+                  <span style={{ color: '#888', fontSize: 12 }}> (참고용 숫자)</span>
+                </div>
+              )
+            })()}
+            {/* [재설계] 결제자 1명이 전액 결제, 1/N은 안내숫자만 — 나머지는 참여자끼리 정산 */}
             <div style={{ fontSize: 12, color: '#aaa', lineHeight: 1.8, marginTop: 10, textAlign: 'left' }}>
-              이 화면은 정확히 인원수만큼 나눠서 결제돼요.<br />
-              누군가 더 내주고 싶으시면, 결제 다 끝난 뒤 현금이나 계좌이체로 따로 정산해주세요 :)
+              결제자 한 분이 전체 <strong style={{ color: '#FFD700' }}>{won(payTotal)}</strong>을 한 번에 결제해요.<br />
+              위 1인당 금액은 <b>계산 참고용</b>이에요. 나머지는 결제 후 참여자끼리 계좌이체·현금으로 정산해주세요 :)
             </div>
             {error && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{error}</div>}
-            <button className="btn-primary" style={{ marginTop: 14 }} onClick={handleSplitStart} disabled={splitLoading}>
-              {splitLoading ? '시작하는 중...' : '더치페이 시작'}
+            <button className="btn-primary" style={{ marginTop: 14 }} onClick={handleSplitConfirm}>
+              확인하고 전액 결제하기
             </button>
             <button
               onClick={() => setSplitModal(false)}

@@ -55,14 +55,7 @@ export default function MenuPage() {
     return () => { alive = false; clearInterval(t) }
   }, [])
 
-  // Phase 3 방식 B: 이 테이블에 진행 중인 더치페이가 있으면 참여 배너 노출
-  const [splitSession, setSplitSession] = useState<{ id: string; paid_count: number; participant_count: number } | null>(null)
-  useEffect(() => {
-    if (!tableNo || tableNo === '0') return
-    fetch(`/api/split?table=${tableNo}`).then(x => x.json())
-      .then(r => { if (r?.ok && r.session) setSplitSession(r.session) })
-      .catch(() => {})
-  }, [tableNo])
+  // 더치페이 재설계: '각자 폰 합류' 세션 방식 폐기 → 참여 배너 제거(결제자 1명이 전액 결제).
   const catRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const headerRef = useRef<HTMLDivElement>(null)
   const [headerH, setHeaderH] = useState(114)
@@ -213,24 +206,6 @@ export default function MenuPage() {
         </div>
       )}
 
-      {/* 진행 중인 더치페이 참여 배너 (방식 B: 각자 폰으로 합류) */}
-      {splitSession && (
-        <div
-          onClick={() => router.push(`/store/baegun/split?sid=${splitSession.id}`)}
-          style={{
-            background: '#101820', border: '1px solid #7fd4ff66', borderRadius: 12,
-            padding: '14px 16px', margin: '12px 16px 0', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}
-        >
-          <span style={{ fontSize: 24 }}>🍗</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#7fd4ff' }}>이 테이블에 진행 중인 더치페이가 있어요!</div>
-            <div style={{ fontSize: 12, color: '#888' }}>{splitSession.paid_count}/{splitSession.participant_count}명 결제 완료 · 눌러서 참여하기</div>
-          </div>
-          <span style={{ color: '#7fd4ff' }}>›</span>
-        </div>
-      )}
 
       {/* 추가정보(생일·주소) 입력 유도 카드 — phone_member/profile_incomplete 회원에게만 */}
       <ProfilePrompt />
