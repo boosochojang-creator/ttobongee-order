@@ -5,6 +5,7 @@ import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import { setActiveOrder } from '../../../lib/activeOrder'
+import { fetchStoreClosed } from '../../../lib/storeStatus'
 
 type PayMethod = 'card' | 'kakao' | 'toss' | 'cash'
 const won = (n: number) => n.toLocaleString() + '원'
@@ -36,6 +37,15 @@ export default function CheckoutPage() {
   const [payMethod, setPayMethod] = useState<PayMethod>('card')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // [2] 영업상태 — 마감 중이면 주문/결제 차단 + 안내. 마운트 시 조회 + 20초 폴링(실시간 반영).
+  const [storeClosed, setStoreClosed] = useState(false)
+  useEffect(() => {
+    let alive = true
+    const check = () => fetchStoreClosed().then(c => { if (alive) setStoreClosed(c) })
+    check()
+    const t = setInterval(check, 20000)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
 
   // ===== Phase 3: 더치페이 (홀 주문 전용) =====
   const [splitModal, setSplitModal] = useState(false)
@@ -46,6 +56,8 @@ export default function CheckoutPage() {
     const n = Math.floor(Number(splitN))
     if (!n || n < 2 || n > 20) { setError('인원수는 2~20명으로 입력해주세요'); return }
     if (!items.length || splitLoading) return
+    // [2] 마감 중이면 더치페이 시작도 차단
+    if (await fetchStoreClosed()) { setStoreClosed(true); setError('지금은 영업 준비 중이라 주문을 받을 수 없어요.'); return }
     setSplitLoading(true); setError('')
     try {
       // 원 주문 생성 (결제 전 pending — 전원 결제 완료 시에만 주방으로 넘어감)
@@ -152,6 +164,12 @@ export default function CheckoutPage() {
 
   const handleOrder = async () => {
     if (!items.length) return
+    // [2] 제출 시점 권위적 재확인 — 페이지 머무는 사이 마감됐을 수 있어 최신 상태로 하드가드(주문·결제 원천 차단)
+    if (await fetchStoreClosed()) {
+      setStoreClosed(true)
+      setError('지금은 영업 준비 중이라 주문을 받을 수 없어요. 잠시 후 다시 시도하거나 직원에게 문의해주세요.')
+      return
+    }
     // 배달 주문 필수 항목 검증 (배달료 계산까지 완료돼야 결제 진행)
     if (isDelivery) {
       const digits = contactPhone.replace(/\D/g, '')
@@ -286,6 +304,16 @@ export default function CheckoutPage() {
         <span style={{ fontWeight: 700 }}>결제하기</span>
       </div>
       <div className="checkout-page">
+        {/* [2] 영업마감 안내 — 마감 중엔 주문/결제 불가 */}
+        {storeClosed && (
+          <div style={{
+            background: '#2a1a00', border: '1px solid #c8a900', borderRadius: 12,
+            padding: '16px 18px', marginBottom: 16, fontSize: 14, lineHeight: 1.7, color: '#f0d890',
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#FFD700', marginBottom: 4 }}>🔒 지금은 영업 준비 중이에요</div>
+            영업이 시작되면 주문할 수 있어요. 매장에 계시다면 직원에게 문의해 주세요 🙏
+          </div>
+        )}
         {/* 받는 방법 (Phase 2: 배달) */}
         <div className="section-title">받는 방법</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -437,10 +465,12 @@ export default function CheckoutPage() {
         )}
 
         <div style={{ height: 12 }} />
-        <button className="btn-primary" onClick={handleOrder} disabled={loading}>
-          {loading
-            ? payMethod === 'cash' ? '주문 접수 중...' : '결제창 열리는 중...'
-            : `${won(payTotal)} ${payMethod === 'cash' ? '주문하기' : '결제하기'}`}
+        <button className="btn-primary" onClick={handleOrder} disabled={loading || storeClosed}>
+          {storeClosed
+            ? '🔒 지금은 영업 준비 중이에요'
+            : loading
+              ? payMethod === 'cash' ? '주문 접수 중...' : '결제창 열리는 중...'
+              : `${won(payTotal)} ${payMethod === 'cash' ? '주문하기' : '결제하기'}`}
         </button>
 
         <LegalFooter />

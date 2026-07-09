@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import ProfilePrompt from '../../../lib/ProfilePrompt'
 import { getMemberLocal } from '../../../lib/memberState'
+import { fetchStoreClosed } from '../../../lib/storeStatus'
 
 type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; image_url?: string | null }
 
@@ -43,6 +44,16 @@ export default function MenuPage() {
   // (isMember는 3시간짜리 장바구니 상태라, 시간이 지난 회원에게 가입 배너가 재노출되던 허점 보완)
   const [isJoined, setIsJoined] = useState(false)
   useEffect(() => { setIsJoined(!!getMemberLocal()) }, [])
+
+  // [2] 영업상태 — 마감 중이면 안내 배너(주문 하드차단은 결제화면에서). 마운트 조회 + 20초 폴링.
+  const [storeClosed, setStoreClosed] = useState(false)
+  useEffect(() => {
+    let alive = true
+    const check = () => fetchStoreClosed().then(c => { if (alive) setStoreClosed(c) })
+    check()
+    const t = setInterval(check, 20000)
+    return () => { alive = false; clearInterval(t) }
+  }, [])
 
   // Phase 3 방식 B: 이 테이블에 진행 중인 더치페이가 있으면 참여 배너 노출
   const [splitSession, setSplitSession] = useState<{ id: string; paid_count: number; participant_count: number } | null>(null)
@@ -122,6 +133,14 @@ export default function MenuPage() {
           ))}
         </div>
       </div>
+
+      {/* [2] 영업마감 안내 배너 — 메뉴는 열람 가능, 주문은 결제화면에서 차단 */}
+      {storeClosed && (
+        <div style={{ margin: '12px 16px 0', background: '#2a1a00', border: '1px solid #c8a900', borderRadius: 12, padding: '14px 16px', fontSize: 14, lineHeight: 1.7, color: '#f0d890' }}>
+          <div style={{ fontSize: 15, fontWeight: 900, color: '#FFD700', marginBottom: 3 }}>🔒 지금은 영업 준비 중이에요</div>
+          메뉴는 둘러보실 수 있지만, 주문은 영업이 시작된 후 가능해요 🙏
+        </div>
+      )}
 
       {/* 회원 배너 */}
       {isMember ? (

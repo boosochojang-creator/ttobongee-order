@@ -517,6 +517,8 @@ export default function OwnerDashboard() {
       { store_id: 'baegun', date: today, start_time: new Date().toISOString() },
       { onConflict: 'store_id,date' }
     )
+    // [2] 영업상태 → 고객 화면 반영 (service role API). 실패해도 영업 흐름은 계속.
+    await fetch('/api/store-open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open: true }) }).catch(() => {})
     await loadTodayReport()
     // 쿠폰 자동발급 실행 → 오늘 발급분 팝업 (확인용, 승인 불필요)
     const r = await fetch('/api/coupons/run', { method: 'POST' }).then(x => x.json()).catch(() => null)
@@ -538,6 +540,8 @@ export default function OwnerDashboard() {
       kakao_sales: byM('kakao'), toss_sales: byM('toss'),
       order_count: count, avg_order_value: count > 0 ? Math.round(total / count) : 0,
     }, { onConflict: 'store_id,date' })
+    // [2] 영업마감 → 고객 화면 즉시 '영업 준비 중'으로 (주문/결제 차단). 실패해도 마감 흐름은 계속.
+    await fetch('/api/store-open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open: false }) }).catch(() => {})
     setClosingConfirm(false)
     await loadTodayReport()
   }
