@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import StatsTab from './StatsTab'
+import { SALES_COUNTED } from './lib/salesStatus'
 
 type Order = {
   id: string
@@ -37,15 +38,14 @@ const STATUS_LABEL: Record<string, string> = {
   accepted: '접수', cooking: '조리중', done: '조리완료', served: '서빙완료', canceled: '취소',
   out_for_delivery: '🛵 배달출발', delivered: '✅ 배달완료',
 }
-// Phase 5-1-a: 매출 확정으로 카운트하는 상태 (배달은 done을 지나 배달출발/완료로 가므로 함께 포함)
-const SALES_STATUSES = ['done', 'out_for_delivery', 'delivered']
+// [3][4][11] 매출 확정 상태는 SALES_COUNTED(단일 기준) 사용 — served 포함, 미결제(cash_pending)·미확정 제외.
 const CUSTOMER_APP_BASE = 'https://ttobongee-order-5izk.vercel.app' // 라이더 화면(/rider)이 있는 손님앱 도메인
 // 5-1 보류(배달대행 API 확인 중): 라이더 UI 숨김. true로 바꾸면 라이더 관리/배차 UI 즉시 복원.
 // 코드·API·DB(riders/018)는 그대로 유지 — 화면 노출만 차단.
 const SHOW_RIDER_MANAGEMENT = false
 
 // Phase 4-A CRM: 등급 라벨/색 + 휴면 계산 (휴면/휴면주의는 저장 안 하고 last_visit로 조회 시 계산 — D2)
-const CRM_COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served', 'out_for_delivery', 'delivered']
+const CRM_COUNTED = SALES_COUNTED // 매출 = CRM 완료주문, 동일 기준
 const CRM_GRADE_LABEL: Record<string, string> = { new: '신규', normal: '일반', regular: '단골', vip: 'VIP' }
 const CRM_GRADE_COLOR: Record<string, string> = { new: '#8a8a8a', normal: '#4a90d9', regular: '#c8a900', vip: '#d98cff' }
 
@@ -256,12 +256,12 @@ export default function OwnerDashboard() {
 
     setOrders(mapped)
 
-    // 요약
-    const done = mapped.filter(o => ['accepted','cooking','done','served'].includes(o.status))
-    const todayAll = mapped
+    // 요약 — '오늘 매출'은 확정 매출(SALES_COUNTED)만 합산해 매출탭·영업마감·통계와 동일 기준.
+    // '오늘 주문'은 오늘 접수된 주문 건수(취소·미결제 제외, mapped 자체 기준).
+    const salesToday = mapped.filter(o => SALES_COUNTED.includes(o.status))
     setSummary({
-      count: todayAll.length,
-      sales: todayAll.reduce((s, o) => s + o.final_amount, 0),
+      count: mapped.length,
+      sales: salesToday.reduce((s, o) => s + o.final_amount, 0),
       newMembers: 0,
     })
   }, [playAlert])
@@ -528,7 +528,7 @@ export default function OwnerDashboard() {
   const closeBusiness = async () => {
     const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     const { data: raw } = await supabase.from('orders')
-      .select('final_amount, payment_method').eq('store_id', 'baegun').in('status', SALES_STATUSES)
+      .select('final_amount, payment_method').eq('store_id', 'baegun').in('status', SALES_COUNTED)
       .gte('created_at', `${today}T00:00:00+09:00`)
     const list = raw || []
     const total = list.reduce((s: number, o: any) => s + o.final_amount, 0)
@@ -920,7 +920,7 @@ export default function OwnerDashboard() {
       {/* 매출 내역 */}
       {tab === 'sales' && (() => {
         const salesOrders = orders
-          .filter(o => SALES_STATUSES.includes(o.status))
+          .filter(o => SALES_COUNTED.includes(o.status))
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         const byMethod: Record<string, number> = {}
         salesOrders.forEach(o => {
@@ -942,7 +942,7 @@ export default function OwnerDashboard() {
                 합계: {won(totalSales)}
               </div>
             </div>
-            {!salesOrders.length && <div className="empty">완료된 주문이 없어요</div>}
+            {!salesOrders.length && <div className="empty">매출 내역이 없어요</div>}
             {salesOrders.map(o => (
               <div key={o.id} style={{
                 background: '#1c1c1c', borderRadius: 12, marginBottom: 8,
@@ -991,7 +991,7 @@ export default function OwnerDashboard() {
           : '-'
 
         // 오늘 실시간 (orders state 기준)
-        const todaySales = orders.filter(o => SALES_STATUSES.includes(o.status))
+        const todaySales = orders.filter(o => SALES_COUNTED.includes(o.status))
         const todaySalesTotal = todaySales.reduce((s, o) => s + o.final_amount, 0)
         const todayCount = todaySales.length
 

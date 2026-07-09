@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
 import CouponStats from './CouponStats'
+import { SALES_COUNTED } from './lib/salesStatus'
 
 type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -115,7 +116,7 @@ export default function StatsTab() {
       .eq('store_id', 'baegun')
       .gte('created_at', new Date(range.start).toISOString())
       .lt('created_at', new Date(range.end).toISOString())
-      .not('status', 'in', '(canceled,pending,verification_failed)')
+      .in('status', SALES_COUNTED) // [4][11] 확정 매출만 — cash_pending(미결제) 등 제외, 화면 전체와 동일 기준
       .then(({ data }) => {
         if (!alive) return
         setOrders((data as OrderRow[]) || [])
@@ -142,7 +143,7 @@ export default function StatsTab() {
       .select('user_id, created_at')
       .eq('store_id', 'baegun')
       .not('user_id', 'is', null)
-      .not('status', 'in', '(canceled,pending,verification_failed)')
+      .in('status', SALES_COUNTED) // [4] 방문/재방문 집계도 동일 기준
       .then(({ data }) => setMemberOrders((data as UserOrderRow[]) || []))
   }, [])
 
