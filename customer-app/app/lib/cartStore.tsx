@@ -1,18 +1,13 @@
 'use client'
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { supabase } from './supabase'
+import { MEMBER_KEY } from './pwaInstall'
+import { computeHydration, CART_STORAGE_KEY, type CartItem } from './hydration'
 
-// 새로고침·앱 전환(결제앱 등) 후에도 장바구니가 사라지지 않도록 localStorage에 보존한다.
-// 유효시간을 두는 이유: 어제 담아둔 장바구니가 오늘 방문 때 되살아나면 안 되므로 (한 끼 세션 기준 3시간)
-export const CART_STORAGE_KEY = 'ttobongee-cart-v1'
-const CART_MAX_AGE_MS = 3 * 60 * 60 * 1000
-
-export type CartItem = {
-  id: number
-  name: string
-  price: number
-  qty: number
-}
+// 장바구니 유지/회원 자동복원 순수 로직은 ./hydration 으로 분리(테스트 가능). 여기선 상태 배선만.
+export { CART_STORAGE_KEY }
+export type { CartItem }
 
 type CartCtx = {
   items: CartItem[]
@@ -50,26 +45,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [visitCount, setVisitCount] = useState(0)
   const [hydrated, setHydrated] = useState(false)
 
-  // 1) 복원: 첫 화면 표시 직후 localStorage의 장바구니를 불러온다.
-  //    테이블 QR로 새로 진입(?table=)한 경우는 새 손님/새 세션이므로 복원하지 않는다.
+  // 1) 복원: 첫 화면 표시 직후 localStorage에서 장바구니 + 회원상태를 불러온다.
+  //    장바구니는 새 테이블 진입(?table=)이면 새 세션이라 복원 안 함.
+  //    회원상태는 영속(MEMBER_KEY)이라 QR 재진입이어도 항상 복원한다 — 재방문 회원 인식/5% 할인 (버그[1] 수정).
   useEffect(() => {
     try {
       const isNewTableEntry = new URLSearchParams(window.location.search).has('table')
-      const raw = localStorage.getItem(CART_STORAGE_KEY)
-      if (raw && !isNewTableEntry) {
-        const saved = JSON.parse(raw)
-        if (saved && Date.now() - (saved.savedAt || 0) < CART_MAX_AGE_MS) {
-          if (Array.isArray(saved.items)) setItems(saved.items)
-          if (saved.tableNo) setTableNo(saved.tableNo)
-          if (saved.orderType) setOrderType(saved.orderType)
-          if (saved.isMember && saved.userId) {
-            setIsMember(true)
-            setUserId(saved.userId)
-            setPhone(saved.phone || '')
-            setGrade(saved.grade || 'bronze')
-            setVisitCount(saved.visitCount || 0)
-          }
-        }
+      const h = computeHydration({
+        cartRaw: localStorage.getItem(CART_STORAGE_KEY),
+        memberRaw: localStorage.getItem(MEMBER_KEY),
+        isNewTableEntry,
+      })
+      setItems(h.items)
+      if (h.tableNo) setTableNo(h.tableNo)
+      if (h.orderType) setOrderType(h.orderType)
+      if (h.isMember && h.userId) {
+        setIsMember(true)
+        setUserId(h.userId)
+        setPhone(h.phone)
+        // 등급·방문횟수는 최신값을 DB에서 조회(배너 표시용). 실패해도 회원 인식/할인엔 영향 없음.
+        supabase.from('users').select('grade, visit_count').eq('id', h.userId).single()
+          .then(({ data }) => { if (data) { setGrade(data.grade || 'bronze'); setVisitCount(data.visit_count || 0) } })
       }
     } catch {}
     setHydrated(true)
