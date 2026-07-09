@@ -15,6 +15,7 @@ type Order = {
   is_member: boolean
   created_at: string
   rider_id?: string | null
+  pickup_at?: string | null // [7] 포장 예약시각
   items?: { name_snapshot: string; qty: number; subtotal: number }[]
   member_info?: { visit_count: number; grade: string } | null
 }
@@ -188,6 +189,7 @@ export default function OwnerDashboard() {
   const [imgUploading, setImgUploading] = useState(false)
   const [imgMsg, setImgMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null)
   const seenIds = useRef(new Set<string>())
+  const pickupAlerted = useRef(new Set<string>()) // [7] 포장 예약 15분전 알림 1회 발동
   const audioRef = useRef<AudioContext | null>(null)
   const isFirst = useRef(true)
 
@@ -254,6 +256,24 @@ export default function OwnerDashboard() {
     }
     mapped.forEach(o => seenIds.current.add(o.id))
     isFirst.current = false
+
+    // [7] 포장 예약 15분 전 알림 (점멸+음성) — 폴링마다 재평가, 주문당 1회
+    const nowT = Date.now()
+    mapped.forEach(o => {
+      if (!o.pickup_at || ['done', 'served', 'delivered', 'canceled'].includes(o.status)) return
+      const diff = new Date(o.pickup_at).getTime() - nowT
+      if (diff > 0 && diff <= 15 * 60 * 1000 && !pickupAlerted.current.has(o.id)) {
+        pickupAlerted.current.add(o.id)
+        playAlert()
+        const hhmm = new Date(o.pickup_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        try {
+          const u = new SpeechSynthesisUtterance(`포장 예약 15분 전입니다. ${hhmm} 픽업 주문을 준비해주세요`)
+          u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.85; window.speechSynthesis.speak(u)
+        } catch {}
+        setCallToast(`🕒 포장 예약 15분 전 — ${hhmm} 픽업 준비!`)
+        setTimeout(() => setCallToast(null), 6000)
+      }
+    })
 
     setOrders(mapped)
 
@@ -633,6 +653,13 @@ export default function OwnerDashboard() {
           {order.rider_id && <div>🛵 라이더: {riderName(order.rider_id)}</div>}
         </div>
       )}
+      {/* [7] 포장 예약시각 — 15분 이내면 점멸+빨강 */}
+      {order.pickup_at && (() => {
+        const t = new Date(order.pickup_at).getTime()
+        const imminent = t - Date.now() <= 15 * 60 * 1000 && !['done', 'served', 'delivered', 'canceled'].includes(order.status)
+        const hhmm = new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        return <div className={imminent ? 'blink' : undefined} style={{ fontSize: 13, fontWeight: 800, color: imminent ? '#e84040' : '#f0a000', margin: '4px 0' }}>🕒 예약 {hhmm}{imminent ? ' · 곧 픽업!' : ''}</div>
+      })()}
       <span className={`pay-badge ${order.payment_method}`}>
         {PAY_LABELS[order.payment_method] || order.payment_method}
         {order.is_member && !order.member_info && ' · 단골'}
@@ -694,6 +721,7 @@ export default function OwnerDashboard() {
 
   return (
     <div>
+      <style>{`@keyframes blink { 50% { opacity: 0.2 } } .blink { animation: blink 1s step-start infinite }`}</style>
       {/* 고객 호출 토스트 */}
       {callToast && (
         <div style={{

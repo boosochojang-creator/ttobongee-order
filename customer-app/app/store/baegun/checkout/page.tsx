@@ -7,6 +7,7 @@ import LegalFooter from '../../../lib/LegalFooter'
 import { setActiveOrder } from '../../../lib/activeOrder'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
 import { validateSplitCount, splitPerPerson } from '../../../lib/splitInfo'
+import { pickupIso } from '../../../lib/pickup'
 
 type PayMethod = 'card' | 'kakao' | 'toss' | 'cash'
 const won = (n: number) => n.toLocaleString() + '원'
@@ -38,6 +39,7 @@ export default function CheckoutPage() {
   const [payMethod, setPayMethod] = useState<PayMethod>('card')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [pickupTime, setPickupTime] = useState('') // [7] 포장 픽업 예약시각 'HH:MM' (선택)
   // [2] 영업상태 — 마감 중이면 주문/결제 차단 + 안내. 마운트 시 조회 + 20초 폴링(실시간 반영).
   const [storeClosed, setStoreClosed] = useState(false)
   useEffect(() => {
@@ -168,6 +170,7 @@ export default function CheckoutPage() {
       user_id: userId,
       is_member: isMember,
       ...(couponDiscount > 0 && coupon ? { coupon_id: coupon.id } : {}),
+      ...(!isDelivery && orderType === 'takeout' && pickupTime ? { pickup_at: pickupIso(pickupTime) } : {}), // [7] 포장 예약시각
       ...(isDelivery ? {
         delivery_address: `${addr.trim()} ${addrDetail.trim()}`.trim(),
         delivery_fee: deliveryFee,
@@ -333,6 +336,19 @@ export default function CheckoutPage() {
                 <span style={{ color: '#777', fontSize: 12 }}> · 실주행 약 {((deliveryDistanceM || 0) / 1000).toFixed(1)}km</span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* [7] 포장 픽업 예약시간 (선택) — 포장 주문에서만 */}
+        {!isDelivery && orderType === 'takeout' && (
+          <div style={{ background: 'var(--bg2)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>🕒 픽업 예약시간 <span style={{ color: '#777', fontSize: 12, fontWeight: 400 }}>(선택 · 안 정하면 준비되는 대로)</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="time" value={pickupTime} onChange={e => setPickupTime(e.target.value)}
+                style={{ background: '#111', border: '1px solid #444', borderRadius: 8, padding: '10px 12px', color: '#f0f0f0', fontSize: 15, outline: 'none' }} />
+              {pickupTime && <button onClick={() => setPickupTime('')} style={{ background: 'none', border: '1px solid #444', color: '#888', borderRadius: 8, padding: '9px 12px', fontSize: 13, cursor: 'pointer' }}>지우기</button>}
+            </div>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>예약시간 15분 전에 매장에서 조리를 시작해 갓 튀긴 맛으로 준비해요 🍗</div>
           </div>
         )}
 
