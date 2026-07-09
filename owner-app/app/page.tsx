@@ -401,6 +401,14 @@ export default function OwnerDashboard() {
       setTimeout(() => setCallToast(null), 3500)
       return
     }
+    // 취소 시 포트원 환불 결과를 점주에게 표시 (실패 건은 수동 확인 유도)
+    if (result.refund?.failed > 0) {
+      setCallToast(`⚠️ 환불 실패 ${result.refund.failed}건 — 포트원 콘솔에서 수동 환불 확인 필요`)
+      setTimeout(() => setCallToast(null), 6000)
+    } else if (result.refund?.attempted > 0) {
+      setCallToast(`💳 환불 완료 (${result.refund.succeeded}건)`)
+      setTimeout(() => setCallToast(null), 3500)
+    }
     // 회원 방문/등급/누적 집계는 서버(/api/update-status)에서 서비스롤로 재계산한다.
     // (기존 익명키 클라이언트 UPDATE는 RLS로 조용히 실패하던 B-2 버그 — 제거하고 서버로 이전)
     await loadOrders()
@@ -660,7 +668,7 @@ export default function OwnerDashboard() {
           </div>
         )}
         {['pending', 'paid', 'cash_pending', 'accepted', 'cooking', 'verification_failed'].includes(order.status) && (
-          <button className="action-btn btn-cancel" onClick={() => updateStatus(order.id, 'canceled')}>취소</button>
+          <button className="action-btn btn-cancel" onClick={() => { if (window.confirm('주문을 취소할까요?\n전자결제(카드/카카오/토스)는 즉시 포트원 환불됩니다.')) updateStatus(order.id, 'canceled') }}>취소</button>
         )}
       </div>
     </div>
