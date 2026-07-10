@@ -18,10 +18,16 @@ export default function ProfilePage() {
   const [loaded, setLoaded] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  // [2] 내 쿠폰함
+  type Coupon = { id: string; reason: string; emoji: string; discount_amount: number; min_order_amount: number; issued_at: string; expires_at: string; state: 'usable' | 'used' | 'expired' }
+  const [coupons, setCoupons] = useState<Coupon[] | null>(null)
 
   useEffect(() => {
     const m = getMemberLocal()
     if (!m) { router.replace('/store/baegun/login'); return }
+    // 내 쿠폰함 로드 (실패해도 프로필 화면엔 영향 없음)
+    fetch(`/api/coupons/list?userId=${m.userId}`).then(r => r.json())
+      .then(r => setCoupons(r?.ok ? r.coupons : [])).catch(() => setCoupons([]))
     supabase.from('users')
       .select('nickname, birthday, address, email, marketing_opt_in')
       .eq('id', m.userId).single()
@@ -66,7 +72,24 @@ export default function ProfilePage() {
         <span style={{ fontWeight: 700 }}>내 정보</span>
       </div>
       <div style={{ padding: '20px 16px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.7 }}>
+        {/* [2] 내 쿠폰함 */}
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', marginBottom: 4 }}>🎟️ 내 쿠폰함</div>
+          <div style={{ fontSize: 12, color: '#777', marginBottom: 10 }}>결제는 카운터에서 진행되며, 쿠폰 할인은 주문 시 자동 안내돼요.</div>
+          {coupons === null ? (
+            <div style={{ color: '#888', fontSize: 13, padding: '14px 0' }}>쿠폰을 불러오는 중…</div>
+          ) : coupons.length === 0 ? (
+            <div style={{ color: '#888', fontSize: 13, background: '#141414', border: '1px solid #2a2a2a', borderRadius: 10, padding: '16px', textAlign: 'center' }}>
+              아직 받은 쿠폰이 없어요. 방문하시면 다양한 혜택 쿠폰을 드려요 💛
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {coupons.map(c => <CouponCard key={c.id} c={c} />)}
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.7, borderTop: '1px solid #2a2a2a', paddingTop: 16 }}>
           생일·주소를 추가하면 <span style={{ color: '#FFD700', fontWeight: 700 }}>생일쿠폰</span>과{' '}
           <span style={{ color: '#FFD700', fontWeight: 700 }}>배달 주문</span>을 더 편하게 이용할 수 있어요.
           <br />모든 항목은 선택 입력입니다.
@@ -129,4 +152,48 @@ export default function ProfilePage() {
 const inputStyle: React.CSSProperties = {
   background: '#111', border: '1px solid #444', borderRadius: 10,
   padding: '12px 14px', color: '#f0f0f0', fontSize: 15, outline: 'none',
+}
+
+const won = (n: number) => n.toLocaleString() + '원'
+const fmtDate = (iso: string) => {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
+}
+
+type CouponCardProps = { c: { reason: string; emoji: string; discount_amount: number; min_order_amount: number; issued_at: string; expires_at: string; state: 'usable' | 'used' | 'expired' } }
+function CouponCard({ c }: CouponCardProps) {
+  const dim = c.state !== 'usable' // 사용됨·만료됨은 회색 처리(삭제 아님, 이력 보존)
+  const badge = c.state === 'used'
+    ? { text: '사용됨', color: '#888', bg: '#222' }
+    : c.state === 'expired'
+      ? { text: '만료됨', color: '#888', bg: '#222' }
+      : { text: '사용가능', color: '#111', bg: '#c8a900' }
+  return (
+    <div style={{
+      background: dim ? '#141414' : 'linear-gradient(135deg, rgba(200,169,0,0.14), rgba(200,169,0,0.04))',
+      border: `1px solid ${dim ? '#2a2a2a' : '#7a6400'}`, borderRadius: 12, padding: '14px 16px',
+      opacity: dim ? 0.6 : 1,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 12, color: dim ? '#888' : '#c9b060', fontWeight: 700, marginBottom: 2 }}>
+            {c.emoji} {c.reason}
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: dim ? '#aaa' : '#FFD700' }}>
+            {won(c.discount_amount)} 할인
+          </div>
+          {c.min_order_amount > 0 && (
+            <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{won(c.min_order_amount)} 이상 주문 시</div>
+          )}
+        </div>
+        <span style={{ background: badge.bg, color: badge.color, fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap' }}>
+          {badge.text}
+        </span>
+      </div>
+      <div style={{ fontSize: 11.5, color: '#777', marginTop: 8, borderTop: '1px dashed #333', paddingTop: 8 }}>
+        {fmtDate(c.issued_at)} 발급 · <span style={{ color: c.state === 'expired' ? '#c86a6a' : '#999' }}>{fmtDate(c.expires_at)}까지</span>
+      </div>
+    </div>
+  )
 }
