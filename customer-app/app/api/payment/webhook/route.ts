@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { confirmPayment, reconcilePendingOrders } from '../../../../lib/paymentConfirm'
-import { confirmShare, cancelShare } from '../../../../lib/splitPay'
 
 // 그룹 D: 포트원 V2 웹훅 수신
 // 포트원이 결제 완료/실패/취소 시점에 서버로 직접 쏘는 알림을 받아, 서버가 재조회 후 주문을 최종 확정한다.
@@ -54,22 +53,10 @@ export async function POST(req: NextRequest) {
 
     let result = 'ignored'
     if (typeof event?.type === 'string' && event.type.startsWith('Transaction.') && paymentId) {
-      if (paymentId.startsWith('spl_')) {
-        // 더치페이 몫 결제 (Phase 3)
-        if (event.type === 'Transaction.Cancelled' || event.type === 'Transaction.Failed') {
-          // 결제 취소/실패 → 예약한 몫(pending) 반납해 슬롯 재사용. 완료(paid) 몫은 cancelShare 내부 가드로 불변
-          const r = await cancelShare(paymentId)
-          result = `split_cancel:${r.released ? 'released' : 'noop'}`
-        } else {
-          // 그 외(주로 Transaction.Paid): 몫 금액 대조 → paid_count 갱신 → 전원 완료 시 원 주문 확정
-          const r = await confirmShare(paymentId)
-          result = r.ok ? `split:${(r as any).status || 'ok'}` : `split_fail:${(r as any).error || ''}`.slice(0, 80)
-        }
-      } else {
-        // 일반 주문: 이벤트 종류와 무관하게 포트원 재조회 결과만 믿는다 (paymentId = 주문 id)
-        const r = await confirmPayment(paymentId, paymentId)
-        result = r.result
-      }
+      // 일반 주문: 이벤트 종류와 무관하게 포트원 재조회 결과만 믿는다 (paymentId = 주문 id)
+      // (더치페이는 결제자 1명 전액결제 방식으로 재설계되어 별도 몫(spl_) 결제 분기가 사라짐 — [10])
+      const r = await confirmPayment(paymentId, paymentId)
+      result = r.result
     }
 
     // 웹훅이 올 때마다 오래된 대기 주문도 함께 청소 (웹훅 유실 백업의 상시 트리거)

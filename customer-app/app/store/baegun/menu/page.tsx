@@ -127,11 +127,21 @@ export default function MenuPage() {
         </div>
       </div>
 
-      {/* [2] 영업마감 안내 배너 — 메뉴는 열람 가능, 주문은 결제화면에서 차단 */}
+      {/* [2] 영업마감 안내 배너 — 메뉴는 열람 가능, 주문은 결제화면에서 차단.
+          앱 아이콘으로 들어온 회원이 처음 보는 화면이므로 영업시간·휴무·확인전화를 감성 톤으로 안내. */}
       {storeClosed && (
-        <div style={{ margin: '12px 16px 0', background: '#2a1a00', border: '1px solid #c8a900', borderRadius: 12, padding: '14px 16px', fontSize: 14, lineHeight: 1.7, color: '#f0d890' }}>
-          <div style={{ fontSize: 15, fontWeight: 900, color: '#FFD700', marginBottom: 3 }}>🔒 지금은 영업 준비 중이에요</div>
-          메뉴는 둘러보실 수 있지만, 주문은 영업이 시작된 후 가능해요 🙏
+        <div style={{ margin: '12px 16px 0', background: '#2a1a00', border: '1px solid #c8a900', borderRadius: 12, padding: '16px 18px', fontSize: 14, lineHeight: 1.75, color: '#f0d890' }}>
+          <div style={{ fontSize: 15.5, fontWeight: 900, color: '#FFD700', marginBottom: 6 }}>🍗 지금은 잠시 불을 끄고 준비 중이에요</div>
+          바삭한 한 마리를 위해 재료를 손질하고 있어요.<br />
+          아래 시간에 따끈하게 다시 찾아뵐게요 🙏
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #7a6400', fontSize: 13.5, color: '#e8cf88' }}>
+            🕜 <b style={{ color: '#FFD700' }}>매일 오후 2시 30분 ~ 새벽 1시</b> <span style={{ color: '#c9b060' }}>(마지막 주문 밤 12시)</span><br />
+            🌙 <b style={{ color: '#FFD700' }}>매주 월요일</b>은 쉬어갑니다
+          </div>
+          <div style={{ marginTop: 10, fontSize: 12.5, color: '#c9b060', lineHeight: 1.7 }}>
+            혹시 영업 중인데 이 안내가 보인다면, 언제든 편하게 전화 주세요.<br />
+            📞 <a href="tel:0322999848" style={{ color: '#FFD700', fontWeight: 700, textDecoration: 'none' }}>032-299-9848</a>
+          </div>
         </div>
       )}
 
