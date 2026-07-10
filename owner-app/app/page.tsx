@@ -41,6 +41,17 @@ const STATUS_LABEL: Record<string, string> = {
 }
 // [3][4][11] 매출 확정 상태는 SALES_COUNTED(단일 기준) 사용 — served 포함, 미결제(cash_pending)·미확정 제외.
 const CUSTOMER_APP_BASE = 'https://ttobongee-order-5izk.vercel.app' // 라이더 화면(/rider)이 있는 손님앱 도메인
+
+// 신규B: 주문 거절 사유 버튼 — 점주가 1번 탭으로 선택, 고객 화면에 그대로 안내된다.
+// (솔님 기본안 2개 + 실매장에서 자주 나오는 사유 예측 추가)
+const REJECT_REASONS = [
+  '재료 소진',
+  '조리 시간 부족',
+  '영업 마감 임박',
+  '주문 폭주로 조리 지연',
+  '해당 메뉴 일시 품절',
+  '기타 (직원이 전화로 안내)',
+]
 // 5-1 보류(배달대행 API 확인 중): 라이더 UI 숨김. true로 바꾸면 라이더 관리/배차 UI 즉시 복원.
 // 코드·API·DB(riders/018)는 그대로 유지 — 화면 노출만 차단.
 const SHOW_RIDER_MANAGEMENT = false
@@ -181,6 +192,7 @@ export default function OwnerDashboard() {
   const [monthlyReports, setMonthlyReports] = useState<any[]>([])
   const [yearlyReports, setYearlyReports] = useState<any[]>([])
   const [closingConfirm, setClosingConfirm] = useState(false)
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null) // 신규B: 거절 사유 선택 모달 대상 주문
   const [bizMonth, setBizMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
   const [bizYear, setBizYear] = useState(new Date().getFullYear())
   const [pinDB, setPinDB] = useState('1234')
@@ -409,11 +421,11 @@ export default function OwnerDashboard() {
     setMemberDetailLoading(false)
   }
 
-  const updateStatus = async (orderId: string, status: string) => {
+  const updateStatus = async (orderId: string, status: string, cancelReason?: string) => {
     const res = await fetch('/api/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId, status }),
+      body: JSON.stringify({ order_id: orderId, status, ...(cancelReason ? { cancel_reason: cancelReason } : {}) }),
     }).catch(() => null)
     const result = res ? await res.json().catch(() => null) : null
     if (!result?.ok) {
@@ -732,7 +744,7 @@ export default function OwnerDashboard() {
           </div>
         )}
         {['pending', 'paid', 'cash_pending', 'accepted', 'cooking', 'verification_failed'].includes(order.status) && (
-          <button className="action-btn btn-cancel" onClick={() => { if (window.confirm('주문을 취소할까요?\n전자결제(카드/카카오/토스)는 즉시 포트원 환불됩니다.')) updateStatus(order.id, 'canceled') }}>취소</button>
+          <button className="action-btn btn-cancel" onClick={() => setCancelTargetId(order.id)}>취소</button>
         )}
       </div>
     </div>
@@ -751,6 +763,33 @@ export default function OwnerDashboard() {
           boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
         }}>
           {callToast}
+        </div>
+      )}
+
+      {/* 신규B: 주문 거절 사유 선택 모달 — 버튼 1탭으로 취소+사유 저장, 고객 화면에 안내됨 */}
+      {cancelTargetId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+          onClick={() => setCancelTargetId(null)}>
+          <div style={{ background: '#1c1c1c', borderRadius: '20px 20px 0 0', padding: '24px 20px 40px', width: '100%', maxWidth: 480, borderTop: '2px solid #e05a4a' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#e05a4a', marginBottom: 6 }}>🚫 주문 거절</div>
+            <div style={{ fontSize: 13, color: '#aaa', marginBottom: 18, lineHeight: 1.7 }}>
+              거절 사유를 선택하면 고객 화면에 안내돼요.<br />전자결제(카드·카카오·토스)는 즉시 포트원 환불됩니다.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {REJECT_REASONS.map(reason => (
+                <button key={reason}
+                  onClick={() => { const id = cancelTargetId; setCancelTargetId(null); updateStatus(id, 'canceled', reason) }}
+                  style={{ width: '100%', padding: 14, background: '#2a2a2a', color: '#f0f0f0', border: '1px solid #444', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>
+                  {reason}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setCancelTargetId(null)}
+              style={{ width: '100%', marginTop: 14, padding: 12, background: 'none', color: '#666', border: '1px solid #333', borderRadius: 10, fontSize: 13, cursor: 'pointer' }}>
+              닫기 (거절 안 함)
+            </button>
+          </div>
         </div>
       )}
 

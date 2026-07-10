@@ -32,6 +32,7 @@ export default function OrderWatcher() {
   const pathname = usePathname()
   const [status, setStatus] = useState<Status | null>(null)
   const [popup, setPopup] = useState<null | 'accepted' | 'done' | 'canceled'>(null)
+  const [cancelReason, setCancelReason] = useState('') // 점주가 선택한 거절 사유 (신규B)
   const prevStatus = useRef<Status | null>(null)
   const watchingId = useRef<string | null>(null)
 
@@ -46,7 +47,8 @@ export default function OrderWatcher() {
     }
     const orderId = active.orderId
 
-    const apply = (s: Status) => {
+    const apply = (s: Status, reason?: string | null) => {
+      if (s === 'canceled') setCancelReason((reason || '').trim())
       if (s === prevStatus.current) return
       const prev = prevStatus.current
       prevStatus.current = s
@@ -76,12 +78,19 @@ export default function OrderWatcher() {
     const ch = supabase.channel(`watch-${orderId}`)
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${orderId}`,
-      }, payload => apply(payload.new.status as Status))
+      }, payload => apply(payload.new.status as Status, payload.new.cancel_reason as string | null))
       .subscribe()
 
     const fetchStatus = async () => {
+      // 상태는 항상 조회(컬럼 확실). 취소 사유는 별도 best-effort — cancel_reason 컬럼 미존재(마이그레이션 전)여도 상태표시가 깨지지 않게 분리.
       const { data } = await supabase.from('orders').select('status').eq('id', orderId).single()
-      if (data) apply(data.status as Status)
+      if (!data) return
+      if (data.status === 'canceled') {
+        const r = await supabase.from('orders').select('cancel_reason').eq('id', orderId).single()
+        apply('canceled', r.error ? null : (r.data?.cancel_reason as string | null))
+      } else {
+        apply(data.status as Status)
+      }
     }
     fetchStatus()
     const poll = setInterval(fetchStatus, 8000)
@@ -126,7 +135,9 @@ export default function OrderWatcher() {
               {POPUPS[popup].title}
             </div>
             <div style={{ fontSize: 14, color: '#aaa', lineHeight: 1.7, marginBottom: 20 }}>
-              {POPUPS[popup].desc}
+              {popup === 'canceled' && cancelReason
+                ? <>사유: <span style={{ color: '#f0d890', fontWeight: 700 }}>{cancelReason}</span><br />불편을 드려 죄송합니다. 궁금한 점은 직원에게 문의해주세요.</>
+                : POPUPS[popup].desc}
             </div>
             <button className="btn-primary" onClick={() => setPopup(null)}>
               확인

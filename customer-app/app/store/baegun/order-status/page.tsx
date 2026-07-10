@@ -33,6 +33,7 @@ function StatusContent() {
   const isCash = params.get('cash') === '1'
   const memberPhone = params.get('phone') ?? ''
   const [status, setStatus] = useState<Status>('pending')
+  const [cancelReason, setCancelReason] = useState('') // 점주가 선택한 거절 사유 (신규B)
   const [fortune] = useState(() => FORTUNES[Math.floor(Math.random() * FORTUNES.length)])
   const prevStatus = useRef<Status | null>(null)
   const [receiptPhone, setReceiptPhone] = useState(memberPhone)
@@ -80,18 +81,25 @@ function StatusContent() {
         filter: `id=eq.${orderId}`
       }, payload => {
         setStatus(payload.new.status as Status)
+        setCancelReason((payload.new.cancel_reason as string | null) || '')
       })
       .subscribe()
+
+    // 상태는 항상 조회, 취소 사유는 별도 best-effort (cancel_reason 컬럼 미존재여도 상태표시 안 깨지게 분리)
+    const loadReason = async () => {
+      const r = await supabase.from('orders').select('cancel_reason').eq('id', orderId).single()
+      if (!r.error && r.data) setCancelReason((r.data.cancel_reason as string | null) || '')
+    }
 
     // 폴링 백업 (아렌: 누락 복구)
     const poll = setInterval(async () => {
       const { data } = await supabase.from('orders').select('status').eq('id', orderId).single()
-      if (data) setStatus(data.status as Status)
+      if (data) { setStatus(data.status as Status); if (data.status === 'canceled') loadReason() }
     }, 8000)
 
     // 초기 조회
     supabase.from('orders').select('status').eq('id', orderId).single()
-      .then(({ data }) => { if (data) setStatus(data.status as Status) })
+      .then(({ data }) => { if (data) { setStatus(data.status as Status); if (data.status === 'canceled') loadReason() } })
 
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [orderId])
@@ -167,6 +175,11 @@ function StatusContent() {
       <div style={{ padding: 40, textAlign: 'center' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>😢</div>
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>주문이 취소됐어요</div>
+        {cancelReason && (
+          <div style={{ display: 'inline-block', background: '#2a1a1a', border: '1px solid #6a3a34', borderRadius: 10, padding: '8px 14px', fontSize: 14, color: '#f0d890', marginBottom: 14 }}>
+            사유: <b>{cancelReason}</b>
+          </div>
+        )}
         <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 24 }}>
           불편을 드려 죄송합니다.<br />직원에게 문의해주세요.
         </p>

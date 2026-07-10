@@ -7,10 +7,13 @@ const VALID = new Set(['accepted', 'cooking', 'done', 'served', 'canceled', 'cas
 
 export async function POST(req: NextRequest) {
   try {
-    const { order_id, status } = await req.json()
+    const { order_id, status, cancel_reason } = await req.json()
     if (!order_id || !VALID.has(status)) {
       return NextResponse.json({ ok: false, error: '잘못된 요청' }, { status: 400 })
     }
+    // 취소 사유(점주가 버튼으로 선택)는 취소일 때만 저장 (고객 화면에 안내됨)
+    const reason = status === 'canceled' && typeof cancel_reason === 'string'
+      ? cancel_reason.trim().slice(0, 60) : null
     const admin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -28,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { error } = await admin.from('orders')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ status, updated_at: new Date().toISOString(), ...(status === 'canceled' ? { cancel_reason: reason } : {}) })
       .eq('id', order_id)
     if (error) throw error
 
