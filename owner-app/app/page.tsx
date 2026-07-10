@@ -545,14 +545,32 @@ export default function OwnerDashboard() {
     setTodayReport(data || null)
   }
 
+  // [2] 하드닝 — 고객화면 영업상태 반영을 '조용한 실패' 없이 확정.
+  // store-open API 성공응답 + DB is_open 실제값까지 재확인해야 true. 실패 시 호출측에서 점주에게 경고.
+  // (배포/네트워크 문제로 마감이 고객화면에 반영 안 된 채 점주가 마감했다고 오인하는 상황 방지)
+  const applyStoreOpen = async (open: boolean): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/store-open', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open }),
+      })
+      if (!res.ok) return false
+      const body = await res.json().catch(() => null)
+      if (!body?.ok) return false
+      // 실제 DB 값 재확인 (권위적)
+      const { data } = await supabase.from('stores').select('is_open').eq('id', 'baegun').single()
+      return data?.is_open === open
+    } catch { return false }
+  }
+
   const startBusiness = async () => {
     const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     await supabase.from('daily_reports').upsert(
       { store_id: 'baegun', date: today, start_time: new Date().toISOString() },
       { onConflict: 'store_id,date' }
     )
-    // [2] 영업상태 → 고객 화면 반영 (service role API). 실패해도 영업 흐름은 계속.
-    await fetch('/api/store-open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open: true }) }).catch(() => {})
+    // [2] 영업상태 → 고객 화면 반영. 반영 확정 실패 시 점주에게 경고(고객화면이 아직 마감으로 보일 수 있음).
+    const okOpen = await applyStoreOpen(true)
+    if (!okOpen) alert('⚠️ 고객 화면 "영업 시작" 반영에 실패했어요.\n인터넷 연결을 확인하고 다시 "영업 시작"을 눌러주세요.\n(반영 전까지 고객 화면이 마감 상태로 보여 주문이 안 될 수 있어요)')
     await loadTodayReport()
     // 쿠폰 자동발급 실행 → 오늘 발급분 팝업 (확인용, 승인 불필요)
     const r = await fetch('/api/coupons/run', { method: 'POST' }).then(x => x.json()).catch(() => null)
@@ -574,8 +592,9 @@ export default function OwnerDashboard() {
       kakao_sales: byM('kakao'), toss_sales: byM('toss'),
       order_count: count, avg_order_value: count > 0 ? Math.round(total / count) : 0,
     }, { onConflict: 'store_id,date' })
-    // [2] 영업마감 → 고객 화면 즉시 '영업 준비 중'으로 (주문/결제 차단). 실패해도 마감 흐름은 계속.
-    await fetch('/api/store-open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open: false }) }).catch(() => {})
+    // [2] 영업마감 → 고객 화면 즉시 '영업 준비 중'으로 (주문/결제 차단). 반영 확정 실패 시 점주에게 경고.
+    const okClosed = await applyStoreOpen(false)
+    if (!okClosed) alert('⚠️ 고객 화면 "영업 마감" 반영에 실패했어요.\n인터넷 연결을 확인하고 다시 "영업 마감"을 눌러주세요.\n(반영 전까지 고객이 계속 주문할 수 있어요)')
     setClosingConfirm(false)
     await loadTodayReport()
   }
