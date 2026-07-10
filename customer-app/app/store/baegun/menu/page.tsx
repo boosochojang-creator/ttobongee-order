@@ -5,7 +5,7 @@ import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import ProfilePrompt from '../../../lib/ProfilePrompt'
-import { getMemberLocal } from '../../../lib/memberState'
+import { getMemberLocal, greetingLabel } from '../../../lib/memberState'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
 
 type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; image_url?: string | null }
@@ -35,7 +35,7 @@ const GRADE_COLOR: Record<string, string> = { gold: '#FFD700', silver: '#C0C0C0'
 
 export default function MenuPage() {
   const router = useRouter()
-  const { addItem, updateQty, items, totalQty, finalAmount, tableNo, orderType, isMember, phone, grade, visitCount } = useCart()
+  const { addItem, updateQty, items, totalQty, finalAmount, tableNo, orderType, isMember, phone, nickname, grade, visitCount } = useCart()
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [activeCat, setActiveCat] = useState('세트메뉴')
   const [showCall, setShowCall] = useState(false)
@@ -156,7 +156,7 @@ export default function MenuPage() {
           <div style={{ fontSize: 36 }}>😊</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ fontSize: 17, fontWeight: 800, color: '#f0f0f0' }}>
-              {phone.slice(-4)}님, 다시 오셨군요!
+              {greetingLabel(nickname, phone)}님, 다시 오셨군요!
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{

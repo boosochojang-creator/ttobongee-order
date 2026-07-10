@@ -29,30 +29,33 @@ export default function LoginPage() {
     try {
       // upsert 회원
       const { data: existing } = await supabase
-        .from('users').select('id, grade, visit_count').eq('store_id', 'baegun').eq('phone', digits).single()
+        .from('users').select('id, grade, visit_count, nickname').eq('store_id', 'baegun').eq('phone', digits).single()
 
       let uid: string
       let memberGrade = 'bronze'
       let memberVisitCount = 0
+      let memberNickname = ''
       if (existing) {
         uid = existing.id
         memberGrade = existing.grade ?? 'bronze'
         memberVisitCount = existing.visit_count ?? 0
+        memberNickname = existing.nickname ?? ''
         await supabase.from('users').update({
           last_visit: new Date().toISOString()
         }).eq('id', uid)
       } else {
         const { data: newUser, error: err } = await supabase.from('users').insert({
           store_id: 'baegun', phone: digits
-        }).select('id, grade, visit_count').single()
+        }).select('id, grade, visit_count, nickname').single()
         if (err || !newUser) throw err
         uid = newUser.id
         memberGrade = newUser.grade ?? 'bronze'
         memberVisitCount = newUser.visit_count ?? 0
+        memberNickname = newUser.nickname ?? ''
       }
 
       // ── 가입은 여기서 이미 확정 (아래 설치 흐름과 무관하게 유지됨) ──
-      setMember(uid, digits, memberGrade, memberVisitCount)
+      setMember(uid, digits, memberGrade, memberVisitCount, memberNickname)
       setMemberFlag(uid, digits)
 
       // 서버의 회원 상태(B-2)를 로컬에 반영 — 컬럼이 아직 없는 환경에서도 로그인은 계속되도록 별도 조회

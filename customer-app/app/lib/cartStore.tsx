@@ -16,6 +16,7 @@ type CartCtx = {
   isMember: boolean
   userId: string | null
   phone: string
+  nickname: string
   grade: string
   visitCount: number
   addItem: (item: { id: number; name: string; price: number }) => void
@@ -25,7 +26,7 @@ type CartCtx = {
   clearItems: () => void
   setTableNo: (t: string) => void
   setOrderType: (t: string) => void
-  setMember: (id: string, phone: string, grade?: string, visitCount?: number) => void
+  setMember: (id: string, phone: string, grade?: string, visitCount?: number, nickname?: string) => void
   totalQty: number
   totalAmount: number
   discountAmount: number
@@ -41,6 +42,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isMember, setIsMember] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [phone, setPhone] = useState('')
+  const [nickname, setNickname] = useState('') // 게시판/오락실 표시명 — 있으면 인사말에도 전화번호 대신 우선 표시
   const [grade, setGrade] = useState('bronze')
   const [visitCount, setVisitCount] = useState(0)
   const [hydrated, setHydrated] = useState(false)
@@ -63,9 +65,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setIsMember(true)
         setUserId(h.userId)
         setPhone(h.phone)
-        // 등급·방문횟수는 최신값을 DB에서 조회(배너 표시용). 실패해도 회원 인식/할인엔 영향 없음.
-        supabase.from('users').select('grade, visit_count').eq('id', h.userId).single()
-          .then(({ data }) => { if (data) { setGrade(data.grade || 'bronze'); setVisitCount(data.visit_count || 0) } })
+        // 등급·방문횟수·닉네임은 최신값을 DB에서 조회(배너/인사말 표시용). 실패해도 회원 인식/할인엔 영향 없음.
+        supabase.from('users').select('grade, visit_count, nickname').eq('id', h.userId).single()
+          .then(({ data }) => { if (data) { setGrade(data.grade || 'bronze'); setVisitCount(data.visit_count || 0); setNickname(data.nickname || '') } })
       }
     } catch {}
     setHydrated(true)
@@ -112,12 +114,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearItems = () => setItems([])
 
-  const setMember = (id: string, ph: string, gr?: string, vc?: number) => {
+  const setMember = (id: string, ph: string, gr?: string, vc?: number, nick?: string) => {
     setIsMember(true)
     setUserId(id)
     setPhone(ph)
     if (gr !== undefined) setGrade(gr)
     if (vc !== undefined) setVisitCount(vc)
+    if (nick !== undefined) setNickname(nick)
   }
 
   const totalQty = items.reduce((sum, i) => sum + i.qty, 0)
@@ -134,6 +137,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         isMember,
         userId,
         phone,
+        nickname,
         grade,
         visitCount,
         addItem,

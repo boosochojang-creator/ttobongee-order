@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
+import { greetingLabel } from '../../../lib/memberState'
 import LegalFooter from '../../../lib/LegalFooter'
 
 const TABLES = [
@@ -26,7 +27,7 @@ function stripEmoji(text: string) {
 
 export default function TablePage() {
   const router = useRouter()
-  const { setTableNo, setOrderType, clearItems, isMember, phone, grade, visitCount } = useCart()
+  const { setTableNo, setOrderType, clearItems, isMember, phone, nickname, grade, visitCount } = useCart()
   const [showPopup, setShowPopup] = useState(false)
   const [greetingText, setGreetingText] = useState<string | null>(null)
 
@@ -56,7 +57,7 @@ export default function TablePage() {
     // 배경음악 자동재생 제거 (5-2-b) — 음악은 음악감상실에서만 재생
 
     if (isMember && phone) {
-      showGreetingToast(`${phone.slice(-4)}님, 다시 오셨군요! 반갑습니다`)
+      showGreetingToast(`${greetingLabel(nickname, phone)}님, 다시 오셨군요! 반갑습니다`)
     } else {
       showGreetingToast('또봉이통닭 백운역점에 오신 것을 환영합니다')
     }
@@ -167,7 +168,7 @@ export default function TablePage() {
         {isMember ? (
           <>
             <h2 style={{fontSize:28, fontWeight:900, marginBottom:8}}>
-              {phone.slice(-4)}님 어서오세요! 👋
+              {greetingLabel(nickname, phone)}님 어서오세요! 👋
             </h2>
             <div style={{display:'flex', gap:8, justifyContent:'center', alignItems:'center', marginBottom:8}}>
               <span style={{
