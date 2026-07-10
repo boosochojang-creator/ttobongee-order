@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import StatsTab from './StatsTab'
 import { SALES_COUNTED } from './lib/salesStatus'
+import { PAYMENT_ENABLED } from './lib/flags'
 
 type Order = {
   id: string
@@ -18,6 +19,7 @@ type Order = {
   pickup_at?: string | null // [7] 포장 예약시각
   items?: { name_snapshot: string; qty: number; subtotal: number }[]
   member_info?: { visit_count: number; grade: string } | null
+  coupon_info?: { type: string; discount_amount: number } | null // 결제분리: 포스에서 적용할 쿠폰 안내용
 }
 
 const won = (n: number) => n.toLocaleString() + '원'
@@ -30,11 +32,16 @@ const GRADE_COLOR: Record<string, string> = {
 }
 
 const PAY_LABELS: Record<string, string> = {
-  card: '💳 카드', kakao: '💛 카카오', toss: '💙 토스', cash: '💵 현금', split: '🍗 더치페이'
+  card: '💳 카드', kakao: '💛 카카오', toss: '💙 토스', cash: '💵 현금', split: '🍗 더치페이',
+  pos: '🧾 포스 결제', // 결제분리: 실제 결제는 오케이포스에서
+}
+// 쿠폰 발급사유 → 사람이 읽는 라벨 (내부 조건명 노출 금지)
+const COUPON_LABEL: Record<string, string> = {
+  signup: '신규가입', birthday: '생일', winback: '재방문', vip_thanks: '단골감사',
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: '신규', paid: '신규', cash_pending: '현금대기',
+  pending: '신규', paid: '신규', cash_pending: PAYMENT_ENABLED ? '현금대기' : '접수대기',
   verification_failed: '⚠️ 결제확인필요',
   accepted: '접수', cooking: '조리중', done: '조리완료', served: '서빙완료', canceled: '취소',
   out_for_delivery: '🛵 배달출발', delivered: '✅ 배달완료',
@@ -229,9 +236,11 @@ export default function OwnerDashboard() {
   function speakOrder(tableNo: number, orderType: string, paymentMethod: string) {
     try {
       const label = orderType === 'delivery' ? '배달' : orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
-      const message = paymentMethod === 'cash'
-        ? `${label} 신규 주문입니다 — 현금결제입니다. 확인 후 접수해 주세요.`
-        : `${label} 신규 주문입니다`
+      const message = !PAYMENT_ENABLED
+        ? `${label} 신규 주문입니다. 확인 후 접수해 주세요.` // 결제분리: 결제는 포스에서
+        : paymentMethod === 'cash'
+          ? `${label} 신규 주문입니다 — 현금결제입니다. 확인 후 접수해 주세요.`
+          : `${label} 신규 주문입니다`
       const u = new SpeechSynthesisUtterance(message)
       u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.85
       window.speechSynthesis.speak(u)
@@ -244,7 +253,8 @@ export default function OwnerDashboard() {
       .from('orders')
       .select(`*,
                order_items(name_snapshot, qty, subtotal),
-               users(visit_count, grade)`)
+               users(visit_count, grade),
+               coupons!coupon_id(type, discount_amount)`)
       .eq('store_id', 'baegun')
       .neq('status', 'canceled')
       // pending = 손님이 결제창만 열고 아직 결제 안 한 상태(취소·이탈 포함) → 확정 전이므로 점주 화면에서 제외
@@ -254,7 +264,7 @@ export default function OwnerDashboard() {
 
     if (!data) return
 
-    const mapped = data.map((o: any) => ({ ...o, items: o.order_items, member_info: o.users || null }))
+    const mapped = data.map((o: any) => ({ ...o, items: o.order_items, member_info: o.users || null, coupon_info: o.coupons || null }))
 
     // 새 주문 감지 → 알림음
     if (!isFirst.current) {
@@ -691,8 +701,8 @@ export default function OwnerDashboard() {
         const hhmm = new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
         return <div className={imminent ? 'blink' : undefined} style={{ fontSize: 13, fontWeight: 800, color: imminent ? '#e84040' : '#f0a000', margin: '4px 0' }}>🕒 예약 {hhmm}{imminent ? ' · 곧 픽업!' : ''}</div>
       })()}
-      <span className={`pay-badge ${order.payment_method}`}>
-        {PAY_LABELS[order.payment_method] || order.payment_method}
+      <span className={`pay-badge ${order.payment_method || 'pos'}`}>
+        {PAYMENT_ENABLED ? (PAY_LABELS[order.payment_method] || order.payment_method) : '🧾 포스 결제'}
         {order.is_member && !order.member_info && ' · 단골'}
       </span>
       {order.is_member && order.member_info && (
@@ -706,6 +716,13 @@ export default function OwnerDashboard() {
         ))}
       </ul>
       <div className="order-total">{won(order.final_amount)}</div>
+      {/* 결제분리: 포스에서 적용할 쿠폰 안내 (표시만 — 실제 차감은 포스에서 수동) */}
+      {!PAYMENT_ENABLED && order.coupon_info && order.coupon_info.discount_amount > 0 && (
+        <div style={{ marginTop: 4, background: '#14210f', border: '1px solid #3a5a2a', borderRadius: 8, padding: '7px 10px', fontSize: 12.5, fontWeight: 700, color: '#a7d98a', lineHeight: 1.5 }}>
+          🎟️ {COUPON_LABEL[order.coupon_info.type] || '쿠폰'} {won(order.coupon_info.discount_amount)} 할인 대상<br />
+          <span style={{ color: '#8ab873', fontWeight: 500 }}>포스 결제 시 이 금액만큼 할인 적용해주세요</span>
+        </div>
+      )}
       <div className="action-btns">
         {(order.status === 'pending' || order.status === 'paid' || order.status === 'cash_pending') && (
           <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'accepted')}>✅ 접수</button>

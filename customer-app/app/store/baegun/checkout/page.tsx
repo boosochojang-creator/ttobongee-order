@@ -8,6 +8,7 @@ import { setActiveOrder } from '../../../lib/activeOrder'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
 import { validateSplitCount, splitPerPerson } from '../../../lib/splitInfo'
 import { pickupIso } from '../../../lib/pickup'
+import { PAYMENT_ENABLED, DUTCH_PAY_ENABLED } from '../../../lib/flags'
 
 type PayMethod = 'card' | 'kakao' | 'toss' | 'cash'
 const won = (n: number) => n.toLocaleString() + '원'
@@ -82,11 +83,14 @@ export default function CheckoutPage() {
     fetch(`/api/coupons/best?userId=${userId}&amount=${finalAmount}`)
       .then(x => x.json()).then(r => setCoupon(r?.ok ? (r.coupon || null) : null)).catch(() => {})
   }, [userId, finalAmount])
-  const couponDiscount = coupon ? coupon.discount : 0 // 카드/전자결제 + 현금 모두 적용 (현금은 점주 접수 시 used 처리)
+  const couponDiscount = coupon ? coupon.discount : 0
+  // 결제분리(PAYMENT_ENABLED=false): 쿠폰은 우리 시스템에서 차감하지 않고 '표시만' — 실제 할인은 점주가 포스에서 수동 적용.
+  // 결제복귀 시엔 기존대로 결제금액에서 자동 차감.
+  const couponApplied = PAYMENT_ENABLED ? couponDiscount : 0
 
-  // 최종 결제금액 = (회원가 상품금액 − 쿠폰) + 배달료
-  const payTotal = finalAmount - couponDiscount + (isDelivery && deliveryFee ? deliveryFee : 0)
-  const canSplit = !isDelivery && orderType === 'dine_in' // 더치페이는 홀 주문 전용 (포장/배달 제외)
+  // 최종 금액 = (회원가 상품금액 − 적용쿠폰) + 배달료
+  const payTotal = finalAmount - couponApplied + (isDelivery && deliveryFee ? deliveryFee : 0)
+  const canSplit = DUTCH_PAY_ENABLED && !isDelivery && orderType === 'dine_in' // 더치페이는 홀 주문 전용 + 결제활성 시에만
 
   // 배달료 계산 (실주행거리 기반, 서버 API)
   const calcDeliveryFee = async (roadAddr: string) => {
@@ -157,19 +161,20 @@ export default function CheckoutPage() {
     setError('')
 
     // 1. 주문 생성
-    const status = payMethod === 'cash' ? 'cash_pending' : 'pending'
+    // 결제분리: 결제 없이 바로 '접수 대기'(cash_pending 재사용)로 생성 → 점주 접수 시 매출/CRM/쿠폰used 처리.
+    const status = (!PAYMENT_ENABLED || payMethod === 'cash') ? 'cash_pending' : 'pending'
     const { data: order, error: orderErr } = await supabase.from('orders').insert({
       store_id: 'baegun',
       table_no: isDelivery ? 0 : Number(tableNo),
       order_type: isDelivery ? 'delivery' : orderType,
       status,
       total_amount: totalAmount,
-      discount_amount: discountAmount + couponDiscount, // 회원 5% + 쿠폰
-      final_amount: payTotal, // 회원가−쿠폰+배달료 (결제 검증도 이 금액 기준)
-      payment_method: payMethod,
+      discount_amount: discountAmount + couponApplied, // 회원 5% + (결제활성 시) 쿠폰. 결제분리 땐 쿠폰 미차감(표시만)
+      final_amount: payTotal, // 회원가−적용쿠폰+배달료
+      payment_method: PAYMENT_ENABLED ? payMethod : null, // 결제분리 땐 실제 결제는 포스에서(값 미지정 — CHECK 제약 회피)
       user_id: userId,
       is_member: isMember,
-      ...(couponDiscount > 0 && coupon ? { coupon_id: coupon.id } : {}),
+      ...(coupon ? { coupon_id: coupon.id } : {}), // 쿠폰 선택 시 항상 연결(접수 시 used 처리 — 표시만이어도 소진)
       ...(!isDelivery && orderType === 'takeout' && pickupTime ? { pickup_at: pickupIso(pickupTime) } : {}), // [7] 포장 예약시각
       ...(isDelivery ? {
         delivery_address: `${addr.trim()} ${addrDetail.trim()}`.trim(),
@@ -201,8 +206,8 @@ export default function CheckoutPage() {
       return
     }
 
-    // 3. 현금 결제 → 메뉴로 복귀 (별도 화면 없이 팝업+음성으로 안내 — 그룹 C)
-    if (payMethod === 'cash') {
+    // 3. 결제분리(또는 현금) → 결제 단계 없이 바로 접수. 메뉴로 복귀 후 팝업+음성 안내(그룹 C)
+    if (!PAYMENT_ENABLED || payMethod === 'cash') {
       clearCart()
       setActiveOrder(order.id)
       router.push('/store/baegun/menu')
@@ -278,7 +283,7 @@ export default function CheckoutPage() {
     <main>
       <div className="top-bar">
         <button onClick={() => router.back()} style={{ background: 'none', fontSize: 22, color: 'var(--text)' }}>←</button>
-        <span style={{ fontWeight: 700 }}>결제하기</span>
+        <span style={{ fontWeight: 700 }}>{PAYMENT_ENABLED ? '결제하기' : '주문하기'}</span>
       </div>
       <div className="checkout-page">
         {/* [2] 영업마감 안내 — 마감 중엔 주문/결제 불가 */}
@@ -370,7 +375,8 @@ export default function CheckoutPage() {
                 <span>단골 할인 5%</span><span>-{won(discountAmount)}</span>
               </div>
             )}
-            {couponDiscount > 0 && coupon && (
+            {/* 결제활성 시: 쿠폰 즉시 차감 표시. 결제분리 시: 차감 없이 '포스에서 할인' 안내만 */}
+            {PAYMENT_ENABLED && couponDiscount > 0 && coupon && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--green)' }}>
                 <span>🎟️ {coupon.label} 쿠폰할인</span><span>-{won(couponDiscount)}</span>
               </div>
@@ -381,28 +387,49 @@ export default function CheckoutPage() {
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 700, marginTop: 8 }}>
-              <span>최종 결제</span><span style={{ color: 'var(--gold)' }}>{won(payTotal)}</span>
+              <span>{PAYMENT_ENABLED ? '최종 결제' : '예상 금액'}</span><span style={{ color: 'var(--gold)' }}>{won(payTotal)}</span>
             </div>
+            {!PAYMENT_ENABLED && coupon && couponDiscount > 0 && (
+              <div style={{ marginTop: 10, background: '#1a2a1a', border: '1px solid #3a5a3a', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#9fd39f', lineHeight: 1.6 }}>
+                🎟️ <b>{coupon.label} 쿠폰 {won(couponDiscount)} 할인 대상</b><br />
+                <span style={{ color: '#7fae7f' }}>결제는 카운터에서 진행되며, 이 쿠폰 할인은 카운터에서 적용돼요.</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* 결제 수단 */}
-        <div className="section-title">결제 수단</div>
-        <div className="pay-methods">
-          {VISIBLE_PAY_OPTIONS.map(o => (
-            <button key={o.key} className={`pay-btn${payMethod === o.key ? ' selected' : ''}`}
-              onClick={() => { setPayMethod(o.key); setError('') }}>
-              <span className="pay-icon">{o.icon}</span>
-              {o.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ fontSize: 12, color: '#777', marginTop: 8 }}>
-          카카오페이·토스페이·네이버페이 준비 중이에요 🙏
-        </div>
+        {/* 결제 수단 — 결제분리 시 전체 숨김(결제는 포스에서). 결제복귀 시 그대로 노출 */}
+        {PAYMENT_ENABLED && <>
+          <div className="section-title">결제 수단</div>
+          <div className="pay-methods">
+            {VISIBLE_PAY_OPTIONS.map(o => (
+              <button key={o.key} className={`pay-btn${payMethod === o.key ? ' selected' : ''}`}
+                onClick={() => { setPayMethod(o.key); setError('') }}>
+                <span className="pay-icon">{o.icon}</span>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: '#777', marginTop: 8 }}>
+            카카오페이·토스페이·네이버페이 준비 중이에요 🙏
+          </div>
+        </>}
 
-        {/* 현금 안내 */}
-        {payMethod === 'cash' && (
+        {/* 결제분리 안내 — 주문만 접수, 결제는 카운터 */}
+        {!PAYMENT_ENABLED && (
+          <div style={{
+            background:'#1a1200', border:'2px solid #c8a900',
+            borderRadius:12, padding:'18px', marginBottom: 4,
+            fontSize:15, lineHeight:1.9, fontWeight:600, color:'#f0f0f0'
+          }}>
+            <div style={{fontSize:18, fontWeight:900, color:'#c8a900', marginBottom:6}}>🧾 주문서만 접수돼요</div>
+            주문하기를 누르면 주방에 바로 접수됩니다.<br/>
+            <span style={{color:'#FFD700', fontWeight:700}}>결제는 카운터에서</span> 진행해 주세요 🙏
+          </div>
+        )}
+
+        {/* 현금 안내 (결제활성 시에만) */}
+        {PAYMENT_ENABLED && payMethod === 'cash' && (
           <div style={{
             background:'#1a1200', border:'2px solid #c8a900',
             borderRadius:12, padding:'20px 18px', marginTop:16,
@@ -459,8 +486,8 @@ export default function CheckoutPage() {
           {storeClosed
             ? '🔒 지금은 영업 준비 중이에요'
             : loading
-              ? payMethod === 'cash' ? '주문 접수 중...' : '결제창 열리는 중...'
-              : `${won(payTotal)} ${payMethod === 'cash' ? '주문하기' : '결제하기'}`}
+              ? (!PAYMENT_ENABLED || payMethod === 'cash') ? '주문 접수 중...' : '결제창 열리는 중...'
+              : `${won(payTotal)} ${(!PAYMENT_ENABLED || payMethod === 'cash') ? '주문하기' : '결제하기'}`}
         </button>
 
         <LegalFooter />
