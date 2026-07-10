@@ -102,13 +102,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // 주문 완료 후 호출 — 장바구니(한 끼 세션)만 비운다.
+  // 회원 정체성(isMember/userId/phone/grade/visitCount)은 '사람'의 영속 정보라 유지한다.
+  // CartProvider는 layout에 상주해 재주문(SPA 이동)시 hydration이 재실행되지 않으므로,
+  // 여기서 회원상태를 지우면 리로드 전까지 복구되지 않아 재주문이 비회원 취급됐다 (버그[1] 회귀 수정).
   const clearCart = () => {
     setItems([])
-    setIsMember(false)
-    setUserId(null)
-    setPhone('')
-    setGrade('bronze')
-    setVisitCount(0)
   }
 
   const clearItems = () => setItems([])
