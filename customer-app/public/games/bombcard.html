@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>복불복 결제폭탄</title>
+<style>
+  :root{--bg:#111214;--card:#1a1b1f;--card2:#23252b;--line:#343843;--text:#f5f5f5;--muted:#b8bcc7;--accent:#f0c419;--danger:#ff5d5d;--ok:#55d68b}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Pretendard,sans-serif;background:radial-gradient(circle at top,#1b1b1e,#101114 55%);color:var(--text)}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 40px}.panel{background:rgba(26,27,31,.92);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:0 16px 36px rgba(0,0,0,.24)}
+  h1{margin:0 0 6px;font-size:28px}.sub{color:var(--muted);font-size:14px;margin-bottom:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}
+  .mode-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.toggle{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid #3a3f49;border-radius:14px;padding:14px 16px;cursor:pointer}.toggle input{width:auto;margin:0;accent-color:var(--accent)}
+  .box-note{margin-top:8px;color:var(--muted);font-size:12px}.hidden{display:none}
+  input,select,button{width:100%;border:none;border-radius:14px;padding:14px 16px;font-size:15px} input,select{background:var(--card2);color:var(--text);border:1px solid transparent} input:focus,select:focus{outline:none;border-color:var(--accent)} button{background:linear-gradient(180deg,#ffd84b,#e8b706);color:#141414;font-weight:800;cursor:pointer} button.secondary{background:#2c3038;color:#fff}
+  .players{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:18px}.card{background:linear-gradient(180deg,#23262e,#17191e);border:1px solid #3a3f4a;border-radius:18px;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:pointer;transition:.22s transform,.22s border-color,.22s background}.card:hover{transform:translateY(-2px);border-color:var(--accent)}.card.locked{opacity:.45;pointer-events:none}.card.revealed{cursor:default}.card.safe.revealed{background:linear-gradient(180deg,#1f4633,#16261e);border-color:#4fa977}.card.bomb.revealed{background:linear-gradient(180deg,#5e2323,#2a1515);border-color:#ff7a7a}
+  .emoji{font-size:36px;margin-bottom:10px}.name{font-weight:800;font-size:18px}.hint{margin-top:8px;color:var(--muted);font-size:13px;text-align:center}.result{margin-top:18px;padding:16px;border-radius:18px;background:#17191e;border:1px solid var(--line);display:none}.result.show{display:block}.result h2{margin:0 0 8px;font-size:22px}.share-list{display:grid;gap:8px;margin-top:12px}.share-item{display:flex;justify-content:space-between;background:#23262d;border-radius:12px;padding:12px 14px}.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#2a2d34;color:var(--muted);font-size:12px;font-weight:700}
+  @media (max-width:640px){.grid,.mode-row{grid-template-columns:1fr}h1{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="panel">
+  <h1>복불복 결제폭탄</h1>
+  <div class="sub">카드를 한 장씩 뒤집어 폭탄에 걸리면 결제 당첨! 이름 입력 없이 번호만으로도 바로 시작할 수 있어요.</div>
+  <div class="grid">
+    <div class="full"><div class="mode-row"><label class="toggle"><input type="radio" name="entryMode" value="names" checked> 이름 직접 입력</label><label class="toggle"><input type="radio" name="entryMode" value="auto"> 번호 자동 생성</label></div></div>
+    <div class="full" id="namesWrap"><input id="names" placeholder="참가자 이름 입력 (예: 민수, 지훈, 수빈)" /><div class="box-note">쉼표로 구분하면 됩니다</div></div>
+    <div class="full hidden" id="countWrap"><input id="playerCount" type="number" min="2" max="10" value="4" placeholder="참가 인원" /><div class="box-note">자동으로 1P, 2P, 3P처럼 표시됩니다</div></div>
+    <div><input id="amount" type="number" min="0" step="100" placeholder="총 결제금액 (예: 54000)" /></div>
+    <div><select id="mode"><option value="all">몰빵 결제 (당첨자 전액)</option><option value="70">당첨자 70% + 나머지 균등</option><option value="50">당첨자 50% + 나머지 균등</option></select></div>
+    <div class="full"><button id="startBtn">게임 시작</button></div>
+  </div>
+  <div id="pill" style="margin-top:14px"></div><div class="players" id="board"></div><div class="result" id="result"></div>
+</div></div>
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const board = $('#board'), result = $('#result'), pill = $('#pill');
+let players = [], bombIndex = -1, revealed = false, audioCtx = null;
+function initAudio(){ if(!audioCtx){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } if(audioCtx.state === 'suspended') audioCtx.resume(); }
+function tone(freq,dur=0.12,type='sine',vol=0.03){ if(!audioCtx) return; const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, audioCtx.currentTime); g.gain.setValueAtTime(vol, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + dur); }
+function playSafe(){ tone(620,0.08,'triangle',0.025); setTimeout(()=>tone(820,0.09,'triangle',0.02),60); }
+function playBomb(){ tone(180,0.18,'sawtooth',0.05); setTimeout(()=>tone(120,0.28,'sawtooth',0.05),120); if(navigator.vibrate) navigator.vibrate([100,80,140]); }
+function playStart(){ tone(520,0.08,'square',0.025); setTimeout(()=>tone(700,0.12,'square',0.02),70); }
+function money(n){ return Math.round(n).toLocaleString('ko-KR') + '원'; }
+function getEntryMode(){ return document.querySelector('input[name="entryMode"]:checked').value; }
+function updateEntryUI(){ const auto = getEntryMode() === 'auto'; $('#namesWrap').classList.toggle('hidden', auto); $('#countWrap').classList.toggle('hidden', !auto); }
+function parsePlayers(){ if(getEntryMode() === 'auto'){ const count = Math.min(10, Math.max(2, Number($('#playerCount').value || 0))); return Array.from({length:count}, (_,i)=>`${i+1}P`); } return $('#names').value.split(',').map(v=>v.trim()).filter(Boolean).slice(0,10); }
+function buildBoard(){ board.innerHTML=''; players.forEach((name,i)=>{ const card = document.createElement('button'); card.className='card'; card.innerHTML = `<div class="emoji">🃏</div><div class="name">${name}</div><div class="hint">카드를 눌러 확인</div>`; card.onclick = ()=>revealCard(card,i,name); board.appendChild(card); }); }
+function start(){ initAudio(); players = parsePlayers(); if(players.length < 2) return alert('참가자는 2명 이상이어야 합니다.'); if(!$('#amount').value || Number($('#amount').value) <= 0) return alert('총 결제금액을 입력해주세요.'); playStart(); bombIndex = Math.floor(Math.random()*players.length); revealed = false; result.className='result'; result.innerHTML=''; pill.innerHTML = `<span class="pill">${players.length}명 참가 · ${getEntryMode()==='auto'?'번호 자동':'이름 입력'} · ${$('#mode').selectedOptions[0].text}</span>`; buildBoard(); }
+function revealCard(card,i,name){ initAudio(); if(revealed) return; card.classList.add('revealed'); if(i===bombIndex){ card.classList.add('bomb'); card.innerHTML = `<div class="emoji">💣</div><div class="name">${name}</div><div class="hint">결제 당첨!</div>`; playBomb(); revealed = true; [...board.children].forEach((c,idx)=>{ if(idx!==i){ c.classList.add('locked'); c.innerHTML=`<div class="emoji">🛡️</div><div class="name">${players[idx]}</div><div class="hint">세이프</div>`; c.classList.add('revealed','safe'); }}); showResult(name); } else { playSafe(); card.classList.add('safe','revealed','locked'); card.innerHTML = `<div class="emoji">✨</div><div class="name">${name}</div><div class="hint">세이프</div>`; card.onclick = null; } }
+function showResult(winner){ const total = Number($('#amount').value), mode = $('#mode').value, shares = {}; if(mode==='all'){ players.forEach(p=>shares[p]=0); shares[winner]=total; } else { const ratio = Number(mode)/100, winnerAmt = total*ratio, others = players.filter(p=>p!==winner), othersAmt = others.length ? (total-winnerAmt)/others.length : 0; players.forEach(p=>shares[p]=p===winner?winnerAmt:othersAmt); } result.className='result show'; result.innerHTML = `<h2>💥 ${winner} 결제 당첨</h2><div class="sub">총 결제금액 ${money(total)} 기준 정산 결과</div><div class="share-list">${players.map(p=>`<div class="share-item"><strong>${p}</strong><span>${money(shares[p])}</span></div>`).join('')}</div><div style="margin-top:14px"><button class="secondary" onclick="start()">다시 섞기</button></div>`; }
+$$('input[name="entryMode"]').forEach(el=>el.addEventListener('change', updateEntryUI)); $('#startBtn').addEventListener('click', start); updateEntryUI();
+</script>
+</body>
+</html>

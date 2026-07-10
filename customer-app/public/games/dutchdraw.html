@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>더치페이 복불복 배수뽑기</title>
+<style>
+  :root{--bg:#101114;--panel:#181a1f;--field:#252931;--line:#373c46;--text:#f4f4f4;--muted:#b9bfca;--accent:#f0c419;--good:#58d691;--bad:#ff7a76}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Pretendard,sans-serif;background:radial-gradient(circle at top,#1b1c20,#101114 60%);color:var(--text)}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 40px}.panel{background:rgba(24,26,31,.94);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:0 18px 38px rgba(0,0,0,.26)}
+  h1{margin:0 0 6px;font-size:28px}.sub{font-size:14px;color:var(--muted);margin-bottom:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}.mode-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.toggle{display:flex;align-items:center;gap:10px;background:var(--field);border:1px solid #3a3f49;border-radius:14px;padding:14px 16px;cursor:pointer}.toggle input{width:auto;margin:0;accent-color:var(--accent)}.box-note{margin-top:8px;color:var(--muted);font-size:12px}.hidden{display:none}
+  input,button{width:100%;border:none;border-radius:14px;padding:14px 16px;font-size:15px} input{background:var(--field);color:var(--text)} button{background:linear-gradient(180deg,#ffd84b,#e8b706);color:#141414;font-weight:800;cursor:pointer}
+  .stage{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-top:18px}.draw{min-height:160px;border-radius:18px;background:linear-gradient(180deg,#23262e,#17191e);border:1px solid #3b404a;color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:.2s transform}.draw:hover{transform:translateY(-2px)}.draw.done{cursor:default;background:linear-gradient(180deg,#2e3324,#1b1f17);border-color:#72844f}.name{font-size:18px;font-weight:800}.big{font-size:34px;font-weight:900;margin:10px 0}.muted{color:var(--muted);font-size:13px;text-align:center}.result{margin-top:18px;padding:16px;background:#17191e;border:1px solid var(--line);border-radius:18px;display:none}.result.show{display:block}.row{display:flex;justify-content:space-between;background:#23262d;border-radius:12px;padding:12px 14px;margin-top:8px}.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#2a2d34;color:var(--muted);font-size:12px;font-weight:700;margin-top:14px}
+  @media (max-width:640px){.grid,.mode-row{grid-template-columns:1fr}h1{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="panel">
+<h1>더치페이 복불복 배수뽑기</h1>
+<div class="sub">각자 카드를 뽑아 결제 배수를 받습니다. 이름 없이 번호만으로도 바로 시작할 수 있는 차등 정산 게임.</div>
+<div class="grid">
+  <div class="full"><div class="mode-row"><label class="toggle"><input type="radio" name="entryMode" value="names" checked> 이름 직접 입력</label><label class="toggle"><input type="radio" name="entryMode" value="auto"> 번호 자동 생성</label></div></div>
+  <div class="full" id="namesWrap"><input id="names" placeholder="참가자 이름 입력 (예: 민수, 지훈, 수빈)" /><div class="box-note">쉼표로 구분하면 됩니다</div></div>
+  <div class="full hidden" id="countWrap"><input id="playerCount" type="number" min="2" max="10" value="4" placeholder="참가 인원" /><div class="box-note">자동으로 1P, 2P, 3P처럼 표시됩니다</div></div>
+  <div class="full"><input id="amount" type="number" min="0" step="100" placeholder="총 결제금액 (예: 54000)" /></div>
+  <div class="full"><button id="startBtn">배수 카드 섞기</button></div>
+</div>
+<div id="pill"></div><div class="stage" id="stage"></div><div class="result" id="result"></div>
+</div></div>
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const stage = $('#stage'), result = $('#result'), pill = $('#pill');
+let players=[], multipliers=[], audioCtx=null;
+function initAudio(){ if(!audioCtx){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } if(audioCtx.state==='suspended') audioCtx.resume(); }
+function tone(freq,dur=0.1,type='triangle',vol=0.025){ if(!audioCtx) return; const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=type; o.frequency.setValueAtTime(freq,audioCtx.currentTime); g.gain.setValueAtTime(vol,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+dur); }
+function playStart(){ tone(480,0.08,'square',0.025); setTimeout(()=>tone(620,0.1,'square',0.02),70); }
+function playReveal(mult){ if(mult===0){ tone(980,0.08,'sine',0.02); setTimeout(()=>tone(1240,0.1,'sine',0.02),60); } else if(mult>=1.5){ tone(240,0.16,'sawtooth',0.035); setTimeout(()=>tone(180,0.18,'sawtooth',0.03),80); } else { tone(560,0.08,'triangle',0.02); setTimeout(()=>tone(760,0.09,'triangle',0.02),60); } }
+function playDone(){ tone(660,0.08,'triangle',0.02); setTimeout(()=>tone(820,0.08,'triangle',0.02),70); setTimeout(()=>tone(980,0.12,'triangle',0.02),140); }
+function money(n){ return Math.round(n).toLocaleString('ko-KR') + '원'; }
+function getEntryMode(){ return document.querySelector('input[name="entryMode"]:checked').value; }
+function updateEntryUI(){ const auto = getEntryMode() === 'auto'; $('#namesWrap').classList.toggle('hidden', auto); $('#countWrap').classList.toggle('hidden', !auto); }
+function parsePlayers(){ if(getEntryMode() === 'auto'){ const count = Math.min(10, Math.max(2, Number($('#playerCount').value || 0))); return Array.from({length:count}, (_,i)=>`${i+1}P`); } return $('#names').value.split(',').map(v=>v.trim()).filter(Boolean).slice(0,10); }
+function shuffled(arr){ return [...arr].sort(()=>Math.random()-0.5); }
+function buildMultiplierPool(n){ const presets={2:[0.7,1.3],3:[0,1,2],4:[0,0.8,1.2,2],5:[0,0.7,1,1.3,2],6:[0,0.5,0.8,1,1.5,2.2],7:[0,0.5,0.8,1,1.2,1.7,2.3],8:[0,0.4,0.7,0.9,1,1.2,1.8,2.5]}; if(presets[n]) return shuffled(presets[n]); const base = Array.from({length:n},(_,i)=>Math.max(0,(i+1)/(n/2))).map(v=>Math.round(v*10)/10); base[0]=0; return shuffled(base); }
+function start(){ initAudio(); players = parsePlayers(); if(players.length<2) return alert('참가자는 2명 이상이어야 합니다.'); if(!$('#amount').value || Number($('#amount').value)<=0) return alert('총 결제금액을 입력해주세요.'); playStart(); multipliers = buildMultiplierPool(players.length); pill.innerHTML = `<span class="pill">${players.length}명 참가 · ${getEntryMode()==='auto'?'번호 자동':'이름 입력'} · 차등 정산</span>`; result.className='result'; result.innerHTML=''; stage.innerHTML=''; players.forEach((p,i)=>{ const btn = document.createElement('button'); btn.className='draw'; btn.innerHTML = `<div class="name">${p}</div><div class="big">🎴</div><div class="muted">눌러서 배수 확인</div>`; btn.onclick = ()=>reveal(btn,i,p); stage.appendChild(btn); }); }
+function reveal(btn,i,name){ initAudio(); if(btn.classList.contains('done')) return; const m = multipliers[i]; playReveal(m); btn.classList.add('done'); const toneIcon = m>=1.5 ? '🔥' : (m===0 ? '🪽' : '✨'); btn.innerHTML = `<div class="name">${name}</div><div class="big">${toneIcon} ${m}배</div><div class="muted">정산에 반영됩니다</div>`; if([...stage.children].every(el=>el.classList.contains('done'))) finalize(); }
+function finalize(){ playDone(); const total = Number($('#amount').value), sum = multipliers.reduce((a,b)=>a+b,0) || 1; const shares = players.map((p,i)=>({name:p,m:multipliers[i],pay: total*(multipliers[i]/sum)})).sort((a,b)=>b.pay-a.pay); result.className='result show'; result.innerHTML = `<h2 style="margin:0 0 8px">🎯 배수 공개 완료</h2><div class="sub">총 결제금액 ${money(total)} 기준 비율 정산 결과</div>${shares.map(s=>`<div class="row"><strong>${s.name} (${s.m}배)</strong><span>${money(s.pay)}</span></div>`).join('')}<div style="margin-top:14px"><button style="background:#2d3139;color:#fff" onclick="start()">다시 뽑기</button></div>`; }
+$$('input[name="entryMode"]').forEach(el=>el.addEventListener('change', updateEntryUI)); $('#startBtn').addEventListener('click',start); updateEntryUI();
+</script>
+</body>
+</html>
