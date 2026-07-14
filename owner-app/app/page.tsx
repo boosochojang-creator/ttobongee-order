@@ -630,6 +630,19 @@ export default function OwnerDashboard() {
     await loadTodayReport()
   }
 
+  // 실수로 마감했거나 다시 열어야 할 때 — 마감 시각(end_time)을 지워 '영업 중'으로 되돌리고 고객 화면 재오픈.
+  // (start_time·매출 기록은 그대로 유지 → 나중에 진짜 마감 시 다시 집계됨)
+  const reopenBusiness = async () => {
+    const today = kstDay(new Date())
+    await supabase.from('daily_reports').upsert(
+      { store_id: 'baegun', date: today, end_time: null },
+      { onConflict: 'store_id,date' }
+    )
+    const okOpen = await applyStoreOpen(true)
+    if (!okOpen) alert('⚠️ 고객 화면 "다시 영업 시작" 반영에 실패했어요.\n인터넷 연결을 확인하고 다시 눌러주세요.')
+    await loadTodayReport()
+  }
+
   const changePIN = async () => {
     setPinChangeMsg(null)
     if (!/^\d{4}$/.test(pinChangeForm.new1)) {
@@ -1202,6 +1215,10 @@ export default function OwnerDashboard() {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ textAlign: 'center', fontSize: 14, color: '#3ac47d', fontWeight: 700 }}>✅ 오늘 영업 마감 완료</div>
+                      {/* 실수 마감/재오픈 대비 — 다시 영업 시작(고객 주문 재개) */}
+                      <button onClick={reopenBusiness} style={{ width: '100%', padding: 14, background: '#3ac47d', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                        🔄 다시 영업 시작
+                      </button>
                       <button onClick={() => setClosingConfirm(true)} style={{ width: '100%', padding: 11, background: '#2a2a2a', color: '#888', border: '1px solid #333', borderRadius: 10, fontSize: 13, cursor: 'pointer' }}>
                         재마감 (데이터 갱신)
                       </button>
