@@ -8,7 +8,7 @@ import ProfilePrompt from '../../../lib/ProfilePrompt'
 import { getMemberLocal, greetingLabel } from '../../../lib/memberState'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
 
-type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; image_url?: string | null }
+type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; sold_out?: boolean; image_url?: string | null }
 
 const CATS = ['세트메뉴', '치킨류', '안주류', '음료/주류']
 const CAT_ICONS: Record<string, string> = {
@@ -84,6 +84,9 @@ export default function MenuPage() {
   const getQty = (id: number) => items.find(i => i.id === id)?.qty || 0
 
   const handleQty = (item: MenuItem, delta: number) => {
+    // [2] 영업 준비 중이면 담기 차단 / [3] 재료 소진(sold_out) 메뉴는 추가 불가
+    if (storeClosed) return
+    if (delta > 0 && item.sold_out) return
     const cur = getQty(item.id)
     if (delta > 0) {
       try {
@@ -141,6 +144,9 @@ export default function MenuPage() {
           <div style={{ marginTop: 10, fontSize: 12.5, color: '#c9b060', lineHeight: 1.7 }}>
             혹시 영업 중인데 이 안내가 보인다면, 언제든 편하게 전화 주세요.<br />
             📞 <a href="tel:0322999848" style={{ color: '#FFD700', fontWeight: 700, textDecoration: 'none' }}>032-299-9848</a>
+          </div>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #7a6400', fontSize: 12.5, color: '#9fd39f' }}>
+            🎮 지금은 주문을 받지 않지만, <b style={{ color: '#b6e6a0' }}>오락실·음악감상실·게시판</b>은 언제든 즐기실 수 있어요! (오른쪽 아래 <b>&lsquo;잠깐 쉬었다 갈까요?&rsquo;</b>)
           </div>
         </div>
       )}
@@ -223,13 +229,14 @@ export default function MenuPage() {
       {/* 메뉴 목록 */}
       <div className="menu-list">
         {CATS.map(cat => {
+          // is_available=false = 메뉴에서 내린 항목(숨김 유지). [3] 재료 소진은 별도 sold_out으로 표시(아래).
           const catMenus = menus.filter(m => m.category === cat && m.is_available !== false)
           if (!catMenus.length) return null
           return (
             <div key={cat} ref={el => { catRefs.current[cat] = el }} style={{ scrollMarginTop: headerH }}>
               <div className="section-header">{CAT_DISPLAY[cat]?.icon ?? CAT_ICONS[cat]} {CAT_DISPLAY[cat]?.label ?? cat}</div>
               {catMenus.map(item => (
-                <div key={item.id} className={`menu-item${!item.is_available ? ' sold-out' : ''}`}>
+                <div key={item.id} className={`menu-item${item.sold_out ? ' sold-out' : ''}`}>
                   <div className="menu-thumb" style={{ width: 92, height: 92, flexShrink: 0, borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1a1a' }}>
                     {NO_IMAGE_NAMES.includes(item.name)
                       ? null
@@ -240,7 +247,7 @@ export default function MenuPage() {
                   <div className="menu-info">
                     <div className="menu-name">{item.name}</div>
                     <div className="menu-price">{item.price.toLocaleString()}원</div>
-                    {!item.is_available && <div className="menu-tag">품절</div>}
+                    {item.sold_out && <div className="menu-tag">재료 소진</div>}
                   </div>
                   <div className="qty-ctrl">
                     {getQty(item.id) > 0 && (
@@ -249,7 +256,10 @@ export default function MenuPage() {
                         <span>{getQty(item.id)}</span>
                       </>
                     )}
-                    <button className="plus" onClick={() => handleQty(item, 1)}>+</button>
+                    {/* [2] 영업 준비 중 또는 [3] 재료 소진이면 담기 버튼 비활성화 */}
+                    <button className="plus" onClick={() => handleQty(item, 1)}
+                      disabled={storeClosed || !!item.sold_out}
+                      style={storeClosed || item.sold_out ? { opacity: 0.35, cursor: 'not-allowed' } : undefined}>+</button>
                   </div>
                 </div>
               ))}
@@ -269,8 +279,8 @@ export default function MenuPage() {
         <span style={{fontSize:10, color:'#aaa'}}>직원호출</span>
       </button>
 
-      {/* 장바구니 플로팅 버튼 */}
-      {totalQty > 0 && (
+      {/* 장바구니 플로팅 버튼 — [2] 영업 준비 중이면 숨김(주문 불가) */}
+      {totalQty > 0 && !storeClosed && (
         <button className="cart-fab" onClick={() => router.push('/store/baegun/cart')}>
           <span>🛒 {totalQty}개 담음</span>
           <span>{finalAmount.toLocaleString()}원 →</span>

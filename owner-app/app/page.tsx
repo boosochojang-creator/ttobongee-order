@@ -534,6 +534,15 @@ export default function OwnerDashboard() {
     })
     await loadMenus()
   }
+  // [3] 재료 소진 토글 — sold_out 뒤집기 (서비스롤, menus는 anon UPDATE 차단)
+  const toggleSoldOut = async (id: string, cur: boolean | undefined) => {
+    await fetch('/api/toggle-menu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, sold_out: !cur }),
+    })
+    await loadMenus()
+  }
 
   const addMenu = async () => {
     if (!addForm.name.trim() || !addForm.price) return
@@ -958,6 +967,12 @@ export default function OwnerDashboard() {
                   style={{ padding: '6px 10px', background: 'rgba(232,64,64,0.12)', color: '#e84040', border: '1px solid rgba(232,64,64,0.3)', borderRadius: 8, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
                   삭제
                 </button>
+                {/* [3] 재료 소진 토글(sold_out) — 활성 메뉴에만. 켜면 고객 메뉴판에 '재료 소진' 표시+담기 차단(숨기지 않음) */}
+                {m.is_available !== false && (
+                  <button className={`toggle-btn ${m.sold_out ? 'off' : 'on'}`} onClick={() => toggleSoldOut(m.id, m.sold_out)}>
+                    {m.sold_out ? '재료 소진' : '재료 있음'}
+                  </button>
+                )}
                 <button className={`toggle-btn ${m.is_available ? 'on' : 'off'}`} onClick={() => toggleMenu(m.id, m.is_available)}>
                   {m.is_available ? '판매중' : '품절'}
                 </button>
