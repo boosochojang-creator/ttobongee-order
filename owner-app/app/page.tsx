@@ -1472,7 +1472,7 @@ export default function OwnerDashboard() {
       {tab === 'content' && (
         <div style={{ padding: 16 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', marginBottom: 4 }}>🎮 오락실 게임 관리</div>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>게임 업로드·온/오프·이름·삭제 (손님 오락실 화면에 즉시 반영)</div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>게임 업로드·이름·삭제 · <b style={{ color: '#3ac47d' }}>🟢 노출</b>=손님에게 보임 / <b style={{ color: '#999' }}>⚫ 숨김</b>=안 보임 (버튼 눌러 전환)</div>
           {/* 게임 업로드 (독립형 HTML 파일) */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
             <input placeholder="게임 이름" value={gameName} maxLength={20} onChange={e => setGameName(e.target.value)}
@@ -1493,7 +1493,7 @@ export default function OwnerDashboard() {
                 style={{ flex: 1, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '8px 10px', color: '#eee', fontSize: 14 }} />
               <button onClick={() => updateGame(g.id, { is_active: !g.is_active })}
                 style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${g.is_active ? '#3ac47d' : '#555'}`, background: g.is_active ? '#12301f' : '#242424', color: g.is_active ? '#3ac47d' : '#888', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                {g.is_active ? '노출 ON' : '숨김'}
+                {g.is_active ? '🟢 노출' : '⚫ 숨김'}
               </button>
               {/* 업로드 게임만 삭제 가능(내장 기본 게임은 실수 삭제 방지 위해 삭제 버튼 미노출) */}
               {g.storage_url && (
@@ -1505,7 +1505,7 @@ export default function OwnerDashboard() {
           <div style={{ fontSize: 11, color: '#666', marginTop: 12 }}>* 이름은 입력 후 다른 곳을 누르면 저장돼요. ⬆️ 표시는 직접 올린 게임(삭제 가능), 🕹️는 기본 내장 게임.</div>
 
           <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', margin: '28px 0 4px' }}>🎵 음악감상실 관리</div>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>곡 업로드·노출·순서·삭제 (손님 음악감상실에 반영)</div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>곡 업로드·순서·삭제 · <b style={{ color: '#3ac47d' }}>🟢 노출</b>=손님에게 들림 / <b style={{ color: '#999' }}>⚫ 숨김</b>=안 들림 (버튼 눌러 전환)</div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
             <input placeholder="곡 제목" value={musicTitle} onChange={e => setMusicTitle(e.target.value)}
               style={{ flex: 1, minWidth: 140, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '9px 10px', color: '#eee', fontSize: 14 }} />
@@ -1526,7 +1526,7 @@ export default function OwnerDashboard() {
                 style={{ background: '#242424', border: '1px solid #333', color: '#aaa', borderRadius: 6, padding: '6px 8px', cursor: 'pointer' }}>▲</button>
               <button onClick={() => updateTrack(t.id, { is_active: !t.is_active })}
                 style={{ padding: '6px 8px', borderRadius: 6, border: `1px solid ${t.is_active ? '#3ac47d' : '#555'}`, background: t.is_active ? '#12301f' : '#242424', color: t.is_active ? '#3ac47d' : '#888', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                {t.is_active ? 'ON' : '숨김'}
+                {t.is_active ? '🟢 노출' : '⚫ 숨김'}
               </button>
               <button onClick={() => { if (confirm('이 곡을 삭제할까요?')) updateTrack(t.id, { action: 'delete' }) }}
                 style={{ background: '#2a1414', border: '1px solid #5c2e2e', color: '#e05555', borderRadius: 6, padding: '6px 8px', fontSize: 12, cursor: 'pointer' }}>삭제</button>
