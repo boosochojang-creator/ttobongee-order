@@ -255,8 +255,7 @@ export default function OwnerDashboard() {
       .from('orders')
       .select(`*,
                order_items(name_snapshot, qty, subtotal),
-               users(visit_count, grade),
-               coupons!coupon_id(type, discount_amount)`)
+               users(visit_count, grade)`)
       .eq('store_id', 'baegun')
       .neq('status', 'canceled')
       // pending = 손님이 결제창만 열고 아직 결제 안 한 상태(취소·이탈 포함) → 확정 전이므로 점주 화면에서 제외
@@ -266,7 +265,15 @@ export default function OwnerDashboard() {
 
     if (!data) return
 
-    const mapped = data.map((o: any) => ({ ...o, items: o.order_items, member_info: o.users || null, coupon_info: o.coupons || null }))
+    // coupons는 RLS로 anon 조인이 막혀 있어 서비스롤 API로 별도 조회 후 붙인다.
+    let couponMap: Record<string, { type: string; discount_amount: number }> = {}
+    const couponIds = Array.from(new Set(data.filter((o: any) => o.coupon_id).map((o: any) => o.coupon_id)))
+    if (couponIds.length) {
+      const cr = await fetch('/api/coupon/info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: couponIds }) }).then(x => x.json()).catch(() => null)
+      if (cr?.ok) couponMap = cr.coupons
+    }
+
+    const mapped = data.map((o: any) => ({ ...o, items: o.order_items, member_info: o.users || null, coupon_info: o.coupon_id ? (couponMap[o.coupon_id] || null) : null }))
 
     // 새 주문 감지 → 알림음
     if (!isFirst.current) {
@@ -771,11 +778,14 @@ export default function OwnerDashboard() {
         ))}
       </ul>
       <div className="order-total">{won(order.final_amount)}</div>
-      {/* 결제분리: 포스에서 적용할 쿠폰 안내 (표시만 — 실제 차감은 포스에서 수동) */}
+      {/* [4-4] 쿠폰 할인이 반영된 카운터 결제 금액을 계산해서 표시 (포스에서 이 금액으로 받도록) */}
       {!PAYMENT_ENABLED && order.coupon_info && order.coupon_info.discount_amount > 0 && (
-        <div style={{ marginTop: 4, background: '#14210f', border: '1px solid #3a5a2a', borderRadius: 8, padding: '7px 10px', fontSize: 12.5, fontWeight: 700, color: '#a7d98a', lineHeight: 1.5 }}>
-          🎟️ {COUPON_LABEL[order.coupon_info.type] || '쿠폰'} {won(order.coupon_info.discount_amount)} 할인 대상<br />
-          <span style={{ color: '#8ab873', fontWeight: 500 }}>포스 결제 시 이 금액만큼 할인 적용해주세요</span>
+        <div style={{ marginTop: 4, background: '#14210f', border: '1px solid #3a5a2a', borderRadius: 8, padding: '9px 11px', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: '#a7d98a', marginBottom: 3 }}>🎟️ {COUPON_LABEL[order.coupon_info.type] || '쿠폰'} 쿠폰 적용</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#dfeecd' }}>
+            {won(order.final_amount)} − {won(order.coupon_info.discount_amount)} = <b style={{ fontSize: 16, color: '#FFD700' }}>{won(order.final_amount - order.coupon_info.discount_amount)}</b>
+          </div>
+          <div style={{ fontSize: 11.5, color: '#8ab873', fontWeight: 600, marginTop: 2 }}>※ 카운터에서 이 금액으로 결제받아 주세요</div>
         </div>
       )}
       <div className="action-btns">

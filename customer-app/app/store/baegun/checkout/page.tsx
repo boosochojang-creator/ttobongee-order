@@ -389,10 +389,16 @@ export default function CheckoutPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 700, marginTop: 8 }}>
               <span>{PAYMENT_ENABLED ? '최종 결제' : '예상 금액'}</span><span style={{ color: 'var(--gold)' }}>{won(payTotal)}</span>
             </div>
+            {/* [4-3] 적용 가능한 쿠폰 강조 배너 — 재방문 회원이 눈에 띄게 인지하도록 */}
             {!PAYMENT_ENABLED && coupon && couponDiscount > 0 && (
-              <div style={{ marginTop: 10, background: '#1a2a1a', border: '1px solid #3a5a3a', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#9fd39f', lineHeight: 1.6 }}>
-                🎟️ <b>{coupon.label} 쿠폰 {won(couponDiscount)} 할인 대상</b><br />
-                <span style={{ color: '#7fae7f' }}>결제는 카운터에서 진행되며, 이 쿠폰 할인은 카운터에서 적용돼요.</span>
+              <div style={{ marginTop: 12, background: 'linear-gradient(135deg, rgba(58,196,125,0.18), rgba(200,169,0,0.10))', border: '2px solid #3ac47d', borderRadius: 12, padding: '14px 16px', boxShadow: '0 0 0 3px rgba(58,196,125,0.12)' }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#8ef0b8', marginBottom: 4 }}>🎟️ 쿠폰 사용 가능!</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.5 }}>
+                  {coupon.label} 쿠폰 <span style={{ color: '#FFD700' }}>{won(couponDiscount)} 할인</span>
+                </div>
+                <div style={{ fontSize: 13, color: '#bfe6cc', marginTop: 6, lineHeight: 1.6 }}>
+                  주문하면 이 쿠폰이 자동으로 적용돼요. <b>할인은 카운터 결제 시</b> 반영됩니다.
+                </div>
               </div>
             )}
           </div>

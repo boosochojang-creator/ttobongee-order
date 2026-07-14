@@ -76,17 +76,17 @@ export default function ProfilePage() {
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', marginBottom: 4 }}>🎟️ 내 쿠폰함</div>
           <div style={{ fontSize: 12, color: '#777', marginBottom: 10 }}>결제는 카운터에서 진행되며, 쿠폰 할인은 주문 시 자동 안내돼요.</div>
-          {coupons === null ? (
-            <div style={{ color: '#888', fontSize: 13, padding: '14px 0' }}>쿠폰을 불러오는 중…</div>
-          ) : coupons.length === 0 ? (
-            <div style={{ color: '#888', fontSize: 13, background: '#141414', border: '1px solid #2a2a2a', borderRadius: 10, padding: '16px', textAlign: 'center' }}>
-              아직 받은 쿠폰이 없어요. 방문하시면 다양한 혜택 쿠폰을 드려요 💛
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {coupons.map(c => <CouponCard key={c.id} c={c} />)}
-            </div>
-          )}
+          {/* [4-2] 사용 가능한 쿠폰만 노출 (사용됨·만료됨은 이력 보존 위해 DB엔 남기고 화면에선 숨김) */}
+          {(() => {
+            const usable = coupons ? coupons.filter(c => c.state === 'usable') : null
+            if (usable === null) return <div style={{ color: '#888', fontSize: 13, padding: '14px 0' }}>쿠폰을 불러오는 중…</div>
+            if (usable.length === 0) return (
+              <div style={{ color: '#888', fontSize: 13, background: '#141414', border: '1px solid #2a2a2a', borderRadius: 10, padding: '16px', textAlign: 'center' }}>
+                지금 사용할 수 있는 쿠폰이 없어요. 방문하시면 다양한 혜택 쿠폰을 드려요 💛
+              </div>
+            )
+            return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{usable.map(c => <CouponCard key={c.id} c={c} />)}</div>
+          })()}
         </div>
 
         <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.7, borderTop: '1px solid #2a2a2a', paddingTop: 16 }}>
