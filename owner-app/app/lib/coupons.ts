@@ -2,11 +2,12 @@
 // 규칙은 템플릿 테이블 없이 하드코딩(4종 고정). 발급 인스턴스만 coupons 테이블에 저장.
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+// 메뉴 무료 증정 방식 (금액할인 폐기). freeMenu 개수만큼 증정, validDays=null이면 무제한, sameDay=true면 발급 당일부터 사용가능(그 외는 다음날부터).
 export const COUPON_RULES = {
-  signup:     { label: '신규가입', discount: 2000, minOrder: 12000, validDays: 14 },
-  birthday:   { label: '생일',     discount: 3000, minOrder: 15000, validDays: 14 },
-  winback:    { label: '재방문',   discount: 3000, minOrder: 15000, validDays: 7  },
-  vip_thanks: { label: '단골감사', discount: 5000, minOrder: 20000, validDays: 30 },
+  signup:     { label: '신규가입', freeMenu: '튀김만두',      freeQty: 5, minOrder: 0,     validDays: null, sameDay: false },
+  birthday:   { label: '생일',     freeMenu: '감자튀김 200g', freeQty: 1, minOrder: 0,     validDays: 7,    sameDay: true  },
+  winback:    { label: '재방문',   freeMenu: '튀김만두',      freeQty: 5, minOrder: 15000, validDays: 7,    sameDay: false },
+  vip_thanks: { label: '단골감사', freeMenu: '튀김만두',      freeQty: 5, minOrder: 20000, validDays: 7,    sameDay: false },
 } as const
 export type CouponType = keyof typeof COUPON_RULES
 
@@ -35,13 +36,25 @@ function kstTodayStartIso() {
   const d = `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`
   return `${d}T00:00:00+09:00`
 }
+// 다음 KST 자정(내일 00:00 KST)을 UTC instant로
+function nextKstMidnight(now: Date) {
+  const kst = new Date(now.getTime() + 9 * 3600 * 1000)
+  return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1, 0, 0, 0) - 9 * 3600 * 1000)
+}
 function newCoupon(userId: string, type: CouponType, now: Date) {
   const r = COUPON_RULES[type]
+  const expires = r.validDays == null
+    ? new Date(now.getTime() + 100 * 365 * 86400000)          // 무제한(신규가입) — 100년 후
+    : new Date(now.getTime() + r.validDays * 86400000)
+  const usableFrom = r.sameDay ? now : nextKstMidnight(now)   // 생일=당일, 나머지=다음날부터
   return {
     user_id: userId, type,
-    discount_amount: r.discount, min_order_amount: r.minOrder,
+    discount_amount: 0,                                       // 금액할인 폐기 → 0 (컬럼은 이력보존용으로 유지)
+    free_menu: r.freeMenu, free_qty: r.freeQty,
+    min_order_amount: r.minOrder,
     status: 'active', issued_at: now.toISOString(),
-    expires_at: new Date(now.getTime() + r.validDays * 86400000).toISOString(),
+    usable_from: usableFrom.toISOString(),
+    expires_at: expires.toISOString(),
   }
 }
 
@@ -80,12 +93,12 @@ export async function runCouponAutomation(admin: SupabaseClient) {
 
   // 오늘(KST) 발급된 쿠폰 전체를 회원명과 함께 반환 (여러 번 눌러도 '오늘 발급분'을 일관되게 표시)
   const { data: todays } = await admin.from('coupons')
-    .select('type, discount_amount, user_id').gte('issued_at', kstTodayStartIso())
+    .select('type, free_menu, free_qty, user_id').gte('issued_at', kstTodayStartIso())
   const nameOf = new Map((users || []).map(u => [u.id, u.nickname || u.phone]))
   const todayIssued = (todays || []).map(c => ({
     who: nameOf.get(c.user_id) || c.user_id,
     label: COUPON_RULES[c.type as CouponType]?.label || c.type,
-    discount: c.discount_amount,
+    gift: c.free_qty && c.free_qty > 1 ? `${c.free_menu} ${c.free_qty}개` : (c.free_menu || '증정'),
   }))
   return { expiredCount: expired?.length || 0, issuedNow: toIssue.length, todayIssued }
 }

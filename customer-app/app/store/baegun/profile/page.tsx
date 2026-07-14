@@ -18,8 +18,8 @@ export default function ProfilePage() {
   const [loaded, setLoaded] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
-  // [2] 내 쿠폰함
-  type Coupon = { id: string; reason: string; emoji: string; discount_amount: number; min_order_amount: number; issued_at: string; expires_at: string; state: 'usable' | 'used' | 'expired' }
+  // [2] 내 쿠폰함 (메뉴 증정 방식)
+  type Coupon = { id: string; reason: string; emoji: string; gift: string | null; discount_amount: number; min_order_amount: number; issued_at: string; usable_from: string | null; expires_at: string; state: 'usable' | 'upcoming' | 'used' | 'expired' }
   const [coupons, setCoupons] = useState<Coupon[] | null>(null)
 
   useEffect(() => {
@@ -76,16 +76,16 @@ export default function ProfilePage() {
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', marginBottom: 4 }}>🎟️ 내 쿠폰함</div>
           <div style={{ fontSize: 12, color: '#777', marginBottom: 10 }}>결제는 카운터에서 진행되며, 쿠폰 할인은 주문 시 자동 안내돼요.</div>
-          {/* [4-2] 사용 가능한 쿠폰만 노출 (사용됨·만료됨은 이력 보존 위해 DB엔 남기고 화면에선 숨김) */}
+          {/* 사용 가능/곧 사용가능 쿠폰만 노출 (사용됨·만료됨은 이력 보존 위해 DB엔 남기고 화면에선 숨김) */}
           {(() => {
-            const usable = coupons ? coupons.filter(c => c.state === 'usable') : null
-            if (usable === null) return <div style={{ color: '#888', fontSize: 13, padding: '14px 0' }}>쿠폰을 불러오는 중…</div>
-            if (usable.length === 0) return (
+            const visible = coupons ? coupons.filter(c => c.state === 'usable' || c.state === 'upcoming') : null
+            if (visible === null) return <div style={{ color: '#888', fontSize: 13, padding: '14px 0' }}>쿠폰을 불러오는 중…</div>
+            if (visible.length === 0) return (
               <div style={{ color: '#888', fontSize: 13, background: '#141414', border: '1px solid #2a2a2a', borderRadius: 10, padding: '16px', textAlign: 'center' }}>
-                지금 사용할 수 있는 쿠폰이 없어요. 방문하시면 다양한 혜택 쿠폰을 드려요 💛
+                지금 사용할 수 있는 쿠폰이 없어요. 방문하시면 메뉴 증정 쿠폰을 드려요 💛
               </div>
             )
-            return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{usable.map(c => <CouponCard key={c.id} c={c} />)}</div>
+            return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{visible.map(c => <CouponCard key={c.id} c={c} />)}</div>
           })()}
         </div>
 
@@ -161,30 +161,39 @@ const fmtDate = (iso: string) => {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
 
-type CouponCardProps = { c: { reason: string; emoji: string; discount_amount: number; min_order_amount: number; issued_at: string; expires_at: string; state: 'usable' | 'used' | 'expired' } }
+type CouponCardProps = { c: { reason: string; emoji: string; gift: string | null; discount_amount: number; min_order_amount: number; issued_at: string; usable_from: string | null; expires_at: string; state: 'usable' | 'upcoming' | 'used' | 'expired' } }
 function CouponCard({ c }: CouponCardProps) {
-  const dim = c.state !== 'usable' // 사용됨·만료됨은 회색 처리(삭제 아님, 이력 보존)
+  const dim = c.state === 'used' || c.state === 'expired' // 사용됨·만료됨만 회색(여긴 안 보이지만 안전용)
   const badge = c.state === 'used'
     ? { text: '사용됨', color: '#888', bg: '#222' }
     : c.state === 'expired'
       ? { text: '만료됨', color: '#888', bg: '#222' }
-      : { text: '사용가능', color: '#111', bg: '#c8a900' }
+      : c.state === 'upcoming'
+        ? { text: '곧 사용가능', color: '#111', bg: '#8ab8e0' }
+        : { text: '사용가능', color: '#111', bg: '#3ac47d' }
+  // 증정 메뉴 문구(신방식). 구 쿠폰(gift 없음)은 금액할인으로 폴백.
+  const title = c.gift ? `${c.gift} 무료 증정` : `${won(c.discount_amount)} 할인`
+  // 무제한(신규가입) 여부: 만료가 아주 먼 미래면 '무제한'으로 표기
+  const farFuture = c.expires_at && (new Date(c.expires_at).getTime() - Date.now()) > 3650 * 86400000
   return (
     <div style={{
-      background: dim ? '#141414' : 'linear-gradient(135deg, rgba(200,169,0,0.14), rgba(200,169,0,0.04))',
-      border: `1px solid ${dim ? '#2a2a2a' : '#7a6400'}`, borderRadius: 12, padding: '14px 16px',
+      background: dim ? '#141414' : 'linear-gradient(135deg, rgba(58,196,125,0.14), rgba(200,169,0,0.05))',
+      border: `1px solid ${dim ? '#2a2a2a' : '#3a6a4a'}`, borderRadius: 12, padding: '14px 16px',
       opacity: dim ? 0.6 : 1,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div>
-          <div style={{ fontSize: 12, color: dim ? '#888' : '#c9b060', fontWeight: 700, marginBottom: 2 }}>
+          <div style={{ fontSize: 12, color: dim ? '#888' : '#8ecfa5', fontWeight: 700, marginBottom: 2 }}>
             {c.emoji} {c.reason}
           </div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: dim ? '#aaa' : '#FFD700' }}>
-            {won(c.discount_amount)} 할인
+          <div style={{ fontSize: 18, fontWeight: 900, color: dim ? '#aaa' : '#fff' }}>
+            🎁 {title}
           </div>
           {c.min_order_amount > 0 && (
             <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{won(c.min_order_amount)} 이상 주문 시</div>
+          )}
+          {c.state === 'upcoming' && c.usable_from && (
+            <div style={{ fontSize: 12, color: '#8ab8e0', fontWeight: 700, marginTop: 3 }}>📅 {fmtDate(c.usable_from)}부터 사용 가능</div>
           )}
         </div>
         <span style={{ background: badge.bg, color: badge.color, fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap' }}>
@@ -192,7 +201,7 @@ function CouponCard({ c }: CouponCardProps) {
         </span>
       </div>
       <div style={{ fontSize: 11.5, color: '#777', marginTop: 8, borderTop: '1px dashed #333', paddingTop: 8 }}>
-        {fmtDate(c.issued_at)} 발급 · <span style={{ color: c.state === 'expired' ? '#c86a6a' : '#999' }}>{fmtDate(c.expires_at)}까지</span>
+        {fmtDate(c.issued_at)} 발급 · <span style={{ color: c.state === 'expired' ? '#c86a6a' : '#999' }}>{farFuture ? '기간 제한 없음' : `${fmtDate(c.expires_at)}까지`}</span>
       </div>
     </div>
   )

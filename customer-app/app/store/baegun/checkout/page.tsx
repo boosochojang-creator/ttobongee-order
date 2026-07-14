@@ -75,20 +75,19 @@ export default function CheckoutPage() {
   const [calcError, setCalcError] = useState('')
   const [farNotice, setFarNotice] = useState(false) // 20km 초과 안내 (차단 아님)
 
-  // ===== Phase 4-B: 쿠폰 자동적용 (카드/전자결제만, 회원 로그인 시) =====
-  const [coupon, setCoupon] = useState<{ id: string; label: string; discount: number } | null>(null)
+  // ===== 쿠폰: 메뉴 무료 증정 방식 (다중). 지금 적용 가능한 쿠폰 전체를 받아 각각 증정. =====
+  type Gift = { id: string; type: string; label: string; menu: string; qty: number }
+  const [gifts, setGifts] = useState<Gift[]>([])
   useEffect(() => {
-    if (!userId) { setCoupon(null); return }
-    // 최소주문 기준 = finalAmount(회원가 적용 후 상품금액). 서버가 유효·최소충족 중 할인 최대 1개 선택
-    fetch(`/api/coupons/best?userId=${userId}&amount=${finalAmount}`)
-      .then(x => x.json()).then(r => setCoupon(r?.ok ? (r.coupon || null) : null)).catch(() => {})
-  }, [userId, finalAmount])
-  const couponDiscount = coupon ? coupon.discount : 0
-  // 결제분리(PAYMENT_ENABLED=false): 쿠폰은 우리 시스템에서 차감하지 않고 '표시만' — 실제 할인은 점주가 포스에서 수동 적용.
-  // 결제복귀 시엔 기존대로 결제금액에서 자동 차감.
-  const couponApplied = PAYMENT_ENABLED ? couponDiscount : 0
+    if (!userId) { setGifts([]); return }
+    // 최소주문 기준 = totalAmount(회원가 적용 전 메뉴 합계). 사용가능일/최소주문 충족한 쿠폰 전체 반환.
+    fetch(`/api/coupons/applicable?userId=${userId}&amount=${totalAmount}`)
+      .then(x => x.json()).then(r => setGifts(r?.ok ? (r.coupons || []) : [])).catch(() => {})
+  }, [userId, totalAmount])
+  // [7] 기존 금액할인 계산은 폐기(메뉴 증정으로 대체). 코드 보존용으로 남기되 항상 0.
+  const couponApplied = 0
 
-  // 최종 금액 = (회원가 상품금액 − 적용쿠폰) + 배달료
+  // 최종 금액 = 회원가 상품금액 + 배달료 (증정 메뉴는 0원이라 금액 영향 없음)
   const payTotal = finalAmount - couponApplied + (isDelivery && deliveryFee ? deliveryFee : 0)
   const canSplit = DUTCH_PAY_ENABLED && !isDelivery && orderType === 'dine_in' // 더치페이는 홀 주문 전용 + 결제활성 시에만
 
@@ -169,12 +168,13 @@ export default function CheckoutPage() {
       order_type: isDelivery ? 'delivery' : orderType,
       status,
       total_amount: totalAmount,
-      discount_amount: discountAmount + couponApplied, // 회원 5% + (결제활성 시) 쿠폰. 결제분리 땐 쿠폰 미차감(표시만)
-      final_amount: payTotal, // 회원가−적용쿠폰+배달료
+      discount_amount: discountAmount + couponApplied, // 회원 5% (쿠폰 금액할인은 폐기 → couponApplied=0)
+      final_amount: payTotal, // 회원가 + 배달료 (증정 메뉴는 0원)
       payment_method: PAYMENT_ENABLED ? payMethod : null, // 결제분리 땐 실제 결제는 포스에서(값 미지정 — CHECK 제약 회피)
       user_id: userId,
       is_member: isMember,
-      ...(coupon ? { coupon_id: coupon.id } : {}), // 쿠폰 선택 시 항상 연결(접수 시 used 처리 — 표시만이어도 소진)
+      // 메뉴 증정 쿠폰(다중): 적용된 쿠폰들의 증정 메뉴를 주문에 기록 → 점주 접수 시 전부 used 처리
+      ...(gifts.length ? { free_gifts: gifts.map(g => ({ coupon_id: g.id, type: g.type, menu: g.menu, qty: g.qty })) } : {}),
       ...(!isDelivery && orderType === 'takeout' && pickupTime ? { pickup_at: pickupIso(pickupTime) } : {}), // [7] 포장 예약시각
       ...(isDelivery ? {
         delivery_address: `${addr.trim()} ${addrDetail.trim()}`.trim(),
@@ -375,29 +375,32 @@ export default function CheckoutPage() {
                 <span>단골 할인 5%</span><span>-{won(discountAmount)}</span>
               </div>
             )}
-            {/* 결제활성 시: 쿠폰 즉시 차감 표시. 결제분리 시: 차감 없이 '포스에서 할인' 안내만 */}
-            {PAYMENT_ENABLED && couponDiscount > 0 && coupon && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--green)' }}>
-                <span>🎟️ {coupon.label} 쿠폰할인</span><span>-{won(couponDiscount)}</span>
-              </div>
-            )}
+            {/* [7] 쿠폰 금액할인 표시는 폐기(메뉴 증정으로 대체) — 옛 계산 라인 비활성화 */}
             {isDelivery && deliveryFee !== null && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--text2)' }}>
                 <span>🛵 배달료</span><span>+{won(deliveryFee)}</span>
               </div>
             )}
+            {/* 증정 메뉴 라인 (0원) — 적용된 쿠폰마다 한 줄씩 */}
+            {gifts.map(g => (
+              <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--green)' }}>
+                <span>🎁 {g.menu}{g.qty > 1 ? ` ${g.qty}개` : ''} (증정)</span><span>무료</span>
+              </div>
+            ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 700, marginTop: 8 }}>
               <span>{PAYMENT_ENABLED ? '최종 결제' : '예상 금액'}</span><span style={{ color: 'var(--gold)' }}>{won(payTotal)}</span>
             </div>
-            {/* [4-3] 적용 가능한 쿠폰 강조 배너 — 재방문 회원이 눈에 띄게 인지하도록 */}
-            {!PAYMENT_ENABLED && coupon && couponDiscount > 0 && (
+            {/* 무료 증정 강조 배너 (다중 쿠폰이면 전부 함께 증정) */}
+            {gifts.length > 0 && (
               <div style={{ marginTop: 12, background: 'linear-gradient(135deg, rgba(58,196,125,0.18), rgba(200,169,0,0.10))', border: '2px solid #3ac47d', borderRadius: 12, padding: '14px 16px', boxShadow: '0 0 0 3px rgba(58,196,125,0.12)' }}>
-                <div style={{ fontSize: 15, fontWeight: 900, color: '#8ef0b8', marginBottom: 4 }}>🎟️ 쿠폰 사용 가능!</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.5 }}>
-                  {coupon.label} 쿠폰 <span style={{ color: '#FFD700' }}>{won(couponDiscount)} 할인</span>
-                </div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#8ef0b8', marginBottom: 5 }}>🎁 무료 증정 쿠폰이 적용됐어요!</div>
+                {gifts.map(g => (
+                  <div key={g.id} style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.6 }}>
+                    · {g.menu}{g.qty > 1 ? ` ${g.qty}개` : ''} <span style={{ color: '#FFD700' }}>무료 증정</span>
+                  </div>
+                ))}
                 <div style={{ fontSize: 13, color: '#bfe6cc', marginTop: 6, lineHeight: 1.6 }}>
-                  주문하면 이 쿠폰이 자동으로 적용돼요. <b>할인은 카운터 결제 시</b> 반영됩니다.
+                  주문하면 위 메뉴가 <b>주문과 함께 무료로 나가요</b>. (카운터에서 함께 받으세요)
                 </div>
               </div>
             )}

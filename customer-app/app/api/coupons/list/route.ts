@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     )
     const { data, error } = await admin.from('coupons')
-      .select('id, type, discount_amount, min_order_amount, status, issued_at, expires_at, used_at')
+      .select('id, type, discount_amount, free_menu, free_qty, min_order_amount, status, issued_at, usable_from, expires_at, used_at')
       .eq('user_id', userId)
       .order('issued_at', { ascending: false })
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
@@ -31,15 +31,20 @@ export async function GET(req: NextRequest) {
     const coupons = (data || []).map(c => {
       const expired = c.expires_at ? new Date(c.expires_at).getTime() < now : false
       const used = c.status === 'used' || !!c.used_at
-      const state: 'usable' | 'used' | 'expired' = used ? 'used' : (expired || c.status !== 'active') ? 'expired' : 'usable'
+      const notYet = c.usable_from ? new Date(c.usable_from).getTime() > now : false // 아직 사용가능일 전
+      const state: 'usable' | 'upcoming' | 'used' | 'expired' =
+        used ? 'used' : (expired || c.status !== 'active') ? 'expired' : notYet ? 'upcoming' : 'usable'
       const r = REASON[c.type] || { label: '쿠폰', emoji: '🎟️' }
+      const gift = c.free_menu ? (c.free_qty && c.free_qty > 1 ? `${c.free_menu} ${c.free_qty}개` : c.free_menu) : null
       return {
         id: c.id,
         reason: r.label,
         emoji: r.emoji,
+        gift,                            // 증정 메뉴 문구 (없으면 구 금액할인)
         discount_amount: c.discount_amount,
         min_order_amount: c.min_order_amount,
         issued_at: c.issued_at,
+        usable_from: c.usable_from,
         expires_at: c.expires_at,
         state,
       }

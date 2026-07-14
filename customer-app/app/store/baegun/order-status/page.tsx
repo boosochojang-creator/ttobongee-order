@@ -34,6 +34,7 @@ function StatusContent() {
   const memberPhone = params.get('phone') ?? ''
   const [status, setStatus] = useState<Status>('pending')
   const [cancelReason, setCancelReason] = useState('') // 점주가 선택한 거절 사유 (신규B)
+  const [gifts, setGifts] = useState<{ menu: string; qty: number }[]>([]) // 이 주문의 무료 증정 메뉴
   const [fortune] = useState(() => FORTUNES[Math.floor(Math.random() * FORTUNES.length)])
   const prevStatus = useRef<Status | null>(null)
   const [receiptPhone, setReceiptPhone] = useState(memberPhone)
@@ -100,6 +101,10 @@ function StatusContent() {
     // 초기 조회
     supabase.from('orders').select('status').eq('id', orderId).single()
       .then(({ data }) => { if (data) { setStatus(data.status as Status); if (data.status === 'canceled') loadReason() } })
+
+    // 무료 증정 메뉴 (best-effort — 컬럼 없거나 없으면 무시)
+    supabase.from('orders').select('free_gifts').eq('id', orderId).single()
+      .then(({ data, error }) => { if (!error && Array.isArray((data as any)?.free_gifts)) setGifts((data as any).free_gifts) })
 
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [orderId])
@@ -203,6 +208,17 @@ function StatusContent() {
         <p style={{ color: 'var(--text2)', fontSize: 14 }}>
           {isCash ? '카운터에서 결제 후 기다려주세요' : '잠시만 기다려주세요'}
         </p>
+
+        {/* 무료 증정 안내 — 쿠폰 메뉴가 주문과 함께 나감 */}
+        {gifts.length > 0 && (
+          <div style={{ margin: '14px 0 0', background: 'linear-gradient(135deg, rgba(58,196,125,0.16), rgba(200,169,0,0.08))', border: '2px solid #3ac47d', borderRadius: 12, padding: '12px 14px', textAlign: 'left' }}>
+            <div style={{ fontSize: 14, fontWeight: 900, color: '#8ef0b8', marginBottom: 3 }}>🎁 무료 증정도 함께 준비돼요!</div>
+            {gifts.map((g, i) => (
+              <div key={i} style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>· {g.menu}{g.qty > 1 ? ` ${g.qty}개` : ''}</div>
+            ))}
+            <div style={{ fontSize: 12, color: '#bfe6cc', marginTop: 4 }}>주문 메뉴와 함께 카운터에서 받으세요 😊</div>
+          </div>
+        )}
 
         {/* 프로그레스 스텝 (루나 제안) */}
         <div className="status-progress">

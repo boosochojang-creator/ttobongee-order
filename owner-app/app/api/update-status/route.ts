@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     // 결제 정보를 먼저 확보 (상태변경은 payment_id/method를 건드리지 않으므로 순서 무관하지만, 취소 환불에 필요).
     const { data: ord } = await admin.from('orders')
-      .select('user_id, coupon_id, payment_method, payment_id, final_amount').eq('id', order_id).single()
+      .select('user_id, coupon_id, free_gifts, payment_method, payment_id, final_amount').eq('id', order_id).single()
 
     // 점주 취소 → 주문에 연결된 포트원 결제건 전부 환불(취소). 실패해도 상태변경은 진행(아래).
     // refundOrder는 예외를 던지지 않고 요약을 반환 → 실패 건수만 응답에 실어 점주에게 표시.
@@ -40,15 +40,19 @@ export async function POST(req: NextRequest) {
     if (ord?.user_id) {
       try { await recomputeCustomer(admin, ord.user_id) } catch {}
     }
-    // 현금결제 등 confirmPayment를 안 타는 주문: 접수(확정) 시점에 쿠폰 used 처리.
-    // 카드/전자결제는 이미 결제확정 시 used라 .eq(status,active) 가드로 no-op. 취소/대기 상태에선 처리 안 함.
+    // 접수(확정) 시점에 이 주문에 적용된 쿠폰을 used 처리.
+    // 신방식(메뉴 증정): free_gifts에 담긴 쿠폰들을 전부 소진. 구방식(단일 coupon_id)도 함께 처리(하위호환).
     const CONFIRMED = new Set(['accepted', 'cooking', 'done', 'served', 'paid'])
-    if (ord?.coupon_id && CONFIRMED.has(status)) {
-      try {
-        await admin.from('coupons')
-          .update({ status: 'used', used_at: new Date().toISOString(), used_order_id: order_id })
-          .eq('id', ord.coupon_id).eq('status', 'active')
-      } catch {}
+    if (CONFIRMED.has(status)) {
+      const giftIds = Array.isArray(ord?.free_gifts) ? (ord!.free_gifts as any[]).map(g => g?.coupon_id).filter(Boolean) : []
+      const couponIds = Array.from(new Set([...(ord?.coupon_id ? [ord.coupon_id] : []), ...giftIds]))
+      if (couponIds.length) {
+        try {
+          await admin.from('coupons')
+            .update({ status: 'used', used_at: new Date().toISOString(), used_order_id: order_id })
+            .in('id', couponIds).eq('status', 'active')
+        } catch {}
+      }
     }
     return NextResponse.json({ ok: true, refund })
   } catch (e: any) {

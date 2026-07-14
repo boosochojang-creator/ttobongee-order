@@ -19,7 +19,8 @@ type Order = {
   pickup_at?: string | null // [7] 포장 예약시각
   items?: { name_snapshot: string; qty: number; subtotal: number }[]
   member_info?: { visit_count: number; grade: string } | null
-  coupon_info?: { type: string; discount_amount: number } | null // 결제분리: 포스에서 적용할 쿠폰 안내용
+  coupon_info?: { type: string; discount_amount: number } | null // (구) 금액할인 쿠폰 안내용 — 현재 미사용
+  free_gifts?: { coupon_id: string; type: string; menu: string; qty: number }[] | null // 메뉴 증정 쿠폰(다중)
 }
 
 const won = (n: number) => n.toLocaleString() + '원'
@@ -194,7 +195,7 @@ export default function OwnerDashboard() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [bizSubTab, setBizSubTab] = useState<'daily' | 'monthly' | 'yearly'>('daily')
   const [todayReport, setTodayReport] = useState<any>(null)
-  const [issuedPopup, setIssuedPopup] = useState<{ who: string; label: string; discount: number }[] | null>(null) // 오늘 자동발급 쿠폰
+  const [issuedPopup, setIssuedPopup] = useState<{ who: string; label: string; gift: string }[] | null>(null) // 오늘 자동발급 쿠폰
   const [riders, setRiders] = useState<any[]>([])          // Phase 5-1-a 라이더
   const [riderModal, setRiderModal] = useState(false)
   const [riderForm, setRiderForm] = useState({ name: '', phone: '' })
@@ -776,10 +777,14 @@ export default function OwnerDashboard() {
         {order.items?.map((item, i) => (
           <li key={i}><strong>{item.name_snapshot}</strong> × {item.qty}</li>
         ))}
+        {/* 메뉴 증정 쿠폰 — 주방이 같이 만들도록 항목으로 표시 (0원 증정) */}
+        {Array.isArray(order.free_gifts) && order.free_gifts.map((g, i) => (
+          <li key={`gift${i}`} style={{ color: '#3ac47d', fontWeight: 700 }}>🎁 <strong>{g.menu}</strong>{g.qty > 1 ? ` × ${g.qty}` : ''} <span style={{ fontSize: 11, color: '#8ab873' }}>(무료 증정)</span></li>
+        ))}
       </ul>
       <div className="order-total">{won(order.final_amount)}</div>
-      {/* [4-4] 쿠폰 할인이 반영된 카운터 결제 금액을 계산해서 표시 (포스에서 이 금액으로 받도록) */}
-      {!PAYMENT_ENABLED && order.coupon_info && order.coupon_info.discount_amount > 0 && (
+      {/* [7] (구) 금액할인 계산 — 메뉴 증정 방식으로 대체되어 비활성(PAYMENT_ENABLED 시에만, 즉 현재 미표시). 코드 보존. */}
+      {PAYMENT_ENABLED && order.coupon_info && order.coupon_info.discount_amount > 0 && (
         <div style={{ marginTop: 4, background: '#14210f', border: '1px solid #3a5a2a', borderRadius: 8, padding: '9px 11px', lineHeight: 1.6 }}>
           <div style={{ fontSize: 12.5, fontWeight: 800, color: '#a7d98a', marginBottom: 3 }}>🎟️ {COUPON_LABEL[order.coupon_info.type] || '쿠폰'} 쿠폰 적용</div>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: '#dfeecd' }}>
@@ -1728,7 +1733,7 @@ export default function OwnerDashboard() {
               issuedPopup.map((c, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid #2a2a2a', fontSize: 14 }}>
                   <span style={{ color: '#ddd' }}>{c.who}</span>
-                  <span style={{ color: '#c8a900', fontWeight: 700 }}>{c.label} · {won(c.discount)}</span>
+                  <span style={{ color: '#c8a900', fontWeight: 700 }}>{c.label} · 🎁 {c.gift}</span>
                 </div>
               ))
             )}
