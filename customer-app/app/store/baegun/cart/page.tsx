@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import LegalFooter from '../../../lib/LegalFooter'
+import { PAYMENT_ENABLED } from '../../../lib/flags'
 
 const won = (n: number) => n.toLocaleString() + '원'
 
@@ -70,7 +71,7 @@ export default function CartPage() {
         )}
 
         <button className="btn-primary" onClick={() => router.push('/store/baegun/checkout')}>
-          결제하러 가기
+          {PAYMENT_ENABLED ? '결제하러 가기' : '주문하러 가기'}
         </button>
       </div>
       <LegalFooter />
