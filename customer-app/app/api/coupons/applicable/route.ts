@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     const { data } = await admin.from('coupons')
       .select('id, type, free_menu, free_qty, min_order_amount, usable_from')
       .eq('user_id', userId).eq('status', 'active')
+      .not('free_menu', 'is', null)   // 옛 금액할인 쿠폰(free_menu 없음)은 이력용 → 증정 제외
       .gt('expires_at', nowIso)
       .lte('min_order_amount', amount)
       .order('issued_at', { ascending: true })

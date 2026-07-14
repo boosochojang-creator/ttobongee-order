@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await admin.from('coupons')
       .select('id, type, discount_amount, free_menu, free_qty, min_order_amount, status, issued_at, usable_from, expires_at, used_at')
       .eq('user_id', userId)
+      .not('free_menu', 'is', null)   // 옛 금액할인 쿠폰은 이력용(DB 보존) → 고객 쿠폰함엔 숨김
       .order('issued_at', { ascending: false })
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
