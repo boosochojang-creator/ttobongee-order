@@ -24,7 +24,10 @@ export default function ArcadePage() {
           <button onClick={() => setPlaying(null)} style={backBtn}>← 게임 목록</button>
           <span style={{ fontWeight: 800, color: '#f0f0f0', fontSize: 15 }}>{playing.name}</span>
         </div>
-        <iframe src={`/games/${playing.file_key}.html`} title={playing.name}
+        {/* 업로드 게임(storage_url)은 스토리지에서, 기본 내장 게임은 /games/*.html 에서 로드.
+            업로드 게임은 외부 오리진이라 자연 격리되며 sandbox로 상위 접근을 추가 차단. */}
+        <iframe src={playing.storage_url || `/games/${playing.file_key}.html`} title={playing.name}
+          {...(playing.storage_url ? { sandbox: 'allow-scripts allow-pointer-lock' } : {})}
           style={{ width: '100%', height: 'calc(100vh - 54px)', border: 'none', display: 'block', background: '#000' }} />
       </main>
     )

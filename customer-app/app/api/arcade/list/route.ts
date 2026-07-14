@@ -12,7 +12,7 @@ export async function GET() {
   try {
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const { data } = await admin.from('arcade_games')
-      .select('id, name, file_key').eq('store_id', 'baegun').eq('is_active', true).order('sort_order')
+      .select('*').eq('store_id', 'baegun').eq('is_active', true).order('sort_order')
     return NextResponse.json({ ok: true, games: data || [] })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })

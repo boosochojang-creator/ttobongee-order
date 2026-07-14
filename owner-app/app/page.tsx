@@ -176,6 +176,8 @@ export default function OwnerDashboard() {
   const [tracks, setTracks] = useState<any[]>([]) // Phase 5-2-d 음악
   const [musicTitle, setMusicTitle] = useState('')
   const [musicUploading, setMusicUploading] = useState(false)
+  const [gameName, setGameName] = useState('')
+  const [gameUploading, setGameUploading] = useState(false)
   const [boardPosts, setBoardPosts] = useState<any[]>([]) // Phase 5-2-e-2 통합조회
   const [boardSource, setBoardSource] = useState('all')
   const [boardOpenId, setBoardOpenId] = useState<string | null>(null)
@@ -484,18 +486,49 @@ export default function OwnerDashboard() {
     await fetch('/api/arcade/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) }).catch(() => {})
     await loadGames()
   }
+  // 공용: 브라우저 → Supabase Storage 직접 업로드(서명 URL). Vercel 4.5MB 함수 제한 우회. 성공 시 공개 URL 반환.
+  const uploadToStorage = async (bucket: 'music' | 'games', file: File): Promise<string | null> => {
+    const ext = (file.name.split('.').pop() || '').toLowerCase()
+    const sign = await fetch('/api/storage/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucket, ext }) }).then(x => x.json()).catch(() => null)
+    if (!sign?.ok) { alert(sign?.error || '업로드 준비 실패'); return null }
+    const up = await supabase.storage.from(bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType: file.type || (bucket === 'games' ? 'text/html' : 'audio/mpeg') })
+    if (up.error) { alert('파일 업로드 실패: ' + up.error.message); return null }
+    return sign.publicUrl as string
+  }
+  // 게임 업로드 — 독립형 HTML 1개 파일을 games 버킷에 올리고 목록에 등록
+  const uploadGame = async (file: File) => {
+    if (gameUploading) return
+    if (!gameName.trim()) { alert('게임 이름을 먼저 입력해주세요'); return }
+    if (!/\.html?$/i.test(file.name)) { alert('HTML 파일(.html)만 올릴 수 있어요'); return }
+    setGameUploading(true)
+    const url = await uploadToStorage('games', file)
+    if (url) {
+      const r = await fetch('/api/arcade/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', name: gameName.trim(), storage_url: url }) }).then(x => x.json()).catch(() => null)
+      if (r?.ok) { setGameName(''); await loadGames() } else alert(r?.error || '등록 실패')
+    }
+    setGameUploading(false)
+  }
+  const deleteGame = async (id: string) => {
+    if (!confirm('이 게임을 삭제할까요?')) return
+    await fetch('/api/arcade/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id }) }).catch(() => {})
+    await loadGames()
+  }
   // ===== Phase 5-2-d: 음악 관리 =====
   const loadTracks = async () => {
     const r = await fetch('/api/music/list').then(x => x.json()).catch(() => null)
     if (r?.ok) setTracks(r.tracks)
   }
   const uploadMusic = async (file: File) => {
-    if (!musicTitle.trim() || !file || musicUploading) return
+    if (musicUploading || !file) return
+    if (!musicTitle.trim()) { alert('곡 제목을 먼저 입력해주세요'); return }
     setMusicUploading(true)
-    const fd = new FormData(); fd.append('file', file); fd.append('title', musicTitle.trim())
-    const r = await fetch('/api/music/upload', { method: 'POST', body: fd }).then(x => x.json()).catch(() => null)
+    // 브라우저가 music 버킷에 직접 업로드(4.5MB 함수 제한 우회) 후, URL만 등록
+    const url = await uploadToStorage('music', file)
+    if (url) {
+      const r = await fetch('/api/music/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: musicTitle.trim(), url }) }).then(x => x.json()).catch(() => null)
+      if (r?.ok) { setMusicTitle(''); loadTracks() } else alert(r?.error || '등록 실패')
+    }
     setMusicUploading(false)
-    if (r?.ok) { setMusicTitle(''); loadTracks() } else alert(r?.error || '업로드 실패')
   }
   const updateTrack = async (id: string, patch: any) => {
     await fetch('/api/music/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) }).catch(() => {})
@@ -1429,11 +1462,22 @@ export default function OwnerDashboard() {
       {tab === 'content' && (
         <div style={{ padding: 16 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', marginBottom: 4 }}>🎮 오락실 게임 관리</div>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 14 }}>온/오프·이름 관리 (손님 오락실 화면에 즉시 반영)</div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>게임 업로드·온/오프·이름·삭제 (손님 오락실 화면에 즉시 반영)</div>
+          {/* 게임 업로드 (독립형 HTML 파일) */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+            <input placeholder="게임 이름" value={gameName} maxLength={20} onChange={e => setGameName(e.target.value)}
+              style={{ flex: 1, minWidth: 140, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '9px 10px', color: '#eee', fontSize: 14 }} />
+            <label style={{ background: gameUploading ? '#555' : '#c8a900', color: '#111', borderRadius: 8, padding: '9px 14px', fontWeight: 700, fontSize: 13, cursor: gameUploading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+              {gameUploading ? '업로드 중…' : '＋ 게임 업로드'}
+              <input type="file" accept=".html,text/html" style={{ display: 'none' }} disabled={gameUploading}
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadGame(f); e.target.value = '' }} />
+            </label>
+          </div>
+          <div style={{ fontSize: 11, color: '#666', marginBottom: 14 }}>* 외부 파일 없이 혼자 도는 <b style={{ color: '#999' }}>독립형 HTML(.html) 한 개 파일</b>만 올려주세요.</div>
           {games.length === 0 && <div style={{ color: '#888', padding: 20, textAlign: 'center' }}>등록된 게임이 없어요</div>}
           {games.map(g => (
             <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0', borderBottom: '1px solid #2a2a2a' }}>
-              <span style={{ fontSize: 20 }}>🕹️</span>
+              <span style={{ fontSize: 20 }}>{g.storage_url ? '⬆️' : '🕹️'}</span>
               <input defaultValue={g.name} maxLength={20}
                 onBlur={e => { const v = e.target.value.trim(); if (v && v !== g.name) updateGame(g.id, { name: v }) }}
                 style={{ flex: 1, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '8px 10px', color: '#eee', fontSize: 14 }} />
@@ -1441,9 +1485,14 @@ export default function OwnerDashboard() {
                 style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${g.is_active ? '#3ac47d' : '#555'}`, background: g.is_active ? '#12301f' : '#242424', color: g.is_active ? '#3ac47d' : '#888', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                 {g.is_active ? '노출 ON' : '숨김'}
               </button>
+              {/* 업로드 게임만 삭제 가능(내장 기본 게임은 실수 삭제 방지 위해 삭제 버튼 미노출) */}
+              {g.storage_url && (
+                <button onClick={() => deleteGame(g.id)}
+                  style={{ background: '#2a1414', border: '1px solid #5c2e2e', color: '#e05555', borderRadius: 8, padding: '8px 10px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>삭제</button>
+              )}
             </div>
           ))}
-          <div style={{ fontSize: 11, color: '#666', marginTop: 12 }}>* 이름은 입력 후 다른 곳을 누르면 저장돼요. 새 게임 추가는 파일 등록이 필요해 개발쪽에서 반영합니다.</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 12 }}>* 이름은 입력 후 다른 곳을 누르면 저장돼요. ⬆️ 표시는 직접 올린 게임(삭제 가능), 🕹️는 기본 내장 게임.</div>
 
           <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', margin: '28px 0 4px' }}>🎵 음악감상실 관리</div>
           <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>곡 업로드·노출·순서·삭제 (손님 음악감상실에 반영)</div>
