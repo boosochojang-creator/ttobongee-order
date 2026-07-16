@@ -44,7 +44,7 @@ const COUPON_LABEL: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   pending: '신규', paid: '신규', cash_pending: PAYMENT_ENABLED ? '현금대기' : '접수대기',
   verification_failed: '⚠️ 결제확인필요',
-  accepted: '접수', cooking: '조리중', done: '조리완료', served: '서빙완료', canceled: '취소',
+  accepted: '접수', cooking: '조리중', done: '조리완료', served: '결제완료', canceled: '취소',
   out_for_delivery: '🛵 배달출발', delivered: '✅ 배달완료',
 }
 // [3][4][11] 매출 확정 상태는 SALES_COUNTED(단일 기준) 사용 — served 포함, 미결제(cash_pending)·미확정 제외.
@@ -185,7 +185,6 @@ export default function OwnerDashboard() {
   const [boardComments, setBoardComments] = useState<any[]>([])
   const [boardReply, setBoardReply] = useState('') // [6] 사장님 답글 입력
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
-  const [hideDone, setHideDone] = useState(false)
   const [callToast, setCallToast] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -282,7 +281,6 @@ export default function OwnerDashboard() {
         if (!seenIds.current.has(o.id) && (o.status === 'paid' || o.status === 'cash_pending' || o.status === 'verification_failed')) {
           playAlert()
           speakOrder(o.table_no, o.order_type, o.payment_method)
-          setHideDone(false)
         }
       })
     }
@@ -464,6 +462,21 @@ export default function OwnerDashboard() {
     }
     // 회원 방문/등급/누적 집계는 서버(/api/update-status)에서 서비스롤로 재계산한다.
     // (기존 익명키 클라이언트 UPDATE는 RLS로 조용히 실패하던 B-2 버그 — 제거하고 서버로 이전)
+    await loadOrders()
+  }
+
+  // A2: 테이블 결제완료 — 그 테이블의 조리완료 매장주문을 한 번에 마감(공유 closed_at=방문 1회)
+  const closeTable = async (tableNo: number) => {
+    const res = await fetch('/api/close-session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table_no: tableNo }),
+    }).catch(() => null)
+    const result = res ? await res.json().catch(() => null) : null
+    if (!result?.ok) {
+      setCallToast('⏳ 처리 중 — 결제완료가 아직 반영되지 않았어요. 잠시 후 다시 눌러주세요.')
+      setTimeout(() => setCallToast(null), 3500)
+      return
+    }
     await loadOrders()
   }
 
@@ -736,7 +749,13 @@ export default function OwnerDashboard() {
   const newOrders = orders.filter(o => ['pending', 'paid', 'cash_pending', 'verification_failed'].includes(o.status))
   const acceptedOrders = orders.filter(o => o.status === 'accepted')
   const cookingOrders = orders.filter(o => o.status === 'cooking')
-  const doneOrders = orders.filter(o => o.status === 'done' || o.status === 'out_for_delivery') // 배달출발도 완료칸에 유지
+  // A2: 칸3(결제 대기) — 매장은 테이블별 병합, 포장은 개별, 배달은 기존 흐름 유지
+  const dineDone = orders.filter(o => o.status === 'done' && o.order_type === 'dine_in')
+  const takeoutDone = orders.filter(o => o.status === 'done' && o.order_type === 'takeout')
+  const deliveryDone = orders.filter(o => (o.status === 'done' && o.order_type === 'delivery') || o.status === 'out_for_delivery')
+  // 테이블별 그룹핑 (같은 테이블의 조리완료 주문 = 하나의 결제 대기 카드)
+  const dineTables = Array.from(new Set(dineDone.map(o => o.table_no))).sort((a, b) => a - b)
+  const doneCount = dineDone.length + takeoutDone.length + deliveryDone.length
 
   const OrderCard = ({ order }: { order: Order }) => (
     <div className={`order-card ${order.status === 'pending' || order.status === 'paid' ? 'new-order' : order.status === 'cash_pending' || order.status === 'verification_failed' ? 'cash_pending' : order.status === 'accepted' ? 'accepted' : order.status === 'cooking' ? 'cooking' : 'done-card'}`}>
@@ -794,21 +813,24 @@ export default function OwnerDashboard() {
         </div>
       )}
       <div className="action-btns">
+        {/* A2: 접수+조리시작 통합 — 신규 주문을 한 번에 조리중으로 */}
         {(order.status === 'pending' || order.status === 'paid' || order.status === 'cash_pending') && (
-          <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'accepted')}>✅ 접수</button>
+          <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'cooking')}>✅ 접수 · 조리시작</button>
         )}
         {order.status === 'verification_failed' && (
           /* 금액 불일치 등 검증 실패 — 포트원 콘솔에서 실제 결제 확인 후 수동 접수 */
-          <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'accepted')}>⚠️ 확인 후 접수</button>
+          <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'cooking')}>⚠️ 확인 후 접수 · 조리시작</button>
         )}
         {order.status === 'accepted' && (
+          /* 레거시(구 접수 단계에 멈춘 주문) 복구용 */
           <button className="action-btn btn-cooking" onClick={() => updateStatus(order.id, 'cooking')}>🍳 조리시작</button>
         )}
         {order.status === 'cooking' && (
           <button className="action-btn btn-done" onClick={() => updateStatus(order.id, 'done')}>🛎️ 조리완료</button>
         )}
-        {order.status === 'done' && order.order_type !== 'delivery' && (
-          <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'served')}>✔️ 서빙완료</button>
+        {/* 포장 조리완료 → 결제완료(픽업 마감). 매장(dine_in)은 칸3 테이블 병합카드에서 일괄 결제완료 */}
+        {order.status === 'done' && order.order_type === 'takeout' && (
+          <button className="action-btn btn-accept" onClick={() => updateStatus(order.id, 'served')}>💳 결제완료</button>
         )}
         {order.status === 'done' && order.order_type === 'delivery' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
@@ -836,6 +858,46 @@ export default function OwnerDashboard() {
       </div>
     </div>
   )
+
+  // A2: 칸3 테이블 병합 카드 — 그 테이블의 조리완료 주문(1차·2차·…)을 합쳐 누적 내역·총액을 한눈에, 결제완료로 일괄 마감
+  const MergedTableCard = ({ tableNo }: { tableNo: number }) => {
+    const group = dineDone.filter(o => o.table_no === tableNo)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    // 메뉴 합산 (이름 기준)
+    const itemMap = new Map<string, number>()
+    for (const o of group) for (const it of (o.items || [])) itemMap.set(it.name_snapshot, (itemMap.get(it.name_snapshot) || 0) + it.qty)
+    // 증정 합산
+    const giftMap = new Map<string, number>()
+    for (const o of group) if (Array.isArray(o.free_gifts)) for (const g of o.free_gifts) giftMap.set(g.menu, (giftMap.get(g.menu) || 0) + (g.qty || 1))
+    const total = group.reduce((s, o) => s + (o.final_amount || 0), 0)
+    const mi = group.find(o => o.is_member && o.member_info)?.member_info
+
+    return (
+      <div className="order-card done-card">
+        <div className="order-table" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>{tableNo}번</span>
+          <span style={{ fontSize: 13, color: '#3ac47d', fontWeight: 700 }}>주문 {group.length}건 · 결제 대기</span>
+        </div>
+        {mi && (
+          <div style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[mi.grade] || '#c8a900', marginTop: 4 }}>
+            {GRADE_LABEL[mi.grade]} · {mi.visit_count}번째 방문
+          </div>
+        )}
+        <ul className="order-items-list">
+          {Array.from(itemMap.entries()).map(([name, qty], i) => (
+            <li key={i}><strong>{name}</strong> × {qty}</li>
+          ))}
+          {Array.from(giftMap.entries()).map(([menu, qty], i) => (
+            <li key={`g${i}`} style={{ color: '#3ac47d', fontWeight: 700 }}>🎁 <strong>{menu}</strong>{qty > 1 ? ` × ${qty}` : ''} <span style={{ fontSize: 11, color: '#8ab873' }}>(무료 증정)</span></li>
+          ))}
+        </ul>
+        <div className="order-total">누적 {won(total)}</div>
+        <div className="action-btns">
+          <button className="action-btn btn-accept" onClick={() => closeTable(tableNo)}>💳 결제완료</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -933,19 +995,15 @@ export default function OwnerDashboard() {
           </div>
           <div className="kanban-col">
             <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
-              <h3 style={{ color: '#3ac47d', margin:0 }}>🟢 완료 ({doneOrders.length})</h3>
-              {doneOrders.length > 0 && (
-                <button
-                  onClick={() => setHideDone(true)}
-                  style={{fontSize:12, color:'#666', background:'#242424',
-                    border:'1px solid #333', borderRadius:8, padding:'4px 10px', cursor:'pointer'}}
-                >
-                  화면 정리
-                </button>
-              )}
+              <h3 style={{ color: '#3ac47d', margin:0 }}>🟢 결제 대기 ({doneCount})</h3>
             </div>
-            {!hideDone && doneOrders.map(o => <OrderCard key={o.id} order={o} />)}
-            {!doneOrders.length && <div className="empty">완료 없음</div>}
+            <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>테이블별로 누적 주문이 모여요. 결제 받으면 결제완료를 눌러 마감하세요.</div>
+            {/* 매장: 테이블별 병합 카드 */}
+            {dineTables.map(t => <MergedTableCard key={`t${t}`} tableNo={t} />)}
+            {/* 포장·배달: 개별 카드 */}
+            {takeoutDone.map(o => <OrderCard key={o.id} order={o} />)}
+            {deliveryDone.map(o => <OrderCard key={o.id} order={o} />)}
+            {!doneCount && <div className="empty">결제 대기 없음</div>}
           </div>
         </div>
         </>

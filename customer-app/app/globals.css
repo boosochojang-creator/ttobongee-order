@@ -115,13 +115,13 @@ a { text-decoration: none; color: inherit; }
 .cart-fab:active { transform: translateX(-50%) scale(0.97); }
 .cart-fab.hidden { display: none; }
 
-/* 직원 호출 버튼 (루나 제안) */
+/* 직원 호출 버튼 (루나 제안) — UX A1: 우측 +담기 버튼 가림 방지 위해 좌측으로 이동 */
 .call-fab {
   position: fixed;
   bottom: 90px;
-  right: 16px;
-  width: 52px;
-  height: 52px;
+  left: 16px;
+  width: 56px;
+  height: 56px;
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 50%;
@@ -218,12 +218,12 @@ a { text-decoration: none; color: inherit; }
   flex-shrink: 0;
 }
 .qty-ctrl button {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--bg3);
   color: var(--text);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   display: flex;
   align-items: center;

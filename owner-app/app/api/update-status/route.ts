@@ -35,6 +35,12 @@ export async function POST(req: NextRequest) {
       .eq('id', order_id)
     if (error) throw error
 
+    // A2: 종료(결제완료/배달완료) 시점 = 방문(세션) 마감. closed_at 기록(방문 카운트 기준).
+    // 컬럼 미존재 마이그레이션 전에도 상태변경이 막히지 않게 별도 best-effort.
+    if (status === 'served' || status === 'delivered') {
+      try { await admin.from('orders').update({ closed_at: new Date().toISOString() }).eq('id', order_id) } catch {}
+    }
+
     // 상태 반영 후 회원이면 CRM 집계 재계산 (모든 결제수단이 이 관문을 지나므로 단일 갱신 지점).
     // 재계산 실패가 상태변경을 막지 않도록 격리 — 멱등이라 다음 상태변경 때 다시 정정된다.
     if (ord?.user_id) {

@@ -2,6 +2,7 @@
 // Phase 5-2-b: 허브 화면 (오락실/음악감상실/자유게시판 3분할 진입)
 import { useRouter } from 'next/navigation'
 import BackToOrder from '../../../lib/BackToOrder'
+import PWAReinstallButton from '../../../lib/PWAReinstallButton'
 
 const CARDS = [
   { key: 'arcade', emoji: '🎮', title: '오락실', desc: '추억의 게임 한 판', href: '/store/baegun/arcade' },
@@ -29,6 +30,9 @@ export default function HubPage() {
               <span style={{ marginLeft: 'auto', color: '#666', fontSize: 22 }}>›</span>
             </button>
           ))}
+        </div>
+        <div style={{ marginTop: 22 }}>
+          <PWAReinstallButton />
         </div>
       </div>
     </main>

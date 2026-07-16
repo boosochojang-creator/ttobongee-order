@@ -38,7 +38,6 @@ export default function MenuPage() {
   const { addItem, updateQty, items, totalQty, finalAmount, tableNo, orderType, isMember, phone, nickname, grade, visitCount } = useCart()
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [activeCat, setActiveCat] = useState('세트메뉴')
-  const [showCall, setShowCall] = useState(false)
   const [showLoginBanner, setShowLoginBanner] = useState(!isMember)
   // phone_member 이상(영구 가입 기록 보유)에게는 회원가입 문구를 절대 다시 안 띄움
   // (isMember는 3시간짜리 장바구니 상태라, 시간이 지난 회원에게 가입 배너가 재노출되던 허점 보완)
@@ -271,13 +270,7 @@ export default function MenuPage() {
       {/* 법적 고지 푸터 */}
       <LegalFooter />
 
-      {/* 직원 호출 버튼 */}
-      <button className="call-fab" onClick={() => setShowCall(true)} style={{
-        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, width:60
-      }}>
-        🔔
-        <span style={{fontSize:10, color:'#aaa'}}>직원호출</span>
-      </button>
+      {/* 직원호출·허브는 전역 speed-dial(GlobalActionFab)로 통합 — 우측 +담기 버튼 가림 방지 */}
 
       {/* 장바구니 플로팅 버튼 — [2] 영업 준비 중이면 숨김(주문 불가) */}
       {totalQty > 0 && !storeClosed && (
@@ -287,37 +280,6 @@ export default function MenuPage() {
         </button>
       )}
 
-      {/* 직원 호출 시트 */}
-      {showCall && (
-        <div className="overlay" onClick={() => setShowCall(false)}>
-          <div className="sheet" onClick={e => e.stopPropagation()}>
-            <div className="sheet-title">무엇이 필요하세요?</div>
-            {['💧 물 주세요', '🥗 치킨무 추가', '🧻 물티슈 주세요', '👋 직원 직접 호출'].map(t => (
-              <button key={t} className="sheet-btn" onClick={() => {
-                try {
-                  // eslint-disable-next-line
-                  const textOnly = t.replace(new RegExp('[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]', 'gu'), '').trim()
-                  const u = new SpeechSynthesisUtterance(`${tableNo}번 테이블 ${textOnly} 호출입니다`)
-                  u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.9
-                  window.speechSynthesis.speak(u)
-                  const ctx = new AudioContext()
-                  ;[880, 1100].forEach((freq, i) => {
-                    const osc = ctx.createOscillator()
-                    const g = ctx.createGain()
-                    osc.connect(g); g.connect(ctx.destination)
-                    osc.frequency.value = freq
-                    g.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.2)
-                    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.15)
-                    osc.start(ctx.currentTime + i * 0.2)
-                    osc.stop(ctx.currentTime + i * 0.2 + 0.2)
-                  })
-                } catch {}
-                setShowCall(false)
-              }}>{t}</button>
-            ))}
-          </div>
-        </div>
-      )}
     </main>
   )
 }

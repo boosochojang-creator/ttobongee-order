@@ -4,7 +4,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 
-type Status = 'pending' | 'paid' | 'cash_pending' | 'accepted' | 'cooking' | 'done' | 'canceled'
+type Status = 'pending' | 'paid' | 'cash_pending' | 'accepted' | 'cooking' | 'done' | 'served' | 'canceled'
+
+type SessionItem = { name: string; qty: number }
 
 const STEPS: { key: Status[]; icon: string; label: string; desc: string }[] = [
   { key: ['pending', 'paid', 'cash_pending'], icon: '📋', label: '주문 접수', desc: '주방에서 확인 중이에요' },
@@ -35,6 +37,8 @@ function StatusContent() {
   const [status, setStatus] = useState<Status>('pending')
   const [cancelReason, setCancelReason] = useState('') // 점주가 선택한 거절 사유 (신규B)
   const [gifts, setGifts] = useState<{ menu: string; qty: number }[]>([]) // 이 주문의 무료 증정 메뉴
+  // A2: 결제완료(served) 시 이 테이블 세션의 누적 주문내역 + 총액
+  const [session, setSession] = useState<{ items: SessionItem[]; gifts: SessionItem[]; total: number; orderCount: number } | null>(null)
   const [fortune] = useState(() => FORTUNES[Math.floor(Math.random() * FORTUNES.length)])
   const prevStatus = useRef<Status | null>(null)
   const [receiptPhone, setReceiptPhone] = useState(memberPhone)
@@ -167,6 +171,50 @@ function StatusContent() {
     }
   }, [status])
 
+  // A2: 결제완료(served) 되면 이 테이블 세션의 1차~현재 누적 주문내역과 총액을 불러온다.
+  useEffect(() => {
+    if (status !== 'served' || !orderId || session) return
+    let alive = true
+    ;(async () => {
+      const agg = (rows: any[]) => {
+        const itemMap = new Map<string, number>()
+        const giftMap = new Map<string, number>()
+        let total = 0
+        for (const r of rows) {
+          total += r.final_amount || 0
+          for (const it of (r.order_items || [])) itemMap.set(it.name_snapshot, (itemMap.get(it.name_snapshot) || 0) + it.qty)
+          if (Array.isArray(r.free_gifts)) for (const g of r.free_gifts) giftMap.set(g.menu, (giftMap.get(g.menu) || 0) + (g.qty || 1))
+        }
+        return {
+          items: Array.from(itemMap.entries()).map(([name, qty]) => ({ name, qty })),
+          gifts: Array.from(giftMap.entries()).map(([name, qty]) => ({ name, qty })),
+          total, orderCount: rows.length,
+        }
+      }
+      // 같은 테이블·같은 결제세션(closed_at) 주문 전체 (마이그레이션 전이면 이 주문 단건으로 폴백)
+      try {
+        const self = await supabase.from('orders')
+          .select('table_no, order_type, closed_at, final_amount, free_gifts, order_items(name_snapshot, qty)')
+          .eq('id', orderId).single()
+        if (self.error || !self.data) throw self.error || new Error('no self')
+        const s: any = self.data
+        if (s.closed_at && s.order_type === 'dine_in') {
+          const sib = await supabase.from('orders')
+            .select('final_amount, free_gifts, order_items(name_snapshot, qty)')
+            .eq('table_no', s.table_no).eq('closed_at', s.closed_at)
+          if (!sib.error && sib.data?.length) { if (alive) setSession(agg(sib.data)); return }
+        }
+        if (alive) setSession(agg([s]))
+      } catch {
+        const one = await supabase.from('orders')
+          .select('final_amount, free_gifts, order_items(name_snapshot, qty)')
+          .eq('id', orderId).single()
+        if (!one.error && one.data && alive) setSession(agg([one.data]))
+      }
+    })()
+    return () => { alive = false }
+  }, [status, orderId, session])
+
   const currentStepIdx = STEPS.findIndex(s => s.key.includes(status))
 
   const stepState = (idx: number): 'done' | 'active' | 'waiting' => {
@@ -189,6 +237,49 @@ function StatusContent() {
           불편을 드려 죄송합니다.<br />직원에게 문의해주세요.
         </p>
         <button className="btn-primary" onClick={() => router.push('/store/baegun/menu')}>
+          다시 주문하기
+        </button>
+      </div>
+      <LegalFooter />
+    </main>
+  )
+
+  // A2: 결제완료(세션 마감) — 1차부터 누적된 전체 주문내역 + 총액
+  if (status === 'served') return (
+    <main>
+      <div className="top-bar"><span className="logo">🍗 또봉이통닭</span></div>
+      <div className="status-page">
+        <div style={{ textAlign: 'center', marginBottom: 8 }}>
+          <div style={{ fontSize: 44, marginBottom: 8 }}>🧾</div>
+          <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 4 }}>이용해주셔서 감사합니다!</h2>
+          <p style={{ color: 'var(--text2)', fontSize: 14 }}>오늘 주문하신 전체 내역이에요</p>
+        </div>
+        <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 12, padding: '16px', marginTop: 12 }}>
+          {session ? (
+            <>
+              {session.orderCount > 1 && (
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>주문 {session.orderCount}건 합산</div>
+              )}
+              {session.items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '6px 0', color: '#eee' }}>
+                  <span>{it.name}</span><span style={{ color: '#aaa' }}>× {it.qty}</span>
+                </div>
+              ))}
+              {session.gifts.map((g, i) => (
+                <div key={`g${i}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, padding: '6px 0', color: '#3ac47d', fontWeight: 700 }}>
+                  <span>🎁 {g.name}{g.qty > 1 ? ` × ${g.qty}` : ''}</span><span>무료</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px solid #333', marginTop: 10, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#ccc' }}>총 결제금액</span>
+                <span style={{ fontSize: 22, fontWeight: 900, color: '#FFD700' }}>{session.total.toLocaleString()}원</span>
+              </div>
+            </>
+          ) : (
+            <div style={{ color: '#888', fontSize: 14, textAlign: 'center', padding: 12 }}>내역 불러오는 중…</div>
+          )}
+        </div>
+        <button className="btn-primary" style={{ marginTop: 24 }} onClick={() => router.push('/store/baegun/menu')}>
           다시 주문하기
         </button>
       </div>

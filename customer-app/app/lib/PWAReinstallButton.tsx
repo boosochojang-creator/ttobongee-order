@@ -1,14 +1,12 @@
 'use client'
-// Phase 5-2-b: 앱 재설치 버튼 (상시 노출). 안드로이드=네이티브 설치 프롬프트, iOS=공유→홈화면 안내 모달.
+// Phase 5-2-b → UX A1: 앱 재설치 안내를 허브 화면 인라인 카드로 이동
+// (메뉴 플로팅에서 제거 — 담기 버튼 가림/신규 손님 뜬금없음 해소. "이미 설치했다 지운 사람"은
+//  브라우저에서 판별 불가하므로, 손님이 스스로 들어온 허브에 맥락 있는 안내로 배치)
 import { useState } from 'react'
-import { usePathname } from 'next/navigation'
 import { getDeferredPrompt, clearDeferredPrompt, isIOS, markInstalled } from './pwaInstall'
 
 export default function PWAReinstallButton() {
-  const pathname = usePathname()
   const [guide, setGuide] = useState(false)
-  // 주문 대기 주요 화면에 상시 노출 (몰입형 결제/게임 화면 제외)
-  if (pathname !== '/store/baegun/menu' && pathname !== '/store/baegun/table') return null
 
   const ios = isIOS()
   const onClick = async () => {
@@ -30,14 +28,16 @@ export default function PWAReinstallButton() {
       <button
         onClick={onClick}
         style={{
-          position: 'fixed', bottom: 238, right: 16, zIndex: 200,
-          display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px',
-          background: '#1c1c1c', border: '1.5px solid #444', borderRadius: 24,
-          cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+          padding: '16px 18px', background: '#141414', border: '1px dashed #555',
+          borderRadius: 14, cursor: 'pointer', textAlign: 'left',
         }}
       >
-        <span style={{ fontSize: 16, lineHeight: 1 }}>📲</span>
-        <span style={{ fontSize: 12, color: '#aaa', whiteSpace: 'nowrap' }}>앱 다시 설치</span>
+        <span style={{ fontSize: 26, lineHeight: 1 }}>📲</span>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#e6e6e6' }}>또봉이 홈 화면에 추가하기</div>
+          <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>다음엔 QR 없이 바로 들어와요 · 실수로 지웠다면 여기서 다시 설치</div>
+        </div>
       </button>
 
       {guide && (
@@ -45,7 +45,7 @@ export default function PWAReinstallButton() {
           style={{ position: 'fixed', inset: 0, zIndex: 320, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()}
             style={{ width: '100%', maxWidth: 340, background: '#1c1c1c', border: '1px solid #c8a900', borderRadius: 16, padding: '22px 18px' }}>
-            <div style={{ fontSize: 16, fontWeight: 900, color: '#f0f0f0', marginBottom: 12 }}>📲 앱 다시 설치하기</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: '#f0f0f0', marginBottom: 12 }}>📲 홈 화면에 추가하기</div>
             {ios ? (
               <div style={{ fontSize: 14, color: '#ddd', lineHeight: 1.9 }}>
                 아이폰(Safari)에서는:<br />
