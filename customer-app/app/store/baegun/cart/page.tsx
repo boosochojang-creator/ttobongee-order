@@ -58,15 +58,15 @@ export default function CartPage() {
             </div>
           )}
           <div className="price-row final">
-            <span>결제금액</span><span>{won(finalAmount)}</span>
+            <span>{PAYMENT_ENABLED ? '결제금액' : '예상 금액'}</span><span>{won(finalAmount)}</span>
           </div>
         </div>
 
         {!isMember && (
           <div className="member-banner" style={{ marginBottom: 16 }}>
             <span className="gift">🎁</span>
-            <p><strong>{won(Math.round(totalAmount * 0.05))} 절약</strong>할 수 있어요!</p>
-            <button className="link" onClick={() => router.push('/store/baegun/login')}>5% 할인받기</button>
+            <p><strong>튀김만두 5개 무료 증정</strong> 받을 수 있어요!</p>
+            <button className="link" onClick={() => router.push('/store/baegun/login')}>무료 받기</button>
           </div>
         )}
 

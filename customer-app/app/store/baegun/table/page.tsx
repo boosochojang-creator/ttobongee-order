@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { greetingLabel } from '../../../lib/memberState'
@@ -28,12 +28,22 @@ function stripEmoji(text: string) {
 export default function TablePage() {
   const router = useRouter()
   const { setTableNo, setOrderType, clearItems, isMember, phone, nickname, grade, visitCount } = useCart()
-  const [showPopup, setShowPopup] = useState(false)
   const [greetingText, setGreetingText] = useState<string | null>(null)
+  const memberRef = useRef({ isMember, phone, nickname })
+  memberRef.current = { isMember, phone, nickname }
 
+  // C5: 전체화면 웰컴 팝업이 자리선택을 덮던 문제 → 자리 즉시 노출. 환영 인사는 비차단 토스트로(세션 1회, 하이드레이션 후).
   useEffect(() => {
-    const closed = sessionStorage.getItem('music-popup-closed')
-    if (!closed) setShowPopup(true)
+    if (sessionStorage.getItem('welcomed-session')) return
+    sessionStorage.setItem('welcomed-session', '1')
+    const t = setTimeout(() => {
+      const mem = memberRef.current
+      showGreetingToast(mem.isMember && mem.phone
+        ? `${greetingLabel(mem.nickname, mem.phone)}님, 다시 오셨군요! 반갑습니다`
+        : '또봉이통닭 백운역점에 오신 것을 환영합니다')
+    }, 600)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function speakGreeting(text: string) {
@@ -49,18 +59,6 @@ export default function TablePage() {
     setGreetingText(text)
     speakGreeting(text)
     setTimeout(() => setGreetingText(null), 3000)
-  }
-
-  function closePopup() {
-    sessionStorage.setItem('music-popup-closed', '1')
-    setShowPopup(false)
-    // 배경음악 자동재생 제거 (5-2-b) — 음악은 음악감상실에서만 재생
-
-    if (isMember && phone) {
-      showGreetingToast(`${greetingLabel(nickname, phone)}님, 다시 오셨군요! 반갑습니다`)
-    } else {
-      showGreetingToast('또봉이통닭 백운역점에 오신 것을 환영합니다')
-    }
   }
 
   function beep() {
@@ -110,56 +108,6 @@ export default function TablePage() {
           animation: 'fadeIn 0.3s ease',
         }}>
           {greetingText}
-        </div>
-      )}
-
-      {/* 배경음악 팝업 */}
-      {showPopup && (
-        <div style={{
-          position:'fixed', inset:0, background:'rgba(0,0,0,0.85)',
-          zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center'
-        }}>
-          <div style={{
-            background:'#1c1c1c', borderRadius:'20px 20px 0 0',
-            padding:'28px 24px 40px', width:'100%', maxWidth:'480px',
-            borderTop:'2px solid #c8a900'
-          }}>
-            <div style={{fontSize:22, fontWeight:900, color:'#c8a900', marginBottom:10}}>
-              🍗 또봉이통닭에 오신 걸 환영해요!
-            </div>
-            <div style={{fontSize:15, color:'#ccc', lineHeight:1.8, marginBottom:20}}>
-              {isMember ? (
-                <><span style={{color:'#FFD700', fontWeight:700}}>오늘도 최고의 바삭함</span>으로 보답하겠습니다 😊</>
-              ) : (
-                <>
-                  주문 전 <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
-                  <span style={{color:'#FF6B00', fontWeight:700}}>5% 할인</span> 혜택을 받으세요!<br/>
-                  <span style={{color:'#FFD700', fontWeight:700}}>오늘도 최고의 바삭함</span>으로 보답하겠습니다 😊
-                </>
-              )}
-            </div>
-            <button
-              onClick={closePopup}
-              style={{
-                width:'100%', padding:'16px',
-                background:'#c8a900', color:'#111',
-                fontSize:16, fontWeight:700,
-                borderRadius:12, border:'none', cursor:'pointer'
-              }}
-            >
-              확인하고 주문하러 가기 🎵
-            </button>
-            <button
-              onClick={closePopup}
-              style={{
-                width:'100%', marginTop:10, padding:'12px',
-                background:'none', color:'#666',
-                fontSize:13, border:'none', cursor:'pointer'
-              }}
-            >
-              오늘 하루 닫기
-            </button>
-          </div>
         </div>
       )}
 
@@ -213,8 +161,8 @@ export default function TablePage() {
           ) : (
             <>🎁 주문 전{' '}
               <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
-              <span style={{color:'#FF6B00', fontWeight:700}}>5% 추가 할인</span>{' '}
-              혜택도 놓치지 마세요!<br/>
+              <span style={{color:'#FF6B00', fontWeight:700}}>튀김만두 5개 무료 증정</span>{' '}
+              받으세요!<br/>
               오늘도{' '}
               <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다.
             </>

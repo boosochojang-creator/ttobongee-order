@@ -193,11 +193,13 @@ export default function MenuPage() {
           display:'flex', flexDirection:'column', gap:8
         }}>
           <div style={{fontSize:20, fontWeight:900, color:'#c8a900'}}>
-            🎁 단골 등록하고 5% 할인받기
+            🎁 단골 등록하고 튀김만두 5개 무료 받기
           </div>
           <div style={{fontSize:15, color:'#ccc', lineHeight:1.7}}>
             전화번호 3초 입력으로 끝!<br/>
-            오늘 주문부터 <span style={{color:'#FF6B00', fontWeight:700}}>바로 적용</span>됩니다
+            {storeClosed
+              ? <>다음 방문 때 <span style={{color:'#FF6B00', fontWeight:700}}>바로 사용</span>할 수 있어요</>
+              : <>가입하면 <span style={{color:'#FF6B00', fontWeight:700}}>무료 증정 쿠폰</span>을 드려요</>}
           </div>
           <div style={{display:'flex', gap:8, marginTop:4}}>
             <button
@@ -205,7 +207,7 @@ export default function MenuPage() {
                 fontWeight:700, fontSize:15, borderRadius:10, border:'none', cursor:'pointer'}}
               onClick={() => router.push('/store/baegun/login')}
             >
-              할인받고 주문하기
+              무료 받고 주문하기
             </button>
             <button
               style={{padding:'12px 16px', background:'none', color:'#666',

@@ -169,8 +169,11 @@ a { text-decoration: none; color: inherit; }
 .cat-tabs::-webkit-scrollbar { display: none; }
 .cat-tabs button {
   white-space: nowrap;
-  padding: 8px 14px;
-  border-radius: 20px;
+  padding: 8px 16px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 22px;
   background: var(--bg3);
   color: var(--text2);
   font-size: 13px;
@@ -218,8 +221,8 @@ a { text-decoration: none; color: inherit; }
   flex-shrink: 0;
 }
 .qty-ctrl button {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: var(--bg3);
   color: var(--text);
@@ -255,7 +258,7 @@ a { text-decoration: none; color: inherit; }
 .cart-item-info { flex: 1; }
 .cart-item-name { font-size: 15px; font-weight: 600; }
 .cart-item-price { font-size: 13px; color: var(--text2); margin-top: 3px; }
-.cart-delete { color: var(--text2); font-size: 20px; background: none; }
+.cart-delete { color: var(--text2); font-size: 20px; background: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
 .price-summary {
   background: var(--bg2);

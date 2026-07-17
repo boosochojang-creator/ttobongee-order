@@ -63,7 +63,7 @@ const REJECT_REASONS = [
   '영업 마감 임박',
   '주문 폭주로 조리 지연',
   '해당 메뉴 일시 품절',
-  '기타 (직원이 전화로 안내)',
+  '기타',
 ]
 // 5-1 보류(배달대행 API 확인 중): 라이더 UI 숨김. true로 바꾸면 라이더 관리/배차 UI 즉시 복원.
 // 코드·API·DB(riders/018)는 그대로 유지 — 화면 노출만 차단.
@@ -964,7 +964,7 @@ export default function OwnerDashboard() {
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 18, fontWeight: 900, color: '#e05a4a', marginBottom: 6 }}>🚫 주문 거절</div>
             <div style={{ fontSize: 13, color: '#aaa', marginBottom: 18, lineHeight: 1.7 }}>
-              거절 사유를 선택하면 고객 화면에 안내돼요.<br />전자결제(카드·카카오·토스)는 즉시 포트원 환불됩니다.
+              거절 사유를 선택하면 고객 화면에 안내돼요.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {REJECT_REASONS.map(reason => (

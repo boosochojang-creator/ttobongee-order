@@ -390,17 +390,12 @@ export default function CheckoutPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 700, marginTop: 8 }}>
               <span>{PAYMENT_ENABLED ? '최종 결제' : '예상 금액'}</span><span style={{ color: 'var(--gold)' }}>{won(payTotal)}</span>
             </div>
-            {/* 무료 증정 강조 배너 (다중 쿠폰이면 전부 함께 증정) */}
+            {/* 무료 증정 안내 배너 — 증정 목록은 위 요약에 이미 있으므로 재나열하지 않고 안내만(중복 제거) */}
             {gifts.length > 0 && (
-              <div style={{ marginTop: 12, background: 'linear-gradient(135deg, rgba(58,196,125,0.18), rgba(200,169,0,0.10))', border: '2px solid #3ac47d', borderRadius: 12, padding: '14px 16px', boxShadow: '0 0 0 3px rgba(58,196,125,0.12)' }}>
-                <div style={{ fontSize: 15, fontWeight: 900, color: '#8ef0b8', marginBottom: 5 }}>🎁 무료 증정 쿠폰이 적용됐어요!</div>
-                {gifts.map(g => (
-                  <div key={g.id} style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.6 }}>
-                    · {g.menu}{g.qty > 1 ? ` ${g.qty}개` : ''} <span style={{ color: '#FFD700' }}>무료 증정</span>
-                  </div>
-                ))}
-                <div style={{ fontSize: 13, color: '#bfe6cc', marginTop: 6, lineHeight: 1.6 }}>
-                  주문하면 위 메뉴가 <b>주문과 함께 무료로 나가요</b>. (카운터에서 함께 받으세요)
+              <div style={{ marginTop: 12, background: 'linear-gradient(135deg, rgba(58,196,125,0.18), rgba(200,169,0,0.10))', border: '2px solid #3ac47d', borderRadius: 12, padding: '12px 14px', boxShadow: '0 0 0 3px rgba(58,196,125,0.12)' }}>
+                <div style={{ fontSize: 14, fontWeight: 900, color: '#8ef0b8', marginBottom: 3 }}>🎁 무료 증정 쿠폰이 적용됐어요!</div>
+                <div style={{ fontSize: 13, color: '#bfe6cc', lineHeight: 1.6 }}>
+                  위 <b style={{ color: '#fff' }}>증정 메뉴</b>가 주문과 함께 <b>무료로 나가요</b>. (카운터에서 함께 받으세요)
                 </div>
               </div>
             )}
