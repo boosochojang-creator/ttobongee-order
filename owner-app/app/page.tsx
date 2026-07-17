@@ -663,23 +663,16 @@ export default function OwnerDashboard() {
   }
 
   const closeBusiness = async () => {
-    const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
-    const { data: raw } = await supabase.from('orders')
-      .select('final_amount, payment_method').eq('store_id', 'baegun').in('status', SALES_COUNTED)
-      .gte('created_at', `${today}T00:00:00+09:00`)
-    const list = raw || []
-    const total = list.reduce((s: number, o: any) => s + o.final_amount, 0)
-    const byM = (m: string) => list.filter((o: any) => o.payment_method === m).reduce((s: number, o: any) => s + o.final_amount, 0)
-    const count = list.length
-    await supabase.from('daily_reports').upsert({
-      store_id: 'baegun', date: today, end_time: new Date().toISOString(),
-      total_sales: total, card_sales: byM('card'), cash_sales: byM('cash'),
-      kakao_sales: byM('kakao'), toss_sales: byM('toss'),
-      order_count: count, avg_order_value: count > 0 ? Math.round(total / count) : 0,
-    }, { onConflict: 'store_id,date' })
-    // [2] 영업마감 → 고객 화면 즉시 '영업 준비 중'으로 (주문/결제 차단). 반영 확정 실패 시 점주에게 경고.
-    const okClosed = await applyStoreOpen(false)
-    if (!okClosed) alert('⚠️ 고객 화면 "영업 마감" 반영에 실패했어요.\n인터넷 연결을 확인하고 다시 "영업 마감"을 눌러주세요.\n(반영 전까지 고객이 계속 주문할 수 있어요)')
+    // 확인1 후속: 마감 로직을 서버 공용 엔드포인트로 일원화(자동마감과 100% 동일 처리).
+    // 열린 영업일을 타깃해 매출집계·daily_reports 기록·is_open=false 를 한 번에 처리한다.
+    const res = await fetch('/api/close-business', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: false }),
+    }).catch(() => null)
+    const body = res ? await res.json().catch(() => null) : null
+    if (!body?.ok) {
+      alert('⚠️ 영업 마감 처리에 실패했어요.\n인터넷 연결을 확인하고 다시 "영업 마감"을 눌러주세요.\n(반영 전까지 고객이 계속 주문할 수 있어요)')
+      return
+    }
     setClosingConfirm(false)
     await loadTodayReport()
   }
