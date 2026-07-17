@@ -10,17 +10,17 @@ import { fetchStoreClosed } from '../../../lib/storeStatus'
 
 type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; sold_out?: boolean; image_url?: string | null }
 
-const CATS = ['세트메뉴', '치킨류', '안주류', '음료/주류']
+const CATS = ['세트메뉴', '치킨류', '안주류', '음료', '주류']
 const CAT_ICONS: Record<string, string> = {
   '세트메뉴': '🔥',
   '치킨류': '🍗',
   '안주류': '🥘',
-  '음료/주류': '🍺',
+  '음료': '🥤',
+  '주류': '🍺',
+  '음료/주류': '🍺', // 구 카테고리 폴백(마이그레이션 전 데이터 안전)
 }
-// v1.4: 화면 표시용 카테고리명/아이콘 — DB category 값('음료/주류')은 그대로 두고 화면 표기만 "음료"로 변경
-const CAT_DISPLAY: Record<string, { label: string; icon: string }> = {
-  '음료/주류': { label: '음료', icon: '🥤' },
-}
+// 표시명/아이콘 오버라이드 — 현재는 카테고리명이 곧 표시명(음료/주류 분리 완료)
+const CAT_DISPLAY: Record<string, { label: string; icon: string }> = {}
 // v1.4: 이미지 없이 빈 썸네일로 표시할 상품명
 const NO_IMAGE_NAMES = ['음료(소)', '음료(대)']
 const FORTUNES = [

@@ -421,7 +421,11 @@ export default function OwnerDashboard() {
       .eq('store_id', 'baegun')
     if (!users) return
 
-    // 선호메뉴: 완료 주문의 order_items에서 회원별 최다 주문 메뉴(수량 기준) — favorite_menu_id는 integer라 미사용, 조회 시 계산
+    // 선호메뉴: 완료 주문의 order_items에서 회원별 최다 주문 '음식' 메뉴(수량 기준). favorite_menu_id는 integer라 미사용, 조회 시 계산.
+    // 음료/주류 카테고리는 선호메뉴 후보에서 제외 — 음식류(세트메뉴/치킨류/안주류)만 반영.
+    const { data: menuCats } = await supabase.from('menus').select('name, category').eq('store_id', 'baegun')
+    const DRINK_CATS = new Set(['음료', '주류', '음료/주류'])
+    const drinkNames = new Set((menuCats || []).filter(m => DRINK_CATS.has(m.category)).map(m => m.name))
     const { data: cntOrders } = await supabase.from('orders')
       .select('id, user_id').in('status', CRM_COUNTED).not('user_id', 'is', null)
     const orderUser = new Map((cntOrders || []).map(o => [o.id, o.user_id]))
@@ -432,6 +436,7 @@ export default function OwnerDashboard() {
         .select('order_id, name_snapshot, qty').in('order_id', orderIds)
       for (const it of items || []) {
         const uid = orderUser.get(it.order_id); if (!uid) continue
+        if (drinkNames.has(it.name_snapshot)) continue // 음료/주류 제외
         ;(favByUser[uid] ||= {})[it.name_snapshot] = (favByUser[uid][it.name_snapshot] || 0) + (it.qty || 0)
       }
     }
@@ -1056,7 +1061,7 @@ export default function OwnerDashboard() {
         const inactiveMenus = menus.filter(m => m.is_available === false)
 
         // B3: 카테고리별 그룹 + 상단 점프 (평평한 나열식 → 원하는 메뉴 빠르게 찾기)
-        const CAT_ORDER = ['세트메뉴', '치킨류', '안주류', '음료/주류']
+        const CAT_ORDER = ['세트메뉴', '치킨류', '안주류', '음료', '주류']
         const byCat: Record<string, any[]> = {}
         for (const m of activeMenus) { (byCat[m.category] = byCat[m.category] || []).push(m) }
         const activeCats = [
@@ -1173,7 +1178,7 @@ export default function OwnerDashboard() {
                     onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}
                     style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: 8, padding: '10px 12px', fontSize: 14 }}
                   >
-                    {['세트메뉴', '치킨류', '안주류', '음료/주류'].map(c => <option key={c}>{c}</option>)}
+                    {['세트메뉴', '치킨류', '안주류', '음료', '주류'].map(c => <option key={c}>{c}</option>)}
                   </select>
                   <input
                     placeholder="메뉴명"
