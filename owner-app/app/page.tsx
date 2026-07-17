@@ -508,11 +508,11 @@ export default function OwnerDashboard() {
     await loadGames()
   }
   // 공용: 브라우저 → Supabase Storage 직접 업로드(서명 URL). Vercel 4.5MB 함수 제한 우회. 성공 시 공개 URL 반환.
-  const uploadToStorage = async (bucket: 'music' | 'games', file: File): Promise<string | null> => {
+  const uploadToStorage = async (bucket: 'music' | 'games' | 'menu-images', file: File): Promise<string | null> => {
     const ext = (file.name.split('.').pop() || '').toLowerCase()
     const sign = await fetch('/api/storage/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucket, ext }) }).then(x => x.json()).catch(() => null)
     if (!sign?.ok) { alert(sign?.error || '업로드 준비 실패'); return null }
-    const up = await supabase.storage.from(bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType: file.type || (bucket === 'games' ? 'text/html' : 'audio/mpeg') })
+    const up = await supabase.storage.from(bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType: file.type || (bucket === 'games' ? 'text/html' : bucket === 'menu-images' ? 'image/jpeg' : 'audio/mpeg') })
     if (up.error) { alert('파일 업로드 실패: ' + up.error.message); return null }
     return sign.publicUrl as string
   }
@@ -598,13 +598,23 @@ export default function OwnerDashboard() {
     await loadMenus()
   }
 
+  // B3: menus는 anon write가 RLS로 차단 → 서비스롤 API(/api/menu) 경유. 실패 시 점주에게 안내.
+  const menuApi = async (payload: Record<string, any>): Promise<boolean> => {
+    const r = await fetch('/api/menu', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    }).then(x => x.json()).catch(() => null)
+    if (!r?.ok) {
+      setCallToast(`⚠️ 처리 실패: ${r?.error || '잠시 후 다시 시도해주세요'}`)
+      setTimeout(() => setCallToast(null), 3500)
+      return false
+    }
+    return true
+  }
+
   const addMenu = async () => {
     if (!addForm.name.trim() || !addForm.price) return
-    await supabase.from('menus').insert({
-      store_id: 'baegun', category: addForm.category,
-      name: addForm.name.trim(), price: parseInt(addForm.price),
-      sort_order: 999, is_available: true,
-    })
+    const ok = await menuApi({ action: 'create', category: addForm.category, name: addForm.name.trim(), price: addForm.price })
+    if (!ok) return
     setAddForm({ category: '치킨류', name: '', price: '' })
     setShowAddForm(false)
     await loadMenus()
@@ -612,13 +622,15 @@ export default function OwnerDashboard() {
 
   const saveEdit = async () => {
     if (!editingId || !editForm.name.trim() || !editForm.price) return
-    await supabase.from('menus').update({ name: editForm.name.trim(), price: parseInt(editForm.price) }).eq('id', editingId)
+    const ok = await menuApi({ action: 'update', id: editingId, name: editForm.name.trim(), price: editForm.price })
+    if (!ok) return
     setEditingId(null)
     await loadMenus()
   }
 
   const deleteMenu = async (id: string) => {
-    await supabase.from('menus').delete().eq('id', id)
+    const ok = await menuApi({ action: 'delete', id })
+    if (!ok) return
     setDeleteConfirmId(null)
     await loadMenus()
   }
@@ -1007,6 +1019,15 @@ export default function OwnerDashboard() {
         const activeMenus = menus.filter(m => m.is_available !== false)
         const inactiveMenus = menus.filter(m => m.is_available === false)
 
+        // B3: 카테고리별 그룹 + 상단 점프 (평평한 나열식 → 원하는 메뉴 빠르게 찾기)
+        const CAT_ORDER = ['세트메뉴', '치킨류', '안주류', '음료/주류']
+        const byCat: Record<string, any[]> = {}
+        for (const m of activeMenus) { (byCat[m.category] = byCat[m.category] || []).push(m) }
+        const activeCats = [
+          ...CAT_ORDER.filter(c => byCat[c]?.length),
+          ...Object.keys(byCat).filter(c => !CAT_ORDER.includes(c)),
+        ]
+
         const MenuRow = ({ m }: { m: any }) => (
           <div key={m.id} className="menu-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
             {editingId === m.id ? (
@@ -1044,12 +1065,12 @@ export default function OwnerDashboard() {
                   <input type="file" accept="image/*" style={{ display: 'none' }} disabled={imgUploading} onChange={async e => {
                     const file = e.target.files?.[0]; if (!file) return
                     setImgUploading(true); setImgMsg(null)
-                    const fd = new FormData(); fd.append('file', file); fd.append('menuId', String(m.id))
-                    const res = await fetch('/api/upload-image', { method: 'POST', body: fd })
-                    const data = await res.json()
+                    // B3: 4.5MB 함수 한도 우회 — 브라우저가 스토리지로 직접 업로드(signed URL) 후 image_url 저장
+                    const url = await uploadToStorage('menu-images', file)
+                    const ok = url ? await menuApi({ action: 'update', id: m.id, image_url: url }) : false
                     setImgUploading(false)
-                    setImgMsg({ id: String(m.id), ok: data.ok, text: data.ok ? '✅ 업로드 완료!' : `❌ ${data.error || '실패'}` })
-                    if (data.ok) { setTimeout(() => setImgMsg(null), 3000); await loadMenus() }
+                    setImgMsg({ id: String(m.id), ok, text: ok ? '✅ 업로드 완료!' : '❌ 업로드 실패' })
+                    if (ok) { setTimeout(() => setImgMsg(null), 3000); await loadMenus() }
                   }} />
                 </label>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -1147,7 +1168,27 @@ export default function OwnerDashboard() {
             </div>
 
             {/* 판매중 메뉴 */}
-            {activeMenus.map(m => <MenuRow key={m.id} m={m} />)}
+            {/* B3: 카테고리 점프 (스크롤 중에도 상단 고정) */}
+            {activeCats.length > 1 && (
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '8px 0', position: 'sticky', top: 0, background: 'var(--bg, #111)', zIndex: 5, borderBottom: '1px solid #222' }}>
+                {activeCats.map(cat => (
+                  <button key={cat} onClick={() => document.getElementById(`ownmenu-cat-${cat}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    style={{ whiteSpace: 'nowrap', padding: '6px 12px', borderRadius: 20, background: '#2a2a2a', color: '#ccc', border: '1px solid #444', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                    {cat} {byCat[cat].length}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* B3: 카테고리별 그룹 헤더 + 메뉴 */}
+            {activeCats.map(cat => (
+              <div key={cat} id={`ownmenu-cat-${cat}`} style={{ scrollMarginTop: 52 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#c8a900', padding: '16px 0 6px' }}>
+                  {cat} <span style={{ color: '#666', fontWeight: 600 }}>({byCat[cat].length})</span>
+                </div>
+                {byCat[cat].map(m => <MenuRow key={m.id} m={m} />)}
+              </div>
+            ))}
 
             {/* 품절 메뉴 */}
             {inactiveMenus.length > 0 && (

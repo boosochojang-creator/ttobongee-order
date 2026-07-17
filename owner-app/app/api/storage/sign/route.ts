@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto'
 
 // 브라우저 직접 업로드용 서명 URL 발급 (서비스롤). Vercel 4.5MB 함수 제한을 우회 —
 // 파일은 브라우저가 스토리지로 직접 올리고, 함수는 짧은 서명 URL만 내려준다.
-const BUCKETS: Record<string, string> = { music: 'audio', games: 'html' } // 허용 버킷만
+const BUCKETS: Record<string, string> = { music: 'audio', games: 'html', 'menu-images': 'jpg' } // 허용 버킷만
 
 export async function POST(req: NextRequest) {
   try {
