@@ -129,7 +129,7 @@ export default function LoginPage() {
       <div className="login-page">
         <div className="brand">🍗 또봉이통닭</div>
         <div className="sub">백운역점</div>
-        <div className="discount-badge">🎁 단골 등록 시 튀김만두 5개 무료 증정</div>
+        <div className="discount-badge">🎁 단골 등록 시 생맥주·소주·음료 중 1잔 무료</div>
         <p style={{ fontSize: 14, color: 'var(--text2)', textAlign: 'center', lineHeight: 1.6 }}>
           전화번호만 입력하면 끝!<br />첫 방문도 자동으로 단골 등록됩니다
         </p>

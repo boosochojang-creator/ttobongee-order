@@ -193,7 +193,7 @@ export default function MenuPage() {
           display:'flex', flexDirection:'column', gap:8
         }}>
           <div style={{fontSize:20, fontWeight:900, color:'#c8a900'}}>
-            🎁 단골 등록하고 튀김만두 5개 무료 받기
+            🎁 단골 등록하고 음료 1잔 무료 받기
           </div>
           <div style={{fontSize:15, color:'#ccc', lineHeight:1.7}}>
             전화번호 3초 입력으로 끝!<br/>

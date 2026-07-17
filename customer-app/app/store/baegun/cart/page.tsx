@@ -65,7 +65,7 @@ export default function CartPage() {
         {!isMember && (
           <div className="member-banner" style={{ marginBottom: 16 }}>
             <span className="gift">🎁</span>
-            <p><strong>튀김만두 5개 무료 증정</strong> 받을 수 있어요!</p>
+            <p><strong>생맥주·소주·음료 중 1잔 무료 증정</strong> 받을 수 있어요!</p>
             <button className="link" onClick={() => router.push('/store/baegun/login')}>무료 받기</button>
           </div>
         )}

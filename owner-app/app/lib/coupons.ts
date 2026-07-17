@@ -3,11 +3,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // 메뉴 무료 증정 방식 (금액할인 폐기). freeMenu 개수만큼 증정, validDays=null이면 무제한, sameDay=true면 발급 당일부터 사용가능(그 외는 다음날부터).
+// 증정 메뉴 교체(2026-07): 발급조건(minOrder/validDays/sameDay)은 그대로, 메뉴만 변경.
+//  - 생일: 음료 택1 + 감자튀김 200g / 나머지: 음료 택1. '택1'은 카운터에서 손님이 선택.
+const DRINK_CHOICE = '생맥주 500cc / 소주 1병 / 음료(대) 중 택1'
 export const COUPON_RULES = {
-  signup:     { label: '신규가입', freeMenu: '튀김만두',      freeQty: 5, minOrder: 0,     validDays: null, sameDay: false },
-  birthday:   { label: '생일',     freeMenu: '감자튀김 200g', freeQty: 1, minOrder: 0,     validDays: 7,    sameDay: true  },
-  winback:    { label: '재방문',   freeMenu: '튀김만두',      freeQty: 5, minOrder: 15000, validDays: 7,    sameDay: false },
-  vip_thanks: { label: '단골감사', freeMenu: '튀김만두',      freeQty: 5, minOrder: 20000, validDays: 7,    sameDay: false },
+  signup:     { label: '신규가입', freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 0,     validDays: null, sameDay: false },
+  birthday:   { label: '생일',     freeMenu: `${DRINK_CHOICE} + 감자튀김 200g`,  freeQty: 1, minOrder: 0,     validDays: 7,    sameDay: true  },
+  winback:    { label: '재방문',   freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 15000, validDays: 7,    sameDay: false },
+  vip_thanks: { label: '단골감사', freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 20000, validDays: 7,    sameDay: false },
 } as const
 export type CouponType = keyof typeof COUPON_RULES
 

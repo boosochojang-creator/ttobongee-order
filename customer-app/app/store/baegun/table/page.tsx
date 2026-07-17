@@ -161,7 +161,7 @@ export default function TablePage() {
           ) : (
             <>🎁 주문 전{' '}
               <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
-              <span style={{color:'#FF6B00', fontWeight:700}}>튀김만두 5개 무료 증정</span>{' '}
+              <span style={{color:'#FF6B00', fontWeight:700}}>생맥주·소주·음료 중 1잔 무료 증정</span>{' '}
               받으세요!<br/>
               오늘도{' '}
               <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다.
