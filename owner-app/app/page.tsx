@@ -41,6 +41,11 @@ const COUPON_LABEL: Record<string, string> = {
   signup: '신규가입', birthday: '생일', winback: '재방문', vip_thanks: '단골감사',
 }
 
+// B4: 점주 인증 지속(재진입 시 PIN 재요구 방지) + 탭 히스토리
+const AUTH_KEY = 'ttobongee-owner-auth-until'
+const AUTH_TTL_MS = 12 * 3600 * 1000 // 12시간 유지
+const TAB_KEYS = ['orders', 'menu', 'members', 'sales', 'business', 'stats', 'content'] as const
+
 const STATUS_LABEL: Record<string, string> = {
   pending: '신규', paid: '신규', cash_pending: PAYMENT_ENABLED ? '현금대기' : '접수대기',
   verification_failed: '⚠️ 결제확인필요',
@@ -173,6 +178,12 @@ export default function OwnerDashboard() {
   const [memberOrders, setMemberOrders] = useState<any[]>([])            // 상세: 주문이력
   const [memberDetailLoading, setMemberDetailLoading] = useState(false)
   const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats' | 'content'>('orders')
+  // B4: 탭 이동을 URL 히스토리에 남겨 뒤로가기 시 이전 탭으로 돌아가게(앱 이탈/PIN 튕김 방지)
+  const navTab = (t: typeof tab) => {
+    if (t === tab) return
+    try { window.history.pushState({ tab: t }, '', `?tab=${t}`) } catch {}
+    setTab(t)
+  }
   const [games, setGames] = useState<any[]>([]) // Phase 5-2-c 오락실 게임
   const [tracks, setTracks] = useState<any[]>([]) // Phase 5-2-d 음악
   const [musicTitle, setMusicTitle] = useState('')
@@ -376,6 +387,27 @@ export default function OwnerDashboard() {
   useEffect(() => {
     supabase.from('stores').select('pin_code').eq('id', 'baegun').single()
       .then(({ data }) => { if (data?.pin_code) setPinDB(data.pin_code) })
+  }, [])
+
+  // B4: ① 인증 지속 복원(12h 내면 PIN 생략) ② 탭 URL 복원 + 뒤로가기(popstate) 시 이전 탭으로
+  useEffect(() => {
+    try {
+      const until = Number(localStorage.getItem(AUTH_KEY))
+      if (until && Date.now() < until) setAuthed(true)
+    } catch {}
+    try {
+      const t = new URLSearchParams(window.location.search).get('tab')
+      const initial = (TAB_KEYS as readonly string[]).includes(t || '') ? (t as typeof tab) : 'orders'
+      setTab(initial)
+      window.history.replaceState({ tab: initial }, '', `?tab=${initial}`)
+    } catch {}
+    const onPop = (e: PopStateEvent) => {
+      const nt = (e.state && (e.state as any).tab) as typeof tab
+      setTab(TAB_KEYS.includes(nt) ? nt : 'orders')
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadMenus = async () => {
@@ -747,7 +779,11 @@ export default function OwnerDashboard() {
   )
 
   function handlePin() {
-    if (pin === pinDB) { setAuthed(true) }
+    if (pin === pinDB) {
+      setAuthed(true)
+      // B4: 12시간 인증 유지 → 뒤로가기/새로고침 재진입 시 PIN 재요구 안 함
+      try { localStorage.setItem(AUTH_KEY, String(Date.now() + AUTH_TTL_MS)) } catch {}
+    }
     else { setPinError('PIN이 올바르지 않아요'); setPin('') }
   }
 
@@ -961,21 +997,21 @@ export default function OwnerDashboard() {
       {/* 요약 */}
       {/* [5] 요약카드 클릭 연동 — 오늘매출→매출탭, 그 외→주문탭 */}
       <div className="summary-bar">
-        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setTab('orders')}><div className="label">오늘 주문</div><div className="value">{summary.count}건</div></div>
-        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setTab('sales')}><div className="label">오늘 매출 ›</div><div className="value">{won(summary.sales)}</div></div>
-        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setTab('orders')}><div className="label">신규 주문</div><div className="value" style={{ color: newOrders.length ? '#e84040' : 'var(--gold)' }}>{newOrders.length}건</div></div>
-        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setTab('orders')}><div className="label">조리중</div><div className="value" style={{ color: '#f09000' }}>{cookingOrders.length}건</div></div>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => navTab('orders')}><div className="label">오늘 주문</div><div className="value">{summary.count}건</div></div>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => navTab('sales')}><div className="label">오늘 매출 ›</div><div className="value">{won(summary.sales)}</div></div>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => navTab('orders')}><div className="label">신규 주문</div><div className="value" style={{ color: newOrders.length ? '#e84040' : 'var(--gold)' }}>{newOrders.length}건</div></div>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => navTab('orders')}><div className="label">조리중</div><div className="value" style={{ color: '#f09000' }}>{cookingOrders.length}건</div></div>
       </div>
 
       {/* 탭 */}
       <div className="owner-tabs">
-        <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>주문</button>
-        <button className={tab === 'menu' ? 'active' : ''} onClick={() => { setTab('menu'); loadMenus() }}>메뉴</button>
-        <button className={tab === 'members' ? 'active' : ''} onClick={() => { setTab('members'); loadMembers() }}>회원</button>
-        <button className={tab === 'sales' ? 'active' : ''} onClick={() => setTab('sales')}>매출</button>
-        <button className={tab === 'business' ? 'active' : ''} onClick={() => setTab('business')}>영업</button>
-        <button className={tab === 'stats' ? 'active' : ''} onClick={() => setTab('stats')}>통계</button>
-        <button className={tab === 'content' ? 'active' : ''} onClick={() => { setTab('content'); loadGames(); loadTracks(); loadBoardPosts() }}>콘텐츠</button>
+        <button className={tab === 'orders' ? 'active' : ''} onClick={() => navTab('orders')}>주문</button>
+        <button className={tab === 'menu' ? 'active' : ''} onClick={() => { navTab('menu'); loadMenus() }}>메뉴</button>
+        <button className={tab === 'members' ? 'active' : ''} onClick={() => { navTab('members'); loadMembers() }}>회원</button>
+        <button className={tab === 'sales' ? 'active' : ''} onClick={() => navTab('sales')}>매출</button>
+        <button className={tab === 'business' ? 'active' : ''} onClick={() => navTab('business')}>영업</button>
+        <button className={tab === 'stats' ? 'active' : ''} onClick={() => navTab('stats')}>통계</button>
+        <button className={tab === 'content' ? 'active' : ''} onClick={() => { navTab('content'); loadGames(); loadTracks(); loadBoardPosts() }}>콘텐츠</button>
       </div>
 
       {/* 주문 칸반 */}
