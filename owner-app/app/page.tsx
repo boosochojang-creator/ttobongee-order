@@ -203,7 +203,7 @@ export default function OwnerDashboard() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({ category: '치킨류', name: '', price: '' })
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
-  const [bizSubTab, setBizSubTab] = useState<'daily' | 'monthly' | 'yearly'>('daily')
+  const [bizSubTab, setBizSubTab] = useState<'daily' | 'monthly' | 'yearly' | 'settings'>('daily')
   const [todayReport, setTodayReport] = useState<any>(null)
   const [issuedPopup, setIssuedPopup] = useState<{ who: string; label: string; gift: string }[] | null>(null) // 오늘 자동발급 쿠폰
   const [riders, setRiders] = useState<any[]>([])          // Phase 5-1-a 라이더
@@ -318,11 +318,11 @@ export default function OwnerDashboard() {
 
     setOrders(mapped)
 
-    // 요약 — '오늘 매출'은 확정 매출(SALES_COUNTED)만 합산해 매출탭·영업마감·통계와 동일 기준.
-    // '오늘 주문'은 오늘 접수된 주문 건수(취소·미결제 제외, mapped 자체 기준).
+    // F2: 매출 지표 정의 통일 — '오늘 매출'과 '오늘 주문'을 모두 확정 매출(SALES_COUNTED) 기준으로
+    // (요약카드·영업탭·매출탭·통계 동일 집합). 미처리 신규는 아래 '신규 주문' 카드로 별도 표시.
     const salesToday = mapped.filter(o => SALES_COUNTED.includes(o.status))
     setSummary({
-      count: mapped.length,
+      count: salesToday.length,
       sales: salesToday.reduce((s, o) => s + o.final_amount, 0),
       newMembers: 0,
     })
@@ -1266,7 +1266,7 @@ export default function OwnerDashboard() {
                 </div>
               ) : null)}
               <div style={{ marginLeft: 'auto', fontSize: 15, fontWeight: 700, color: '#c8a900' }}>
-                합계: {won(totalSales)}
+                오늘 매출: {won(totalSales)}
               </div>
             </div>
             {!salesOrders.length && <div className="empty">매출 내역이 없어요</div>}
@@ -1358,14 +1358,14 @@ export default function OwnerDashboard() {
           <div style={{ paddingBottom: 40 }}>
             {/* 서브탭 */}
             <div style={{ display: 'flex', borderBottom: '1px solid #222' }}>
-              {(['daily', 'monthly', 'yearly'] as const).map(t => (
+              {(['daily', 'monthly', 'yearly', 'settings'] as const).map(t => (
                 <button key={t} onClick={() => setBizSubTab(t)} style={{
                   flex: 1, padding: '11px 8px', fontSize: 13, fontWeight: 600,
                   background: 'none', border: 'none', cursor: 'pointer',
                   color: bizSubTab === t ? '#c8a900' : '#666',
                   borderBottom: `2px solid ${bizSubTab === t ? '#c8a900' : 'transparent'}`,
                 }}>
-                  {t === 'daily' ? '오늘' : t === 'monthly' ? '이달' : '연간'}
+                  {t === 'daily' ? '오늘' : t === 'monthly' ? '이달' : t === 'yearly' ? '연간' : '⚙️ 설정'}
                 </button>
               ))}
             </div>
@@ -1409,10 +1409,10 @@ export default function OwnerDashboard() {
 
                 {/* 실시간 현황 */}
                 <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 16, marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, color: '#666', marginBottom: 10 }}>오늘 실시간 현황 (완료 주문)</div>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 10 }}>오늘 실시간 현황 (확정 매출 기준)</div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <SB label="총 매출" value={won(todaySalesTotal)} gold />
-                    <SB label="주문 수" value={`${todayCount}건`} />
+                    <SB label="오늘 매출" value={won(todaySalesTotal)} gold />
+                    <SB label="오늘 주문" value={`${todayCount}건`} />
                     <SB label="평균 객단가" value={todayCount > 0 ? won(Math.round(todaySalesTotal / todayCount)) : '-'} />
                   </div>
                 </div>
@@ -1527,6 +1527,8 @@ export default function OwnerDashboard() {
               </div>
             )}
 
+            {/* F1: 설정 서브탭 — 배경음악·PIN 등 설정류를 영업/매출 화면과 분리 */}
+            {bizSubTab === 'settings' && (<>
             {/* BGM 변경 */}
             <div style={{ margin: '16px 16px 0', background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: 14, padding: 18 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#aaa', marginBottom: 12 }}>🎵 배경음악 변경</div>
@@ -1579,6 +1581,7 @@ export default function OwnerDashboard() {
                 PIN 변경하기
               </button>
             </div>
+            </>)}
 
             {/* 마감 확인 팝업 */}
             {closingConfirm && (

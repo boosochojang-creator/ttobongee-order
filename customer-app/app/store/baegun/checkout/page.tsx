@@ -481,7 +481,7 @@ export default function CheckoutPage() {
               border: '1px solid #7a6400', borderRadius: 10, cursor: 'pointer',
             }}
           >
-            🍗 더치페이 — 1/N 계산해서 전액 결제
+            🧮 여럿이 나눠 낼 때 — 1/N 계산해보기
           </button>
         )}
 
@@ -518,14 +518,14 @@ export default function CheckoutPage() {
                 </div>
               )
             })()}
-            {/* [재설계] 결제자 1명이 전액 결제, 1/N은 안내숫자만 — 나머지는 참여자끼리 정산 */}
+            {/* F4: 앱은 1/N 안내숫자만 — 주문은 한 건으로 접수, 실제 결제/정산은 카운터에서 */}
             <div style={{ fontSize: 12, color: '#aaa', lineHeight: 1.8, marginTop: 10, textAlign: 'left' }}>
-              결제자 한 분이 전체 <strong style={{ color: '#FFD700' }}>{won(payTotal)}</strong>을 한 번에 결제해요.<br />
-              위 1인당 금액은 <b>계산 참고용</b>이에요. 나머지는 결제 후 참여자끼리 계좌이체·현금으로 정산해주세요 :)
+              주문은 <strong style={{ color: '#FFD700' }}>{won(payTotal)}</strong> 한 건으로 접수돼요.<br />
+              위 1인당 금액은 <b>계산 참고용</b>이에요. 카운터에서 함께 결제하거나, 위 금액대로 각자 정산하시면 돼요 :)
             </div>
             {error && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{error}</div>}
             <button className="btn-primary" style={{ marginTop: 14 }} onClick={handleSplitConfirm}>
-              확인하고 전액 결제하기
+              확인하고 주문하기
             </button>
             <button
               onClick={() => setSplitModal(false)}

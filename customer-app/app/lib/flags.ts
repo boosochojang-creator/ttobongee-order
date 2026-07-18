@@ -3,5 +3,6 @@
 // 재활성화: 아래를 true로 바꾸고 재배포하면 포트원 결제·결제수단 선택·더치페이가 그대로 복귀한다.
 export const PAYMENT_ENABLED = false
 
-// 더치페이는 '결제자 전액결제'가 전제라 결제분리 시 함께 숨긴다(코드 보존, 플래그로만 제어).
-export const DUTCH_PAY_ENABLED = PAYMENT_ENABLED
+// F4: 앱 내 결제(포트원)는 꺼져 있어도(POS 결제) '여럿이 나눠 낼 때 1인당 얼마인지' 참고 계산은 유용.
+// → PAYMENT_ENABLED와 분리해 활성화. 실제 결제는 카운터에서, 앱은 1/N 안내숫자만 제공.
+export const DUTCH_PAY_ENABLED = true
