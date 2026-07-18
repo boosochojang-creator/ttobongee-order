@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
-import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import {
   getDeferredPrompt, clearDeferredPrompt, isInstalled, isIOS,
@@ -29,42 +28,18 @@ export default function LoginPage() {
     if (digits.length < 10) { setError('전화번호를 정확히 입력해주세요'); return }
     setLoading(true)
     try {
-      // upsert 회원
-      const { data: existing } = await supabase
-        .from('users').select('id, grade, visit_count, nickname').eq('store_id', storeId).eq('phone', digits).single()
+      // E2: 전화번호 해시 조회 + dual-write 가입을 서버 라우트로(HMAC/AES 키가 서버 비밀).
+      const res = await fetch('/api/member/auth', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: digits, storeId }),
+      }).then(x => x.json()).catch(() => null)
+      if (!res?.ok) { setError(res?.error || '로그인에 실패했어요. 잠시 후 다시 시도해주세요'); setLoading(false); return }
+      const u = res.user
 
-      let uid: string
-      let memberGrade = 'bronze'
-      let memberVisitCount = 0
-      let memberNickname = ''
-      if (existing) {
-        uid = existing.id
-        memberGrade = existing.grade ?? 'bronze'
-        memberVisitCount = existing.visit_count ?? 0
-        memberNickname = existing.nickname ?? ''
-        await supabase.from('users').update({
-          last_visit: new Date().toISOString()
-        }).eq('id', uid)
-      } else {
-        const { data: newUser, error: err } = await supabase.from('users').insert({
-          store_id: storeId, phone: digits
-        }).select('id, grade, visit_count, nickname').single()
-        if (err || !newUser) throw err
-        uid = newUser.id
-        memberGrade = newUser.grade ?? 'bronze'
-        memberVisitCount = newUser.visit_count ?? 0
-        memberNickname = newUser.nickname ?? ''
-      }
-
-      // ── 가입은 여기서 이미 확정 (아래 설치 흐름과 무관하게 유지됨) ──
-      setMember(uid, digits, memberGrade, memberVisitCount, memberNickname)
-      setMemberFlag(uid, digits)
-
-      // 서버의 회원 상태(B-2)를 로컬에 반영 — 컬럼이 아직 없는 환경에서도 로그인은 계속되도록 별도 조회
-      try {
-        const { data: st } = await supabase.from('users').select('member_status').eq('id', uid).single()
-        if (st?.member_status) updateMemberLocal({ status: st.member_status })
-      } catch {}
+      // ── 가입 확정 (아래 설치 흐름과 무관하게 유지됨) ──
+      setMember(u.id, digits, u.grade, u.visit_count, u.nickname)
+      setMemberFlag(u.id, digits)
+      if (u.member_status) updateMemberLocal({ status: u.member_status })
 
       // 가입 완료 → 같은 흐름에서 설치 승인 이어붙이기 (거부해도 가입은 그대로)
       if (isInstalled()) { router.back(); return }

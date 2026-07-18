@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { phoneDecrypt, phoneDigits } from '../../lib/phoneCrypto'
 
 // ===== 알리고 SMS 발송 (환경변수 등록 후 활성화) =====
 // ALIGO_API_KEY   : 알리고 API 키
@@ -38,9 +39,10 @@ async function sendSMS(to: string, message: string) {
 export async function POST(req: NextRequest) {
   try {
     const { orderId, phone } = await req.json()
+    // E2: 발송번호는 DB 복호화로 확정하므로 클라이언트 phone은 폴백(선택). orderId만 필수.
     const cleanPhone = (phone || '').replace(/-/g, '').trim()
-    if (!orderId || cleanPhone.length < 10) {
-      return NextResponse.json({ ok: false, error: '전화번호가 올바르지 않습니다' }, { status: 400 })
+    if (!orderId) {
+      return NextResponse.json({ ok: false, error: '주문번호가 필요합니다' }, { status: 400 })
     }
 
     const admin = createClient(
@@ -48,14 +50,27 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // 주문 정보 조회
+    // 주문 정보 조회 (+ 복호화용 회원/주문 전화 암호)
     const { data: order } = await admin
       .from('orders')
-      .select('final_amount, payment_method, order_type, table_no, created_at, order_items(name_snapshot, qty, subtotal)')
+      .select('final_amount, payment_method, order_type, table_no, created_at, user_id, customer_phone_encrypted, order_items(name_snapshot, qty, subtotal)')
       .eq('id', orderId)
       .single()
 
     if (!order) return NextResponse.json({ ok: false, error: '주문을 찾을 수 없습니다' }, { status: 404 })
+
+    // E2: 발송 번호는 DB 복호화로 확정(클라이언트가 넘긴 값은 폴백만). 회원 phone_encrypted 우선, 없으면 주문 customer_phone_encrypted.
+    let receiver = cleanPhone
+    if (order.user_id) {
+      const { data: mem } = await admin.from('users').select('phone_encrypted').eq('id', order.user_id).single()
+      const dec = phoneDecrypt(mem?.phone_encrypted)
+      if (dec) receiver = dec
+    } else if (order.customer_phone_encrypted) {
+      const dec = phoneDecrypt(order.customer_phone_encrypted)
+      if (dec) receiver = dec
+    }
+    receiver = phoneDigits(receiver)
+    if (receiver.length < 10) return NextResponse.json({ ok: false, error: '발송할 전화번호를 찾을 수 없습니다' }, { status: 400 })
 
     const items = (order.order_items as any[]) || []
     const payLabel: Record<string, string> = { card: '카드', kakao: '카카오페이', toss: '토스페이', cash: '현금' }
@@ -79,7 +94,7 @@ export async function POST(req: NextRequest) {
     ]
 
     const message = lines.join('\n')
-    const result = await sendSMS(cleanPhone, message)
+    const result = await sendSMS(receiver, message)
 
     return NextResponse.json({ ok: true, skipped: result.skipped })
   } catch (e: any) {
