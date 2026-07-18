@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
-import { getMemberLocal, updateMemberLocal } from '../../../lib/memberState'
+import { getMemberLocal, updateMemberLocal, clearMemberLocal } from '../../../lib/memberState'
 import { useStoreId } from '../../../lib/storeContext'
 
 export default function ProfilePage() {
@@ -20,6 +20,10 @@ export default function ProfilePage() {
   const [loaded, setLoaded] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  // 회원 탈퇴
+  const [showWithdraw, setShowWithdraw] = useState(false)
+  const [withdrawing, setWithdrawing] = useState(false)
+  const [withdrawError, setWithdrawError] = useState('')
   // [2] 내 쿠폰함 (메뉴 증정 방식)
   type Coupon = { id: string; reason: string; emoji: string; gift: string | null; discount_amount: number; min_order_amount: number; issued_at: string; usable_from: string | null; expires_at: string; state: 'usable' | 'upcoming' | 'used' | 'expired' }
   const [coupons, setCoupons] = useState<Coupon[] | null>(null)
@@ -65,6 +69,26 @@ export default function ProfilePage() {
     updateMemberLocal({ status: data.status, marketingOptIn: marketing })
     setSaved(true)
     setTimeout(() => router.back(), 1200)
+  }
+
+  const handleWithdraw = async () => {
+    const m = getMemberLocal()
+    if (!m) { router.replace(`/store/${storeId}/login`); return }
+    setWithdrawing(true)
+    setWithdrawError('')
+    const res = await fetch('/api/member/withdraw', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: m.userId }),
+    }).catch(() => null)
+    const data = res ? await res.json().catch(() => null) : null
+    if (!data?.ok) {
+      setWithdrawing(false)
+      setWithdrawError('탈퇴 처리 중 오류가 발생했어요. 잠시 후 다시 시도해주세요')
+      return
+    }
+    clearMemberLocal()
+    // 하드 이동으로 인메모리 회원상태(장바구니 스토어)까지 초기화 → 게스트로 복원
+    window.location.href = `/store/${storeId}/hub`
   }
 
   return (
@@ -145,7 +169,51 @@ export default function ProfilePage() {
         </button>
         </>
         )}
+
+        {/* 회원 탈퇴 */}
+        <div style={{ borderTop: '1px solid #2a2a2a', marginTop: 8, paddingTop: 16, textAlign: 'center' }}>
+          <button onClick={() => { setWithdrawError(''); setShowWithdraw(true) }}
+            style={{ background: 'none', border: 'none', color: '#777', fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>
+            회원 탈퇴
+          </button>
+        </div>
       </div>
+
+      {/* 탈퇴 확인 모달 */}
+      {showWithdraw && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }} onClick={() => { if (!withdrawing) setShowWithdraw(false) }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#181818', border: '1px solid #3a3a3a', borderRadius: 16,
+            padding: '22px 20px', maxWidth: 360, width: '100%', display: 'flex', flexDirection: 'column', gap: 14,
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#f0f0f0' }}>정말 탈퇴하시겠어요?</div>
+            <div style={{ fontSize: 13.5, color: '#bbb', lineHeight: 1.75 }}>
+              탈퇴하면 아래 내용이 처리되며 <span style={{ color: '#e88', fontWeight: 700 }}>되돌릴 수 없어요.</span>
+              <ul style={{ margin: '10px 0 0', paddingLeft: 18, color: '#aaa', lineHeight: 1.9 }}>
+                <li>전화번호 등 <b>개인정보가 삭제</b>돼요</li>
+                <li>보유하신 <b>쿠폰이 모두 사라져요</b></li>
+                <li>지난 주문 내역은 매장 정산·통계 목적으로 <b>이름 없이(비식별)</b> 남아요</li>
+              </ul>
+              <div style={{ marginTop: 10, color: '#888' }}>같은 번호로 언제든 다시 가입하실 수 있어요 (신규 가입 혜택도 다시 드려요 💛)</div>
+            </div>
+            {withdrawError && <div style={{ fontSize: 13, color: 'var(--red)' }}>{withdrawError}</div>}
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <button onClick={() => setShowWithdraw(false)} disabled={withdrawing} style={{
+                flex: 1, padding: '13px', borderRadius: 10, fontSize: 15, fontWeight: 800, cursor: 'pointer',
+                background: '#2a2a2a', color: '#eee', border: '1px solid #444',
+              }}>취소</button>
+              <button onClick={handleWithdraw} disabled={withdrawing} style={{
+                flex: 1, padding: '13px', borderRadius: 10, fontSize: 15, fontWeight: 800, cursor: 'pointer',
+                background: withdrawing ? '#5a2a2a' : '#c0392b', color: '#fff', border: 'none',
+              }}>{withdrawing ? '처리 중...' : '탈퇴하기'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <LegalFooter />
     </main>
   )

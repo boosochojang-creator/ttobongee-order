@@ -8,7 +8,7 @@ import { setActiveOrder } from '../../../lib/activeOrder'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
 import { validateSplitCount, splitPerPerson } from '../../../lib/splitInfo'
 import { pickupIso } from '../../../lib/pickup'
-import { PAYMENT_ENABLED, DUTCH_PAY_ENABLED } from '../../../lib/flags'
+import { PAYMENT_ENABLED, DUTCH_PAY_ENABLED, DELIVERY_ENABLED } from '../../../lib/flags'
 import { useStoreId } from '../../../lib/storeContext'
 
 type PayMethod = 'card' | 'kakao' | 'toss' | 'cash'
@@ -298,7 +298,9 @@ export default function CheckoutPage() {
             영업이 시작되면 주문할 수 있어요. 매장에 계시다면 직원에게 문의해 주세요 🙏
           </div>
         )}
-        {/* 받는 방법 (Phase 2: 배달) */}
+        {/* 받는 방법 (Phase 2: 배달) — DELIVERY_ENABLED=false면 배달 비활성이라 선택 UI 전체 숨김(코드 보존) */}
+        {DELIVERY_ENABLED && (
+        <>
         <div className="section-title">받는 방법</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button onClick={() => { setIsDelivery(false); setError('') }} style={{
@@ -312,6 +314,8 @@ export default function CheckoutPage() {
             border: isDelivery ? 'none' : '1px solid #444',
           }}>🛵 배달로</button>
         </div>
+        </>
+        )}
 
         {isDelivery && (
           <div style={{ background: 'var(--bg2)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>

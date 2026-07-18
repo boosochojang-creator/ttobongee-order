@@ -45,6 +45,15 @@ export function updateMemberLocal(patch: Partial<MemberLocal>) {
   try { localStorage.setItem(MEMBER_KEY, JSON.stringify({ ...m, ...patch })) } catch {}
 }
 
+// 회원 로컬 상태 완전 제거(로그아웃/탈퇴). 이후 하드 리로드하면 게스트로 복원된다.
+export function clearMemberLocal() {
+  try {
+    localStorage.removeItem(MEMBER_KEY)
+    localStorage.removeItem(PROMPT_DATE_KEY)
+    localStorage.removeItem(PROMPT_COUNT_KEY)
+  } catch {}
+}
+
 // 입력값 조합 → 상태 계산: 셋 다 비면 phone_member, 일부만 있으면 incomplete, 셋 다 있으면 complete
 export function computeStatus(birthday: string, address: string, email: string): MemberStatus {
   const filled = [birthday, address, email].filter(v => (v || '').trim() !== '').length

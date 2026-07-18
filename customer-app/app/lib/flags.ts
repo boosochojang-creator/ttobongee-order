@@ -6,3 +6,7 @@ export const PAYMENT_ENABLED = false
 // F4: 앱 내 결제(포트원)는 꺼져 있어도(POS 결제) '여럿이 나눠 낼 때 1인당 얼마인지' 참고 계산은 유용.
 // → PAYMENT_ENABLED와 분리해 활성화. 실제 결제는 카운터에서, 앱은 1/N 안내숫자만 제공.
 export const DUTCH_PAY_ENABLED = true
+
+// 배달 주문 — 안정화 우선 방침으로 당분간 비활성(버튼 숨김). 코드·API·배달료 계산은 삭제하지 않고 이 플래그로만 끈다.
+// 재활성화(정부지원사업 승인 등): 아래를 true로 바꾸고 재배포하면 체크아웃의 '배달로' 선택이 그대로 복귀한다.
+export const DELIVERY_ENABLED = false
