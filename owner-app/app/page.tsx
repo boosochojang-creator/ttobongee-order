@@ -443,11 +443,11 @@ export default function OwnerDashboard() {
     }
 
     // 세그먼트용 보조 데이터: 유효 쿠폰(미사용·미만료) 보유자 + 배달 이력 보유자
-    // 멀티매장: coupons엔 store_id가 없어 이 매장 회원(user_id)로 스코핑한다(부모 경유).
+    // [1] coupons는 RLS로 anon 읽기 차단 → 서비스롤 API 경유(store 회원 스코핑은 API 내부에서).
     const nowIso = new Date().toISOString()
-    const storeUserIds = users.map(u => u.id)
-    const { data: coup } = await supabase.from('coupons').select('user_id').eq('status', 'active').gt('expires_at', nowIso).in('user_id', storeUserIds)
-    const couponUsers = new Set((coup || []).map(c => c.user_id))
+    const cr = await fetch('/api/coupon/store', { method: 'POST' }).then(x => x.json()).catch(() => null)
+    const couponUsers = new Set(((cr?.ok ? cr.coupons : []) as any[])
+      .filter(c => c.status === 'active' && c.expires_at > nowIso).map(c => c.user_id))
     const { data: delo } = await supabase.from('orders').select('user_id')
       .eq('order_type', 'delivery').not('delivery_address', 'is', null).not('user_id', 'is', null)
     const deliveryUsers = new Set((delo || []).map(o => o.user_id))

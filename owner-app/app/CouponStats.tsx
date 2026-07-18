@@ -23,12 +23,10 @@ export default function CouponStats() {
   const [orders, setOrders] = useState<Ord[]>([])
 
   useEffect(() => {
-    // 멀티매장: 이 매장(STORE_ID) 회원·주문으로 스코핑. coupons는 store_id가 없어 store 회원(user_id) 경유.
+    // [1] coupons는 RLS로 anon 읽기 차단 → 서비스롤 API 경유(빈 통계 버그 수정). orders는 anon 허용이라 그대로.
     ;(async () => {
-      const { data: us } = await supabase.from('users').select('id').eq('store_id', STORE_ID)
-      const storeUserIds = (us || []).map(u => u.id)
-      const { data: cp } = await supabase.from('coupons').select('type, status, issued_at, used_order_id, user_id').in('user_id', storeUserIds)
-      setCoupons((cp as Coupon[]) || [])
+      const cr = await fetch('/api/coupon/store', { method: 'POST' }).then(x => x.json()).catch(() => null)
+      setCoupons(cr?.ok ? (cr.coupons as Coupon[]) : [])
       const { data: od } = await supabase.from('orders').select('id, user_id, created_at, final_amount, status').eq('store_id', STORE_ID)
       setOrders((od as Ord[]) || [])
     })()
