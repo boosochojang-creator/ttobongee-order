@@ -216,7 +216,6 @@ export default function OwnerDashboard() {
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null) // 신규B: 거절 사유 선택 모달 대상 주문
   const [bizMonth, setBizMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
   const [bizYear, setBizYear] = useState(new Date().getFullYear())
-  const [pinDB, setPinDB] = useState('1234')
   const [pinChangeForm, setPinChangeForm] = useState({ current: '', new1: '', new2: '' })
   const [pinChangeMsg, setPinChangeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [imgUploading, setImgUploading] = useState(false)
@@ -385,10 +384,7 @@ export default function OwnerDashboard() {
     loadYearlyReports(bizYear)
   }, [authed, tab, bizSubTab, bizYear, loadYearlyReports])
 
-  useEffect(() => {
-    supabase.from('stores').select('pin_code').eq('id', STORE_ID).single()
-      .then(({ data }) => { if (data?.pin_code) setPinDB(data.pin_code) })
-  }, [])
+  // (평문 PIN을 클라이언트로 로드하던 코드 제거 — 입장 검증은 /api/verify-pin 서버 bcrypt)
 
   // B4: ① 인증 지속 복원(12h 내면 PIN 생략) ② 탭 URL 복원 + 뒤로가기(popstate) 시 이전 탭으로
   useEffect(() => {
@@ -762,7 +758,6 @@ export default function OwnerDashboard() {
       setPinChangeMsg({ type: 'error', text: data.error || 'PIN 변경에 실패했어요' })
       return
     }
-    setPinDB(pinChangeForm.new1)
     setPinChangeForm({ current: '', new1: '', new2: '' })
     setPinChangeMsg({ type: 'success', text: 'PIN이 변경되었습니다' })
   }
@@ -786,8 +781,12 @@ export default function OwnerDashboard() {
     </div>
   )
 
-  function handlePin() {
-    if (pin === pinDB) {
+  async function handlePin() {
+    // 서버에서 bcrypt 검증(클라이언트가 평문 PIN을 받지 않음)
+    const r = await fetch('/api/verify-pin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }),
+    }).then(x => x.json()).catch(() => null)
+    if (r?.ok) {
       setAuthed(true)
       // B4: 12시간 인증 유지 → 뒤로가기/새로고침 재진입 시 PIN 재요구 안 함
       try { localStorage.setItem(AUTH_KEY, String(Date.now() + AUTH_TTL_MS)) } catch {}

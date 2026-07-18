@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import bcrypt from 'bcryptjs'
 import { STORE_ID } from '../../lib/store'
 
 export async function POST(req: NextRequest) {
@@ -15,27 +16,25 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // DB에서 현재 PIN 조회
+    // 현재 PIN 검증 — 해시 우선(bcrypt.compare), 없으면 평문 폴백
     const { data: store, error: fetchErr } = await admin
       .from('stores')
-      .select('pin_code')
+      .select('*')
       .eq('id', STORE_ID)
       .single()
-
     if (fetchErr && fetchErr.code !== 'PGRST116') throw fetchErr
 
-    const dbPin = store?.pin_code ?? '1234'
-
-    // 현재 PIN 검증
-    if (currentPin !== dbPin) {
+    const currentOk = store?.pin_code_hash
+      ? await bcrypt.compare(currentPin, store.pin_code_hash)
+      : currentPin === (store?.pin_code ?? '1234')
+    if (!currentOk) {
       return NextResponse.json({ ok: false, error: '현재 PIN이 올바르지 않아요' }, { status: 400 })
     }
 
-    // PIN 업데이트
-    const { error: updateErr } = await admin
-      .from('stores')
-      .update({ pin_code: newPin })
-      .eq('id', STORE_ID)
+    // 새 PIN 저장 — bcrypt 해시 + 평문(전환 중 dual-write). pin_code_hash 컬럼이 있을 때만 해시도 기록(022 내성).
+    const patch: Record<string, any> = { pin_code: newPin }
+    if (store && 'pin_code_hash' in store) patch.pin_code_hash = await bcrypt.hash(newPin, 10)
+    const { error: updateErr } = await admin.from('stores').update(patch).eq('id', STORE_ID)
 
     if (updateErr) throw updateErr
 
