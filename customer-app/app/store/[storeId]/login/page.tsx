@@ -9,6 +9,7 @@ import {
 } from '../../../lib/pwaInstall'
 import { updateMemberLocal } from '../../../lib/memberState'
 import { useStoreId } from '../../../lib/storeContext'
+import { subscribeToPush } from '../../../lib/pushClient'
 
 // 가입 완료 후 이어지는 설치 안내 단계 종류
 type InstallStep = null | 'ios' | 'guide'
@@ -40,6 +41,8 @@ export default function LoginPage() {
       setMember(u.id, digits, u.grade, u.visit_count, u.nickname)
       setMemberFlag(u.id, digits)
       if (u.member_status) updateMemberLocal({ status: u.member_status })
+      // [2] 웹푸시 구독 — 로그인/가입과 함께 알림 권한 요청+구독(설치 유도 흐름에 자연스럽게). 거부/미지원은 조용히 스킵.
+      subscribeToPush(u.id, storeId).catch(() => {})
 
       // 가입 완료 → 같은 흐름에서 설치 승인 이어붙이기 (거부해도 가입은 그대로)
       if (isInstalled()) { router.back(); return }

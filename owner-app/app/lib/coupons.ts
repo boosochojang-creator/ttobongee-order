@@ -2,6 +2,7 @@
 // 규칙은 템플릿 테이블 없이 하드코딩(4종 고정). 발급 인스턴스만 coupons 테이블에 저장.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { STORE_ID } from './store'
+import { sendPushToUser } from './pushSend'
 
 // 메뉴 무료 증정 방식 (금액할인 폐기). freeMenu 개수만큼 증정, validDays=null이면 무제한, sameDay=true면 발급 당일부터 사용가능(그 외는 다음날부터).
 // 증정 메뉴 교체(2026-07): 발급조건(minOrder/validDays/sameDay)은 그대로, 메뉴만 변경.
@@ -93,7 +94,23 @@ export async function runCouponAutomation(admin: SupabaseClient) {
       && days !== null && days >= 30 && !has(u.id, 'winback')) toIssue.push(newCoupon(u.id, 'winback', now))
     if (u.customer_grade === 'vip' && !has(u.id, 'vip_thanks')) toIssue.push(newCoupon(u.id, 'vip_thanks', now))
   }
-  if (toIssue.length) await admin.from('coupons').insert(toIssue)
+  if (toIssue.length) {
+    await admin.from('coupons').insert(toIssue)
+    // [2] 웹푸시: 발급받은 회원에게 알림(회원별 1건 요약). 구독 없으면 조용히 스킵.
+    const byUser = new Map<string, string[]>()
+    for (const c of toIssue) {
+      const label = COUPON_RULES[c.type as CouponType]?.label || c.type
+      const gift = c.free_qty && c.free_qty > 1 ? `${c.free_menu} ${c.free_qty}개` : (c.free_menu || '증정')
+      if (!byUser.has(c.user_id)) byUser.set(c.user_id, [])
+      byUser.get(c.user_id)!.push(`${label} · ${gift}`)
+    }
+    for (const [uid, lines] of Array.from(byUser.entries())) {
+      await sendPushToUser(admin, {
+        storeId: STORE_ID, userId: uid,
+        payload: { title: '🎁 또봉이 쿠폰이 도착했어요!', body: `${lines.join('\n')}\n앱에서 확인하세요`, url: `/store/${STORE_ID}/profile`, tag: 'coupon' },
+      })
+    }
+  }
 
   // 오늘(KST) 발급된 쿠폰을 회원명과 함께 반환 (여러 번 눌러도 '오늘 발급분'을 일관되게 표시)
   // 멀티매장: coupons엔 store_id가 없어 이 매장 회원(user_id)로 스코핑.
