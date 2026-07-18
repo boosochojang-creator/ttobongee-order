@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { STORE_ID } from '../../lib/store'
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
     )
 
     const ext = file.name.split('.').pop()
-    const path = `baegun.${ext}`
+    const path = `${STORE_ID}.${ext}`
     const bytes = await file.arrayBuffer()
 
     const { error: uploadErr } = await admin.storage
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     const { error: updateErr } = await admin
       .from('stores')
       .update({ bgm_url: publicUrl })
-      .eq('id', 'baegun')
+      .eq('id', STORE_ID)
 
     if (updateErr) throw updateErr
 

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { greetingLabel } from '../../../lib/memberState'
 import LegalFooter from '../../../lib/LegalFooter'
+import { useStoreId } from '../../../lib/storeContext'
 
 const TABLES = [
   { no: 1, label: '1번', sub: '테이블' },
@@ -27,6 +28,7 @@ function stripEmoji(text: string) {
 
 export default function TablePage() {
   const router = useRouter()
+  const storeId = useStoreId()
   const { setTableNo, setOrderType, clearItems, isMember, phone, nickname, grade, visitCount } = useCart()
   const [greetingText, setGreetingText] = useState<string | null>(null)
   const memberRef = useRef({ isMember, phone, nickname })
@@ -79,7 +81,7 @@ export default function TablePage() {
     clearItems()
     setTableNo(String(t.no))
     setOrderType('dine_in')
-    router.push('/store/baegun/menu')
+    router.push(`/store/${storeId}/menu`)
   }
 
   function takeout() {
@@ -87,7 +89,7 @@ export default function TablePage() {
     clearItems()
     setTableNo('0')
     setOrderType('takeout')
-    router.push('/store/baegun/menu')
+    router.push(`/store/${storeId}/menu`)
   }
 
   return (

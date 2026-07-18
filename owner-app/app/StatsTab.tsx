@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './lib/supabase'
 import CouponStats from './CouponStats'
 import { SALES_COUNTED } from './lib/salesStatus'
+import { STORE_ID } from './lib/store'
 
 type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -113,7 +114,7 @@ export default function StatsTab() {
     setLoading(true)
     supabase.from('orders')
       .select('id, user_id, table_no, order_type, status, final_amount, created_at, order_items(menu_id, name_snapshot, qty, subtotal)')
-      .eq('store_id', 'baegun')
+      .eq('store_id', STORE_ID)
       .gte('created_at', new Date(range.start).toISOString())
       .lt('created_at', new Date(range.end).toISOString())
       .in('status', SALES_COUNTED) // [4][11] 확정 매출만 — cash_pending(미결제) 등 제외, 화면 전체와 동일 기준
@@ -137,11 +138,11 @@ export default function StatsTab() {
   useEffect(() => {
     supabase.from('users')
       .select('id, created_at, marketing_opt_in, member_status, last_visit')
-      .eq('store_id', 'baegun')
+      .eq('store_id', STORE_ID)
       .then(({ data }) => setMembers((data as UserRow[]) || []))
     supabase.from('orders')
       .select('user_id, created_at')
-      .eq('store_id', 'baegun')
+      .eq('store_id', STORE_ID)
       .not('user_id', 'is', null)
       .in('status', SALES_COUNTED) // [4] 방문/재방문 집계도 동일 기준
       .then(({ data }) => setMemberOrders((data as UserOrderRow[]) || []))

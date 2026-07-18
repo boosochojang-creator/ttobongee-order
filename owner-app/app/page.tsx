@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase'
 import StatsTab from './StatsTab'
 import { SALES_COUNTED } from './lib/salesStatus'
 import { PAYMENT_ENABLED } from './lib/flags'
+import { STORE_ID } from './lib/store'
 
 type Order = {
   id: string
@@ -267,7 +268,7 @@ export default function OwnerDashboard() {
       .select(`*,
                order_items(name_snapshot, qty, subtotal),
                users(visit_count, grade)`)
-      .eq('store_id', 'baegun')
+      .eq('store_id', STORE_ID)
       .neq('status', 'canceled')
       // pending = 손님이 결제창만 열고 아직 결제 안 한 상태(취소·이탈 포함) → 확정 전이므로 점주 화면에서 제외
       .neq('status', 'pending')
@@ -331,13 +332,13 @@ export default function OwnerDashboard() {
   const loadMonthlyReports = useCallback(async (year: number, month: number) => {
     const pad = (n: number) => String(n).padStart(2, '0')
     const { data } = await supabase.from('daily_reports').select('*')
-      .eq('store_id', 'baegun').gte('date', `${year}-${pad(month)}-01`).lte('date', `${year}-${pad(month)}-31`).order('date')
+      .eq('store_id', STORE_ID).gte('date', `${year}-${pad(month)}-01`).lte('date', `${year}-${pad(month)}-31`).order('date')
     setMonthlyReports(data || [])
   }, [])
 
   const loadYearlyReports = useCallback(async (year: number) => {
     const { data } = await supabase.from('daily_reports').select('date, total_sales, order_count')
-      .eq('store_id', 'baegun').gte('date', `${year}-01-01`).lte('date', `${year}-12-31`)
+      .eq('store_id', STORE_ID).gte('date', `${year}-01-01`).lte('date', `${year}-12-31`)
     setYearlyReports(data || [])
   }, [])
 
@@ -385,7 +386,7 @@ export default function OwnerDashboard() {
   }, [authed, tab, bizSubTab, bizYear, loadYearlyReports])
 
   useEffect(() => {
-    supabase.from('stores').select('pin_code').eq('id', 'baegun').single()
+    supabase.from('stores').select('pin_code').eq('id', STORE_ID).single()
       .then(({ data }) => { if (data?.pin_code) setPinDB(data.pin_code) })
   }, [])
 
@@ -411,19 +412,19 @@ export default function OwnerDashboard() {
   }, [])
 
   const loadMenus = async () => {
-    const { data } = await supabase.from('menus').select('*').eq('store_id', 'baegun').order('category').order('sort_order')
+    const { data } = await supabase.from('menus').select('*').eq('store_id', STORE_ID).order('category').order('sort_order')
     if (data) setMenus(data)
   }
 
   const loadMembers = async () => {
     const { data: users } = await supabase.from('users')
       .select('id, phone, nickname, created_at, last_visit, first_order_at, last_order_at, visit_count, total_order_count, total_spent, average_order_amount, customer_grade, grade, member_status, marketing_opt_in, address_saved, birthday_saved, birthday, address, email')
-      .eq('store_id', 'baegun')
+      .eq('store_id', STORE_ID)
     if (!users) return
 
     // 선호메뉴: 완료 주문의 order_items에서 회원별 최다 주문 '음식' 메뉴(수량 기준). favorite_menu_id는 integer라 미사용, 조회 시 계산.
     // 음료/주류 카테고리는 선호메뉴 후보에서 제외 — 음식류(세트메뉴/치킨류/안주류)만 반영.
-    const { data: menuCats } = await supabase.from('menus').select('name, category').eq('store_id', 'baegun')
+    const { data: menuCats } = await supabase.from('menus').select('name, category').eq('store_id', STORE_ID)
     const DRINK_CATS = new Set(['음료', '주류', '음료/주류'])
     const drinkNames = new Set((menuCats || []).filter(m => DRINK_CATS.has(m.category)).map(m => m.name))
     const { data: cntOrders } = await supabase.from('orders')
@@ -446,8 +447,10 @@ export default function OwnerDashboard() {
     }
 
     // 세그먼트용 보조 데이터: 유효 쿠폰(미사용·미만료) 보유자 + 배달 이력 보유자
+    // 멀티매장: coupons엔 store_id가 없어 이 매장 회원(user_id)로 스코핑한다(부모 경유).
     const nowIso = new Date().toISOString()
-    const { data: coup } = await supabase.from('coupons').select('user_id').eq('status', 'active').gt('expires_at', nowIso)
+    const storeUserIds = users.map(u => u.id)
+    const { data: coup } = await supabase.from('coupons').select('user_id').eq('status', 'active').gt('expires_at', nowIso).in('user_id', storeUserIds)
     const couponUsers = new Set((coup || []).map(c => c.user_id))
     const { data: delo } = await supabase.from('orders').select('user_id')
       .eq('order_type', 'delivery').not('delivery_address', 'is', null).not('user_id', 'is', null)
@@ -519,7 +522,7 @@ export default function OwnerDashboard() {
 
   // ===== Phase 5-1-a: 라이더 =====
   const loadRiders = async () => {
-    const { data } = await supabase.from('riders').select('*').eq('store_id', 'baegun').eq('is_active', true).order('created_at')
+    const { data } = await supabase.from('riders').select('*').eq('store_id', STORE_ID).eq('is_active', true).order('created_at')
     if (data) setRiders(data)
   }
   const addRider = async () => {
@@ -675,7 +678,7 @@ export default function OwnerDashboard() {
   const loadTodayReport = async () => {
     const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     const { data } = await supabase.from('daily_reports').select('*')
-      .eq('store_id', 'baegun').eq('date', today).maybeSingle()
+      .eq('store_id', STORE_ID).eq('date', today).maybeSingle()
     setTodayReport(data || null)
   }
 
@@ -691,7 +694,7 @@ export default function OwnerDashboard() {
       const body = await res.json().catch(() => null)
       if (!body?.ok) return false
       // 실제 DB 값 재확인 (권위적)
-      const { data } = await supabase.from('stores').select('is_open').eq('id', 'baegun').single()
+      const { data } = await supabase.from('stores').select('is_open').eq('id', STORE_ID).single()
       return data?.is_open === open
     } catch { return false }
   }
@@ -699,7 +702,7 @@ export default function OwnerDashboard() {
   const startBusiness = async () => {
     const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
     await supabase.from('daily_reports').upsert(
-      { store_id: 'baegun', date: today, start_time: new Date().toISOString() },
+      { store_id: STORE_ID, date: today, start_time: new Date().toISOString() },
       { onConflict: 'store_id,date' }
     )
     // [2] 영업상태 → 고객 화면 반영. 반영 확정 실패 시 점주에게 경고(고객화면이 아직 마감으로 보일 수 있음).
@@ -731,7 +734,7 @@ export default function OwnerDashboard() {
   const reopenBusiness = async () => {
     const today = kstDay(new Date())
     await supabase.from('daily_reports').upsert(
-      { store_id: 'baegun', date: today, end_time: null },
+      { store_id: STORE_ID, date: today, end_time: null },
       { onConflict: 'store_id,date' }
     )
     const okOpen = await applyStoreOpen(true)

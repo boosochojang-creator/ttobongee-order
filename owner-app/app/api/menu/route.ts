@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { STORE_ID } from '../../lib/store'
 
 // B3: 메뉴 생성/수정/삭제 — menus는 anon write가 RLS로 차단되므로 서비스롤 경유(토글과 동일 패턴).
 // (기존 saveEdit/addMenu/deleteMenu가 anon 직접 write라 조용히 실패하던 버그 수정)
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: '이름/가격을 확인해주세요' }, { status: 400 })
       }
       const { error } = await admin.from('menus').insert({
-        store_id: 'baegun', category, name, price, sort_order: 999, is_available: true,
+        store_id: STORE_ID, category, name, price, sort_order: 999, is_available: true,
       })
       if (error) throw error
       return NextResponse.json({ ok: true })

@@ -9,12 +9,14 @@ import {
   markInstalled, setMemberFlag,
 } from '../../../lib/pwaInstall'
 import { updateMemberLocal } from '../../../lib/memberState'
+import { useStoreId } from '../../../lib/storeContext'
 
 // 가입 완료 후 이어지는 설치 안내 단계 종류
 type InstallStep = null | 'ios' | 'guide'
 
 export default function LoginPage() {
   const router = useRouter()
+  const storeId = useStoreId()
   const { setMember } = useCart()
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,7 +31,7 @@ export default function LoginPage() {
     try {
       // upsert 회원
       const { data: existing } = await supabase
-        .from('users').select('id, grade, visit_count, nickname').eq('store_id', 'baegun').eq('phone', digits).single()
+        .from('users').select('id, grade, visit_count, nickname').eq('store_id', storeId).eq('phone', digits).single()
 
       let uid: string
       let memberGrade = 'bronze'
@@ -45,7 +47,7 @@ export default function LoginPage() {
         }).eq('id', uid)
       } else {
         const { data: newUser, error: err } = await supabase.from('users').insert({
-          store_id: 'baegun', phone: digits
+          store_id: storeId, phone: digits
         }).select('id, grade, visit_count, nickname').single()
         if (err || !newUser) throw err
         uid = newUser.id

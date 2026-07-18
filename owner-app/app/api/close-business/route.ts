@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { SALES_COUNTED } from '../../lib/salesStatus'
+import { STORE_ID } from '../../lib/store'
 
 // 확인1 후속: 영업 마감(수동 버튼 + 자동 안전장치 공용 로직).
 // 원칙: '열린 영업일'(start_time 있고 end_time null)을 타깃해 마감한다.
@@ -23,7 +24,7 @@ async function performClose(auto: boolean) {
   // 열린 영업일 탐지 (start 있고 end 없음).
   const { data: openRow } = await admin.from('daily_reports')
     .select('id, date, start_time, end_time')
-    .eq('store_id', 'baegun')
+    .eq('store_id', STORE_ID)
     .not('start_time', 'is', null)
     .is('end_time', null)
     .order('date', { ascending: false })
@@ -31,7 +32,7 @@ async function performClose(auto: boolean) {
 
   if (!openRow) {
     // 열린 영업일이 없으면 집계할 세션은 없지만, 마감 의사(수동/자동)는 is_open=false로 반영(과거 잔여 보정).
-    try { await admin.from('stores').update({ is_open: false }).eq('id', 'baegun') } catch {}
+    try { await admin.from('stores').update({ is_open: false }).eq('id', STORE_ID) } catch {}
     return { ok: true, closed: false, reason: 'no_open_day' }
   }
 
@@ -41,7 +42,7 @@ async function performClose(auto: boolean) {
   // 해당 영업 세션 매출 집계 ([영업시작, 마감시각))
   const { data: raw } = await admin.from('orders')
     .select('final_amount, payment_method')
-    .eq('store_id', 'baegun')
+    .eq('store_id', STORE_ID)
     .in('status', SALES_COUNTED)
     .gte('created_at', openRow.start_time)
     .lt('created_at', endIso)
@@ -60,7 +61,7 @@ async function performClose(auto: boolean) {
   if (drErr) throw drErr
 
   // ② 고객 화면 마감 반영
-  const { error: soErr } = await admin.from('stores').update({ is_open: false }).eq('id', 'baegun')
+  const { error: soErr } = await admin.from('stores').update({ is_open: false }).eq('id', STORE_ID)
   if (soErr) throw soErr
 
   return { ok: true, closed: true, date: openRow.date, auto, end_time: endIso, total_sales: total, order_count: count }

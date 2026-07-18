@@ -17,10 +17,11 @@ export async function GET(req: NextRequest) {
     if (!['music', 'arcade', 'board'].includes(source || '')) {
       return NextResponse.json({ ok: false, error: 'source 필요' }, { status: 400 })
     }
+    const storeId = req.nextUrl.searchParams.get('storeId') || 'baegun'
     const db = admin()
     const { data: posts } = await db.from('posts')
       .select('id, user_id, author_name, is_anonymous, is_secret, content, image_url, created_at')
-      .eq('store_id', 'baegun').eq('source', source)
+      .eq('store_id', storeId).eq('source', source)
       .order('created_at', { ascending: false }).limit(100)
 
     const ids = (posts || []).map(p => p.id)
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await db.from('posts').insert({
-      store_id: 'baegun', source, user_id: b.userId || null,
+      store_id: b.storeId || 'baegun', source, user_id: b.userId || null,
       author_name: authorName, is_anonymous: anonymous, content,
       is_secret: isSecret, secret_pw_hash: secretHash, image_url: imageKey,
     }).select('id').single()

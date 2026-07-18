@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { useCart, CART_STORAGE_KEY } from './lib/cartStore'
+import { DEFAULT_STORE } from './lib/storeContext'
 
 function Home() {
   const router = useRouter()
@@ -18,10 +19,10 @@ function Home() {
       clearItems()
       setTableNo(table)
       setOrderType('dine_in')
-      router.replace('/store/baegun/menu')
+      router.replace(`/store/${DEFAULT_STORE}/menu`)
     } else {
-      // 입구 QR / 직접 접속 → 테이블 선택 화면
-      router.replace('/store/baegun/table')
+      // 입구 QR / 직접 접속 → 기본 매장 테이블 선택 화면 (매장별 QR은 /store/{storeId}?table=N 로 진입)
+      router.replace(`/store/${DEFAULT_STORE}/table`)
     }
   }, [])
 

@@ -3,11 +3,13 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import LegalFooter from '../../../lib/LegalFooter'
 import { PAYMENT_ENABLED } from '../../../lib/flags'
+import { useStoreId } from '../../../lib/storeContext'
 
 const won = (n: number) => n.toLocaleString() + '원'
 
 export default function CartPage() {
   const router = useRouter()
+  const storeId = useStoreId()
   const { items, updateQty, removeItem, totalAmount, discountAmount, finalAmount, isMember, totalQty } = useCart()
 
   if (!items.length) return (
@@ -66,11 +68,11 @@ export default function CartPage() {
           <div className="member-banner" style={{ marginBottom: 16 }}>
             <span className="gift">🎁</span>
             <p><strong>생맥주·소주·음료 중 1잔 무료 증정</strong> 받을 수 있어요!</p>
-            <button className="link" onClick={() => router.push('/store/baegun/login')}>무료 받기</button>
+            <button className="link" onClick={() => router.push(`/store/${storeId}/login`)}>무료 받기</button>
           </div>
         )}
 
-        <button className="btn-primary" onClick={() => router.push('/store/baegun/checkout')}>
+        <button className="btn-primary" onClick={() => router.push(`/store/${storeId}/checkout`)}>
           {PAYMENT_ENABLED ? '결제하러 가기' : '주문하러 가기'}
         </button>
       </div>

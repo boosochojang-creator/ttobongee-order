@@ -9,6 +9,7 @@ import { fetchStoreClosed } from '../../../lib/storeStatus'
 import { validateSplitCount, splitPerPerson } from '../../../lib/splitInfo'
 import { pickupIso } from '../../../lib/pickup'
 import { PAYMENT_ENABLED, DUTCH_PAY_ENABLED } from '../../../lib/flags'
+import { useStoreId } from '../../../lib/storeContext'
 
 type PayMethod = 'card' | 'kakao' | 'toss' | 'cash'
 const won = (n: number) => n.toLocaleString() + '원'
@@ -36,6 +37,7 @@ const VISIBLE_PAY_OPTIONS = PAY_OPTIONS.filter(
 
 export default function CheckoutPage() {
   const router = useRouter()
+  const storeId = useStoreId()
   const { items, tableNo, orderType, isMember, userId, phone, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
   const [payMethod, setPayMethod] = useState<PayMethod>('card')
   const [loading, setLoading] = useState(false)
@@ -45,7 +47,7 @@ export default function CheckoutPage() {
   const [storeClosed, setStoreClosed] = useState(false)
   useEffect(() => {
     let alive = true
-    const check = () => fetchStoreClosed().then(c => { if (alive) setStoreClosed(c) })
+    const check = () => fetchStoreClosed(storeId).then(c => { if (alive) setStoreClosed(c) })
     check()
     const t = setInterval(check, 20000)
     return () => { alive = false; clearInterval(t) }
@@ -99,7 +101,7 @@ export default function CheckoutPage() {
       const res = await fetch('/api/delivery-fee', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: roadAddr }),
+        body: JSON.stringify({ address: roadAddr, storeId }),
       })
       const data = await res.json()
       if (!data.ok) { setCalcError(data.error || '배달료 계산에 실패했어요'); return }
@@ -144,7 +146,7 @@ export default function CheckoutPage() {
   const handleOrder = async () => {
     if (!items.length) return
     // [2] 제출 시점 권위적 재확인 — 페이지 머무는 사이 마감됐을 수 있어 최신 상태로 하드가드(주문·결제 원천 차단)
-    if (await fetchStoreClosed()) {
+    if (await fetchStoreClosed(storeId)) {
       setStoreClosed(true)
       setError('지금은 영업 준비 중이라 주문을 받을 수 없어요. 잠시 후 다시 시도하거나 직원에게 문의해주세요.')
       return
@@ -163,7 +165,7 @@ export default function CheckoutPage() {
     // 결제분리: 결제 없이 바로 '접수 대기'(cash_pending 재사용)로 생성 → 점주 접수 시 매출/CRM/쿠폰used 처리.
     const status = (!PAYMENT_ENABLED || payMethod === 'cash') ? 'cash_pending' : 'pending'
     const { data: order, error: orderErr } = await supabase.from('orders').insert({
-      store_id: 'baegun',
+      store_id: storeId,
       table_no: isDelivery ? 0 : Number(tableNo),
       order_type: isDelivery ? 'delivery' : orderType,
       status,
@@ -210,7 +212,7 @@ export default function CheckoutPage() {
     if (!PAYMENT_ENABLED || payMethod === 'cash') {
       clearCart()
       setActiveOrder(order.id)
-      router.push('/store/baegun/menu')
+      router.push(`/store/${storeId}/menu`)
       return
     }
 
@@ -229,7 +231,7 @@ export default function CheckoutPage() {
         currency: 'CURRENCY_KRW',
         // 모바일은 결제창으로 페이지가 통째로 이동했다 돌아오는 리디렉션 방식이라 복귀 주소가 필수.
         // PC(iframe/팝업)에서는 SDK가 이 값을 무시하므로 기존 흐름에 영향 없음.
-        redirectUrl: `${window.location.origin}/store/baegun/payment-result?orderId=${order.id}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`,
+        redirectUrl: `${window.location.origin}/store/${storeId}/payment-result?orderId=${order.id}${phone ? `&phone=${encodeURIComponent(phone)}` : ''}`,
         payMethod: payMethod === 'card' ? 'CARD' : 'EASY_PAY',
         ...(payMethod !== 'card' && {
           easyPay: {
@@ -271,7 +273,7 @@ export default function CheckoutPage() {
 
       clearCart()
       setActiveOrder(order.id)
-      router.push('/store/baegun/menu')
+      router.push(`/store/${storeId}/menu`)
     } catch (e: any) {
       console.error('[checkout] 결제 처리 오류:', e)
       setError('결제 처리 중 오류가 발생했어요. 다시 시도해주세요.')

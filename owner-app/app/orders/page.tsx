@@ -16,7 +16,7 @@ type Order = {
   payment_method: string | null;
 };
 
-const STORE_ID = "baegun";
+const STORE_ID = process.env.NEXT_PUBLIC_STORE_ID || "baegun";
 
 const NEXT_STATUS: Record<string, string> = {
   pending: "awaiting_approval",

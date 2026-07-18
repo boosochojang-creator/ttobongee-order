@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import BackToOrder from '../../../lib/BackToOrder'
 import HanmadiSection from '../../../lib/HanmadiSection'
+import { useStoreId } from '../../../lib/storeContext'
 
 const backBtn: React.CSSProperties = {
   background: '#1c1c1c', border: '1px solid #c8a900', color: '#FFD700',
@@ -10,12 +11,13 @@ const backBtn: React.CSSProperties = {
 }
 
 export default function ArcadePage() {
+  const storeId = useStoreId()
   const [games, setGames] = useState<any[]>([])
   const [playing, setPlaying] = useState<any | null>(null)
 
   useEffect(() => {
-    fetch('/api/arcade/list').then(x => x.json()).then(r => setGames(r?.ok ? r.games : [])).catch(() => {})
-  }, [])
+    fetch(`/api/arcade/list?storeId=${storeId}`).then(x => x.json()).then(r => setGames(r?.ok ? r.games : [])).catch(() => {})
+  }, [storeId])
 
   if (playing) {
     return (

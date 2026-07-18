@@ -3,16 +3,18 @@
 import { useEffect, useRef, useState } from 'react'
 import BackToOrder from '../../../lib/BackToOrder'
 import HanmadiSection from '../../../lib/HanmadiSection'
+import { useStoreId } from '../../../lib/storeContext'
 
 export default function MusicPage() {
+  const storeId = useStoreId()
   const [tracks, setTracks] = useState<any[]>([])
   const [playing, setPlaying] = useState<string | null>(null) // 재생중 track id
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
-    fetch('/api/music/list').then(x => x.json()).then(r => setTracks(r?.ok ? r.tracks : [])).catch(() => {})
+    fetch(`/api/music/list?storeId=${storeId}`).then(x => x.json()).then(r => setTracks(r?.ok ? r.tracks : [])).catch(() => {})
     return () => { audioRef.current?.pause() }
-  }, [])
+  }, [storeId])
 
   const toggle = (t: any) => {
     const audio = audioRef.current

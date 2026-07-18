@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { STORE_ID } from '../../lib/store'
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
     const { data: store, error: fetchErr } = await admin
       .from('stores')
       .select('pin_code')
-      .eq('id', 'baegun')
+      .eq('id', STORE_ID)
       .single()
 
     if (fetchErr && fetchErr.code !== 'PGRST116') throw fetchErr
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     const { error: updateErr } = await admin
       .from('stores')
       .update({ pin_code: newPin })
-      .eq('id', 'baegun')
+      .eq('id', STORE_ID)
 
     if (updateErr) throw updateErr
 

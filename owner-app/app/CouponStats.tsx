@@ -3,6 +3,7 @@
 // 집계: 종류별 발급/사용/사용률/미사용(만료포함), 쿠폰사용 매출, 발급 후 7일·30일 내 재주문(발급 건 기준).
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
+import { STORE_ID } from './lib/store'
 
 const COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served', 'out_for_delivery', 'delivered']
 const TYPES = ['signup', 'birthday', 'winback', 'vip_thanks'] as const
@@ -22,10 +23,15 @@ export default function CouponStats() {
   const [orders, setOrders] = useState<Ord[]>([])
 
   useEffect(() => {
-    supabase.from('coupons').select('type, status, issued_at, used_order_id, user_id')
-      .then(({ data }) => setCoupons((data as Coupon[]) || []))
-    supabase.from('orders').select('id, user_id, created_at, final_amount, status')
-      .then(({ data }) => setOrders((data as Ord[]) || []))
+    // 멀티매장: 이 매장(STORE_ID) 회원·주문으로 스코핑. coupons는 store_id가 없어 store 회원(user_id) 경유.
+    ;(async () => {
+      const { data: us } = await supabase.from('users').select('id').eq('store_id', STORE_ID)
+      const storeUserIds = (us || []).map(u => u.id)
+      const { data: cp } = await supabase.from('coupons').select('type, status, issued_at, used_order_id, user_id').in('user_id', storeUserIds)
+      setCoupons((cp as Coupon[]) || [])
+      const { data: od } = await supabase.from('orders').select('id, user_id, created_at, final_amount, status').eq('store_id', STORE_ID)
+      setOrders((od as Ord[]) || [])
+    })()
   }, [])
 
   if (!coupons) return <div style={box}><div style={{ color: '#888', fontSize: 13 }}>쿠폰 성과 불러오는 중…</div></div>

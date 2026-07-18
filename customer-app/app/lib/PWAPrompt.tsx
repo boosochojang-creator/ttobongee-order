@@ -6,6 +6,7 @@
 // - 설치 완료: 영구 숨김 / 닫기(✕): 7일 숨김
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import { useStoreId } from './storeContext'
 import {
   getDeferredPrompt, clearDeferredPrompt, getMember,
   isInstalled, isLaterActive, isIOS, markInstalled, setLater,
@@ -13,6 +14,7 @@ import {
 
 export default function PWAPrompt() {
   const pathname = usePathname()
+  const storeId = useStoreId()
   const [show, setShow] = useState(false)
   const [ios, setIos] = useState(false)
   const [openGuide, setOpenGuide] = useState(false)
@@ -25,7 +27,7 @@ export default function PWAPrompt() {
     return () => clearTimeout(t)
   }, [])
 
-  if (pathname !== '/store/baegun/menu' && pathname !== '/store/baegun/table') return null
+  if (pathname !== `/store/${storeId}/menu` && pathname !== `/store/${storeId}/table`) return null
   if (!show) return null
 
   const dismiss = () => { setLater(7); setShow(false) }

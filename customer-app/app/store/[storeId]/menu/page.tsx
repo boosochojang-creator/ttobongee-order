@@ -7,6 +7,7 @@ import LegalFooter from '../../../lib/LegalFooter'
 import ProfilePrompt from '../../../lib/ProfilePrompt'
 import { getMemberLocal, greetingLabel } from '../../../lib/memberState'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
+import { useStoreId } from '../../../lib/storeContext'
 
 type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; sold_out?: boolean; image_url?: string | null }
 
@@ -35,6 +36,7 @@ const GRADE_COLOR: Record<string, string> = { gold: '#FFD700', silver: '#C0C0C0'
 
 export default function MenuPage() {
   const router = useRouter()
+  const storeId = useStoreId()
   const { addItem, updateQty, items, totalQty, finalAmount, tableNo, orderType, isMember, phone, nickname, grade, visitCount } = useCart()
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [activeCat, setActiveCat] = useState('세트메뉴')
@@ -48,7 +50,7 @@ export default function MenuPage() {
   const [storeClosed, setStoreClosed] = useState(false)
   useEffect(() => {
     let alive = true
-    const check = () => fetchStoreClosed().then(c => { if (alive) setStoreClosed(c) })
+    const check = () => fetchStoreClosed(storeId).then(c => { if (alive) setStoreClosed(c) })
     check()
     const t = setInterval(check, 20000)
     return () => { alive = false; clearInterval(t) }
@@ -60,7 +62,7 @@ export default function MenuPage() {
   const [headerH, setHeaderH] = useState(114)
 
   useEffect(() => {
-    supabase.from('menus').select('*').eq('store_id', 'baegun').order('sort_order')
+    supabase.from('menus').select('*').eq('store_id', storeId).order('sort_order')
       .then(({ data }) => { if (data) setMenus(data) })
   }, [])
 
@@ -174,7 +176,7 @@ export default function MenuPage() {
               </span>
               <span style={{ fontSize: 13, color: '#888' }}>· {visitCount}번째 방문</span>
               <button
-                onClick={() => router.push('/store/baegun/profile')}
+                onClick={() => router.push(`/store/${storeId}/profile`)}
                 style={{
                   marginLeft: 'auto', background: 'none', border: '1px solid #444',
                   borderRadius: 20, padding: '2px 10px', fontSize: 12, color: '#aaa', cursor: 'pointer',
@@ -205,7 +207,7 @@ export default function MenuPage() {
             <button
               style={{flex:1, padding:'12px', background:'#c8a900', color:'#111',
                 fontWeight:700, fontSize:15, borderRadius:10, border:'none', cursor:'pointer'}}
-              onClick={() => router.push('/store/baegun/login')}
+              onClick={() => router.push(`/store/${storeId}/login`)}
             >
               무료 받고 주문하기
             </button>
@@ -276,7 +278,7 @@ export default function MenuPage() {
 
       {/* 장바구니 플로팅 버튼 — [2] 영업 준비 중이면 숨김(주문 불가) */}
       {totalQty > 0 && !storeClosed && (
-        <button className="cart-fab" onClick={() => router.push('/store/baegun/cart')}>
+        <button className="cart-fab" onClick={() => router.push(`/store/${storeId}/cart`)}>
           <span>🛒 {totalQty}개 담음</span>
           <span>{finalAmount.toLocaleString()}원 →</span>
         </button>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
+import { useStoreId } from '../../../lib/storeContext'
 
 type Status = 'pending' | 'paid' | 'cash_pending' | 'accepted' | 'cooking' | 'done' | 'served' | 'canceled'
 
@@ -30,6 +31,7 @@ const FORTUNES = [
 
 function StatusContent() {
   const params = useSearchParams()
+  const storeId = useStoreId()
   const router = useRouter()
   const orderId = params.get('id')
   const isCash = params.get('cash') === '1'
@@ -236,7 +238,7 @@ function StatusContent() {
         <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 24 }}>
           불편을 드려 죄송합니다.<br />직원에게 문의해주세요.
         </p>
-        <button className="btn-primary" onClick={() => router.push('/store/baegun/menu')}>
+        <button className="btn-primary" onClick={() => router.push(`/store/${storeId}/menu`)}>
           다시 주문하기
         </button>
       </div>
@@ -279,7 +281,7 @@ function StatusContent() {
             <div style={{ color: '#888', fontSize: 14, textAlign: 'center', padding: 12 }}>내역 불러오는 중…</div>
           )}
         </div>
-        <button className="btn-primary" style={{ marginTop: 24 }} onClick={() => router.push('/store/baegun/menu')}>
+        <button className="btn-primary" style={{ marginTop: 24 }} onClick={() => router.push(`/store/${storeId}/menu`)}>
           다시 주문하기
         </button>
       </div>
@@ -423,7 +425,7 @@ function StatusContent() {
         {/* 완료 시 추가 주문 버튼 */}
         {status === 'done' && (
           <div style={{ marginTop: 32 }}>
-            <button className="btn-primary" onClick={() => router.push('/store/baegun/menu')}>
+            <button className="btn-primary" onClick={() => router.push(`/store/${storeId}/menu`)}>
               추가 주문하기
             </button>
             {/* v1.4: PWA 설치 유도 문구 비활성화 (PWAPrompt.tsx 참조 — 구조 보존)

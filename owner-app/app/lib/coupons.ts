@@ -1,6 +1,7 @@
 // Phase 4-B 쿠폰 자동발급 엔진 (서버 전용 · 서비스롤)
 // 규칙은 템플릿 테이블 없이 하드코딩(4종 고정). 발급 인스턴스만 coupons 테이블에 저장.
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { STORE_ID } from './store'
 
 // 메뉴 무료 증정 방식 (금액할인 폐기). freeMenu 개수만큼 증정, validDays=null이면 무제한, sameDay=true면 발급 당일부터 사용가능(그 외는 다음날부터).
 // 증정 메뉴 교체(2026-07): 발급조건(minOrder/validDays/sameDay)은 그대로, 메뉴만 변경.
@@ -71,7 +72,7 @@ export async function runCouponAutomation(admin: SupabaseClient) {
     .eq('status', 'active').lt('expires_at', nowIso).select('id')
 
   const { data: users } = await admin.from('users')
-    .select('id, phone, nickname, birthday, customer_grade, last_visit, total_order_count').eq('store_id', 'baegun')
+    .select('id, phone, nickname, birthday, customer_grade, last_visit, total_order_count').eq('store_id', STORE_ID)
   const { data: existing } = await admin.from('coupons').select('user_id, type, status, expires_at')
 
   const everSignup = new Set<string>()
@@ -94,9 +95,11 @@ export async function runCouponAutomation(admin: SupabaseClient) {
   }
   if (toIssue.length) await admin.from('coupons').insert(toIssue)
 
-  // 오늘(KST) 발급된 쿠폰 전체를 회원명과 함께 반환 (여러 번 눌러도 '오늘 발급분'을 일관되게 표시)
+  // 오늘(KST) 발급된 쿠폰을 회원명과 함께 반환 (여러 번 눌러도 '오늘 발급분'을 일관되게 표시)
+  // 멀티매장: coupons엔 store_id가 없어 이 매장 회원(user_id)로 스코핑.
+  const storeUserIds = (users || []).map(u => u.id)
   const { data: todays } = await admin.from('coupons')
-    .select('type, free_menu, free_qty, user_id').gte('issued_at', kstTodayStartIso())
+    .select('type, free_menu, free_qty, user_id').gte('issued_at', kstTodayStartIso()).in('user_id', storeUserIds)
   const nameOf = new Map((users || []).map(u => [u.id, u.nickname || u.phone]))
   const todayIssued = (todays || []).map(c => ({
     who: nameOf.get(c.user_id) || c.user_id,

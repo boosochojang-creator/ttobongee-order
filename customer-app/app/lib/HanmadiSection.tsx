@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getMemberLocal } from './memberState'
 import { BOARD_WARNING } from '../../lib/contentFilter'
+import { useStoreId } from './storeContext'
 
 type Post = { id: string; author_name: string; created_at: string; is_secret: boolean; comment_count: number; content: string | null; has_image: boolean; image_url: string | null; is_mine: boolean }
 
@@ -53,10 +54,11 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
   const [revealPw, setRevealPw] = useState<Record<string, string>>({})
   const [revealErr, setRevealErr] = useState<Record<string, string>>({})
 
+  const storeId = useStoreId()
   const userId = getMemberLocal()?.userId || null
   const uidQ = userId ? `&userId=${userId}` : ''
-  const load = () => fetch(`/api/board/posts?source=${source}${uidQ}`).then(x => x.json()).then(r => { if (r.ok) setPosts(r.posts) }).catch(() => {})
-  useEffect(() => { load() }, [source]) // eslint-disable-line react-hooks/exhaustive-deps
+  const load = () => fetch(`/api/board/posts?source=${source}&storeId=${storeId}${uidQ}`).then(x => x.json()).then(r => { if (r.ok) setPosts(r.posts) }).catch(() => {})
+  useEffect(() => { load() }, [source, storeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // [8] 본인 글/댓글 수정·삭제
   const [editingPost, setEditingPost] = useState<{ id: string; content: string } | null>(null)
@@ -100,7 +102,7 @@ export default function HanmadiSection({ source, title = '💬 한마디 남기�
     if (!content.trim() || busy) return
     if (board && secret && secretPw.trim().length < 2) { setErr('비밀번호를 2자 이상 입력해주세요'); return }
     setBusy(true); setErr('')
-    const body: any = { source, content, anonymous: anon, userId }
+    const body: any = { source, content, anonymous: anon, userId, storeId }
     if (board && secret) { body.is_secret = true; body.secret_pw = secretPw }
     if (board && imageData) body.image = imageData // [9] 공개글/비밀글 모두 사진 첨부 가능
     const r = await fetch('/api/board/posts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(x => x.json()).catch(() => null)

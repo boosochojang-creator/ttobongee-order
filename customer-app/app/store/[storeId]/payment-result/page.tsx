@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase'
 import { useCart } from '../../../lib/cartStore'
 import LegalFooter from '../../../lib/LegalFooter'
 import { setActiveOrder } from '../../../lib/activeOrder'
+import { useStoreId } from '../../../lib/storeContext'
 
 // 모바일 결제 복귀 페이지.
 // 결제창(리디렉션)에서 돌아오면 포트원이 paymentId(성공/실패 공통), code·message(실패 시)를
@@ -15,6 +16,7 @@ type Phase = 'verifying' | 'failed'
 
 function PaymentResultContent() {
   const params = useSearchParams()
+  const storeId = useStoreId()
   const router = useRouter()
   const orderId = params.get('orderId') || params.get('paymentId')
   const paymentId = params.get('paymentId') || orderId
@@ -46,7 +48,7 @@ function PaymentResultContent() {
     if (order.status !== 'pending' && order.status !== 'canceled') {
       clearCart()
       if (orderId) setActiveOrder(orderId)
-      router.replace('/store/baegun/menu')
+      router.replace(`/store/${storeId}/menu`)
       return
     }
 
@@ -65,7 +67,7 @@ function PaymentResultContent() {
       // 결제 확정 → 장바구니 비우고 메뉴로 복귀, 이후 안내는 팝업+음성 (그룹 C)
       clearCart()
       if (orderId) setActiveOrder(orderId)
-      router.replace('/store/baegun/menu')
+      router.replace(`/store/${storeId}/menu`)
     } else {
       // 검증 실패: 결제완료로 절대 넘기지 않는다. 이중결제 위험이 있으니 주문 취소도 하지 않고
       // 재확인/직원 문의를 안내한다 (실제로 돈이 빠졌을 수 있는 상태).
@@ -147,7 +149,7 @@ function PaymentResultContent() {
           )}
           <button
             className={canRetry ? undefined : 'btn-primary'}
-            onClick={() => router.push('/store/baegun/menu')}
+            onClick={() => router.push(`/store/${storeId}/menu`)}
             style={canRetry ? {
               background: 'none', border: '1px solid #555', borderRadius: 10,
               padding: '14px', color: '#aaa', fontSize: 15, cursor: 'pointer',

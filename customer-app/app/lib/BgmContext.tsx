@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase } from './supabase'
+import { useStoreId } from './storeContext'
 
 const MUTE_KEY = 'bgm-muted'
 
@@ -18,6 +19,7 @@ const BgmContext = createContext<BgmCtx>({
 })
 
 export function BgmProvider({ children }: { children: ReactNode }) {
+  const storeId = useStoreId()
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const startedRef = useRef(false)
   const [muted, setMuted] = useState(false)
@@ -33,7 +35,7 @@ export function BgmProvider({ children }: { children: ReactNode }) {
     // BGM URL: Supabase Storage bgm 버킷 우선, 없으면 로컬 fallback
     let bgmUrl = '/bgm.mp3'
     try {
-      const { data } = await supabase.from('stores').select('bgm_url').eq('id', 'baegun').single()
+      const { data } = await supabase.from('stores').select('bgm_url').eq('id', storeId).single()
       if (data?.bgm_url) bgmUrl = data.bgm_url
     } catch {}
 
@@ -46,7 +48,7 @@ export function BgmProvider({ children }: { children: ReactNode }) {
         await audio.play()
       }
     } catch {}
-  }, [])
+  }, [storeId])
 
   const toggleMuted = useCallback(() => {
     setMuted(prev => {

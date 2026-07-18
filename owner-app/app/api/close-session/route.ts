@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { recomputeCustomer } from '../../lib/customerStats'
+import { STORE_ID } from '../../lib/store'
 
 // A2: 한 테이블의 결제완료(세션 마감). 그 테이블의 조리완료(done) 매장주문을 한 번에 served로 닫고,
 // 같은 closed_at(하나의 결제 시점)을 공유시켜 '방문 1회'로 집계되게 한다.
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
     const { data: targets } = await admin.from('orders')
       .select('id, user_id')
-      .eq('store_id', 'baegun')
+      .eq('store_id', STORE_ID)
       .eq('order_type', 'dine_in')
       .eq('table_no', table_no)
       .eq('status', 'done')

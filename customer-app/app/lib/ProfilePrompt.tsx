@@ -4,12 +4,14 @@
 // profile_complete 회원에게는 아무것도 안 띄움.
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useStoreId } from './storeContext'
 import {
   getMemberLocal, shouldShowProfilePrompt, dismissProfilePromptToday,
 } from './memberState'
 
 export default function ProfilePrompt() {
   const router = useRouter()
+  const storeId = useStoreId()
   const [show, setShow] = useState(false)
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export default function ProfilePrompt() {
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button
-          onClick={() => router.push('/store/baegun/profile')}
+          onClick={() => router.push(`/store/${storeId}/profile`)}
           style={{
             flex: 1, padding: '10px', background: '#c8a900', color: '#111',
             fontWeight: 700, fontSize: 14, borderRadius: 10, border: 'none', cursor: 'pointer',

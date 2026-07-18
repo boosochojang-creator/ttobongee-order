@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { STORE_ID } from '../../../lib/store'
 
 // Phase 5-2-e-2: 오너 게시글 통합조회 — 3곳(source) 한곳에서. 비밀글 내용도 점주는 비번 없이 열람(서비스롤).
 export async function GET(req: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     let q = admin.from('posts')
       .select('id, source, author_name, is_anonymous, is_secret, content, image_url, created_at')
-      .eq('store_id', 'baegun').order('created_at', { ascending: false }).limit(200)
+      .eq('store_id', STORE_ID).order('created_at', { ascending: false }).limit(200)
     if (source !== 'all') q = q.eq('source', source)
     const { data: posts } = await q
 

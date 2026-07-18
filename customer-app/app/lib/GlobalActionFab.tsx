@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useCart } from './cartStore'
 import { supabase } from './supabase'
+import { useStoreId } from './storeContext'
 
 const CALL_ITEMS = ['💧 물 주세요', '🥗 치킨무 추가', '🧻 물티슈 주세요', '👋 직원 직접 호출']
 
@@ -16,15 +17,16 @@ function stripEmoji(text: string) {
 
 export default function GlobalActionFab() {
   const pathname = usePathname()
+  const storeId = useStoreId()
   const router = useRouter()
   const { tableNo } = useCart()
   const [open, setOpen] = useState(false)
   const [showSheet, setShowSheet] = useState(false)
 
   // 자리선택 화면에서는 숨김(주문 대기 화면에서만 노출)
-  if (pathname === '/store/baegun/table') return null
+  if (pathname === `/store/${storeId}/table`) return null
   // 허브 진입은 메뉴/자리 화면에서만 의미 있음
-  const showHub = pathname === '/store/baegun/menu'
+  const showHub = pathname === `/store/${storeId}/menu`
 
   const handleSelect = (item: string) => {
     // 비프음 (880hz → 1100hz)
@@ -91,7 +93,7 @@ export default function GlobalActionFab() {
       }}>
         {open && (
           <>
-            {showHub && pill(() => { setOpen(false); router.push('/store/baegun/hub') }, '🎮', '잠깐 쉬었다 갈까요?', true)}
+            {showHub && pill(() => { setOpen(false); router.push(`/store/${storeId}/hub`) }, '🎮', '잠깐 쉬었다 갈까요?', true)}
             {pill(() => { setOpen(false); setShowSheet(true) }, '🔔', '직원호출')}
           </>
         )}

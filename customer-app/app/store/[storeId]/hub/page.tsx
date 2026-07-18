@@ -3,15 +3,17 @@
 import { useRouter } from 'next/navigation'
 import BackToOrder from '../../../lib/BackToOrder'
 import PWAReinstallButton from '../../../lib/PWAReinstallButton'
+import { useStoreId } from '../../../lib/storeContext'
 
 const CARDS = [
-  { key: 'arcade', emoji: '🎮', title: '오락실', desc: '추억의 게임 한 판', href: '/store/baegun/arcade' },
-  { key: 'music', emoji: '🎵', title: '음악감상실', desc: '노래 듣고 한마디', href: '/store/baegun/music' },
-  { key: 'board', emoji: '📝', title: '자유게시판', desc: '하고 싶은 이야기', href: '/store/baegun/board' },
+  { key: 'arcade', emoji: '🎮', title: '오락실', desc: '추억의 게임 한 판' },
+  { key: 'music', emoji: '🎵', title: '음악감상실', desc: '노래 듣고 한마디' },
+  { key: 'board', emoji: '📝', title: '자유게시판', desc: '하고 싶은 이야기' },
 ]
 
 export default function HubPage() {
   const router = useRouter()
+  const storeId = useStoreId()
   return (
     <main>
       <BackToOrder />
@@ -20,7 +22,7 @@ export default function HubPage() {
         <p style={{ color: '#888', fontSize: 13, marginBottom: 22 }}>골라서 즐겨보세요 🍗</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {CARDS.map(c => (
-            <button key={c.key} onClick={() => router.push(c.href)}
+            <button key={c.key} onClick={() => router.push(`/store/${storeId}/${c.key}`)}
               style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 18px', background: '#1a1a1a', border: '1px solid #333', borderRadius: 16, cursor: 'pointer', textAlign: 'left' }}>
               <span style={{ fontSize: 38 }}>{c.emoji}</span>
               <div>

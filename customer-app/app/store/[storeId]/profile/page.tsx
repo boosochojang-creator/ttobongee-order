@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import { getMemberLocal, updateMemberLocal } from '../../../lib/memberState'
+import { useStoreId } from '../../../lib/storeContext'
 
 export default function ProfilePage() {
   const router = useRouter()
+  const storeId = useStoreId()
   const [nickname, setNickname] = useState('')
   const [birthday, setBirthday] = useState('')
   const [address, setAddress] = useState('')
@@ -24,7 +26,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const m = getMemberLocal()
-    if (!m) { router.replace('/store/baegun/login'); return }
+    if (!m) { router.replace(`/store/${storeId}/login`); return }
     // 내 쿠폰함 로드 (실패해도 프로필 화면엔 영향 없음)
     fetch(`/api/coupons/list?userId=${m.userId}`).then(r => r.json())
       .then(r => setCoupons(r?.ok ? r.coupons : [])).catch(() => setCoupons([]))

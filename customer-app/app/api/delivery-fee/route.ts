@@ -48,13 +48,13 @@ export async function POST(req: NextRequest) {
     const key = process.env.KAKAO_REST_API_KEY
     if (!key) return NextResponse.json({ ok: false, error: '지도 API 키 미설정 (KAKAO_REST_API_KEY)' }, { status: 503 })
 
-    const { address } = await req.json()
+    const { address, storeId } = await req.json()
     if (!address || String(address).trim().length < 5) {
       return NextResponse.json({ ok: false, error: '주소를 입력해주세요' }, { status: 400 })
     }
 
     const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-    const { data: store } = await db.from('stores').select('*').eq('id', 'baegun').single()
+    const { data: store } = await db.from('stores').select('*').eq('id', storeId || 'baegun').single()
 
     const settings: Settings = { ...DEFAULT_SETTINGS, ...(store?.delivery_settings || {}) }
 
