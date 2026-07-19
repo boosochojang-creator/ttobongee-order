@@ -3,6 +3,7 @@ import { CartProvider } from './lib/cartStore'
 import { BgmProvider } from './lib/BgmContext'
 import GlobalActionFab from './lib/GlobalActionFab'
 import PWAPrompt from './lib/PWAPrompt'
+import InAppBanner from './lib/InAppBanner'
 import SWRegister from './lib/SWRegister'
 import OrderWatcher from './lib/OrderWatcher'
 import './globals.css'
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <BgmProvider>
             {children}
             <GlobalActionFab />
+            <InAppBanner />
             <PWAPrompt />
             <SWRegister />
             <OrderWatcher />
