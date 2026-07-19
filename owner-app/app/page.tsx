@@ -178,6 +178,16 @@ export default function OwnerDashboard() {
   const [segFilter, setSegFilter] = useState<string | null>(null)        // 세그먼트 필터
   const [memberOrders, setMemberOrders] = useState<any[]>([])            // 상세: 주문이력
   const [memberDetailLoading, setMemberDetailLoading] = useState(false)
+  // [항목2-부속] 웹푸시 발송 — 일괄(이벤트) / 개별(경고, 물리 분리)
+  const [pushTitle, setPushTitle] = useState('')
+  const [pushBody, setPushBody] = useState('')
+  const [pushSending, setPushSending] = useState(false)
+  const [pushResult, setPushResult] = useState<string | null>(null)
+  const [pushOpen, setPushOpen] = useState(false)
+  const [warnModal, setWarnModal] = useState<any | null>(null)           // 개별 경고 대상 회원
+  const [warnBody, setWarnBody] = useState('')
+  const [warnSending, setWarnSending] = useState(false)
+  const [warnResult, setWarnResult] = useState<string | null>(null)
   const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats' | 'content'>('orders')
   // B4: 탭 이동을 URL 히스토리에 남겨 뒤로가기 시 이전 탭으로 돌아가게(앱 이탈/PIN 튕김 방지)
   const navTab = (t: typeof tab) => {
@@ -1753,6 +1763,22 @@ export default function OwnerDashboard() {
           border: `1px solid ${active ? color : '#333'}`, background: active ? color + '22' : 'transparent',
           color: active ? color : '#aaa', whiteSpace: 'nowrap' as const,
         })
+        // [항목2-부속] 일괄(이벤트) 발송 — 지금 필터된 대상(visible)에게. 수신거부자는 서버에서 자동 제외.
+        const sendBroadcast = async () => {
+          const ids = visible.map(m => m.id)
+          if (!pushTitle.trim() || !pushBody.trim()) { setPushResult('제목과 내용을 입력해주세요'); return }
+          if (!ids.length) { setPushResult('발송 대상이 없어요'); return }
+          setPushSending(true); setPushResult(null)
+          const target = segFilter ? `segment:${segFilter}` : 'all'
+          const r = await fetch('/api/push/broadcast', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userIds: ids, kind: 'event', target, title: pushTitle.trim(), body: pushBody.trim() }),
+          }).then(x => x.json()).catch(() => null)
+          setPushSending(false)
+          if (!r?.ok) { setPushResult(r?.error || '발송에 실패했어요'); return }
+          setPushResult(`✅ ${r.reached}명 발송 · 미도달(구독없음) ${r.skipped}명 · 수신거부 제외 ${r.excluded}명`)
+          setPushTitle(''); setPushBody('')
+        }
         return (
           <div className="member-list">
             {/* 세그먼트 필터 */}
@@ -1763,6 +1789,30 @@ export default function OwnerDashboard() {
                   {s.label} {segCount(s.key)}
                 </button>
               ))}
+            </div>
+            {/* [항목2-부속] 📣 알림 보내기 (일괄/이벤트) — 지금 필터된 대상에게. 경고성 개별발송은 회원 상세에서(분리). */}
+            <div style={{ border: '1px solid #2a3a4a', background: '#101820', borderRadius: 12, padding: '10px 12px', marginBottom: 10 }}>
+              <button onClick={() => { setPushOpen(o => !o); setPushResult(null) }}
+                style={{ width: '100%', background: 'none', border: 'none', color: '#7fd4ff', fontSize: 14, fontWeight: 800, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>📣 알림 보내기 (이벤트·공지)</span><span>{pushOpen ? '▲' : '▼'}</span>
+              </button>
+              {pushOpen && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 12, color: '#8ab4cc', lineHeight: 1.6 }}>
+                    받는 대상: <b style={{ color: '#cde' }}>{segFilter ? `${SEGMENT_LABEL[segFilter]?.label} 세그먼트` : '전체 회원'} {visible.length}명</b>
+                    <span style={{ color: '#668' }}> · 수신거부 회원은 자동 제외돼요</span>
+                  </div>
+                  <input value={pushTitle} onChange={e => setPushTitle(e.target.value)} placeholder="제목 (예: 🍗 이번 주 단골 감사 이벤트)"
+                    style={{ background: '#0b1218', border: '1px solid #2a3a4a', borderRadius: 8, padding: '10px 12px', color: '#eee', fontSize: 14, outline: 'none' }} />
+                  <textarea value={pushBody} onChange={e => setPushBody(e.target.value)} placeholder="내용" rows={2}
+                    style={{ background: '#0b1218', border: '1px solid #2a3a4a', borderRadius: 8, padding: '10px 12px', color: '#eee', fontSize: 14, outline: 'none', resize: 'vertical' }} />
+                  {pushResult && <div style={{ fontSize: 13, color: pushResult.startsWith('✅') ? '#3ac47d' : '#e88', lineHeight: 1.6 }}>{pushResult}</div>}
+                  <button onClick={sendBroadcast} disabled={pushSending}
+                    style={{ padding: '11px', background: pushSending ? '#245' : '#2b7fc0', color: '#fff', fontWeight: 800, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+                    {pushSending ? '발송 중...' : `📣 ${visible.length}명에게 보내기`}
+                  </button>
+                </div>
+              )}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text2)', padding: '0 0 10px' }}>
               {visible.length}명{segFilter ? ` · ${SEGMENT_LABEL[segFilter]?.label} 필터` : ''} · 이름/전화 클릭 시 상세
@@ -1873,6 +1923,51 @@ export default function OwnerDashboard() {
                   </div>
                 ))
               )}
+
+              {/* [항목2-부속] 개별 경고 발송 — 이벤트 일괄발송과 분리(오발송 방지). 수신동의 무관 발송. */}
+              <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 14 }}>
+                <button onClick={() => { setWarnModal(m); setWarnBody(''); setWarnResult(null) }}
+                  style={{ width: '100%', padding: '11px', background: '#2a1414', color: '#e0736a', fontWeight: 800, fontSize: 14, border: '1px solid #6a2a2a', borderRadius: 10, cursor: 'pointer' }}>
+                  ⚠️ 이 회원에게 경고 알림 보내기
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* [항목2-부속] 개별 경고 발송 모달 (이벤트 발송과 물리 분리) */}
+      {warnModal && (() => {
+        const m = warnModal
+        const sendWarn = async () => {
+          if (!warnBody.trim()) { setWarnResult('경고 내용을 입력해주세요'); return }
+          setWarnSending(true); setWarnResult(null)
+          const r = await fetch('/api/push/broadcast', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userIds: [m.id], kind: 'warning', target: `user:${m.id}`, title: '⚠️ 또봉이통닭 주문 관련 안내', body: warnBody.trim() }),
+          }).then(x => x.json()).catch(() => null)
+          setWarnSending(false)
+          if (!r?.ok) { setWarnResult(r?.error || '발송에 실패했어요'); return }
+          setWarnResult(r.reached > 0 ? '✅ 경고 알림을 보냈어요' : '⚠️ 이 회원은 푸시 구독이 없어 도달하지 못했어요')
+        }
+        return (
+          <div onClick={() => setWarnModal(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 380, background: '#1a1212', border: '1px solid #6a2a2a', borderRadius: 16, padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 17, fontWeight: 900, color: '#e0736a' }}>⚠️ 경고 알림 발송</div>
+              <div style={{ fontSize: 13, color: '#c9a' }}>대상: <b style={{ color: '#eee' }}>{m.nickname || m.phone}</b> · 개별 발송(수신동의 무관)</div>
+              <textarea value={warnBody} onChange={e => setWarnBody(e.target.value)} rows={3}
+                placeholder="경고 내용 (예: 반복적인 장난 주문이 확인돼요. 계속되면 이용이 제한될 수 있습니다.)"
+                style={{ background: '#0f0a0a', border: '1px solid #6a2a2a', borderRadius: 8, padding: '10px 12px', color: '#eee', fontSize: 14, outline: 'none', resize: 'vertical' }} />
+              {warnResult && <div style={{ fontSize: 13, color: warnResult.startsWith('✅') ? '#3ac47d' : '#e88' }}>{warnResult}</div>}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setWarnModal(null)} disabled={warnSending}
+                  style={{ flex: 1, padding: '12px', background: '#2a2a2a', color: '#eee', border: '1px solid #444', borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>닫기</button>
+                <button onClick={sendWarn} disabled={warnSending}
+                  style={{ flex: 1, padding: '12px', background: warnSending ? '#5a2a2a' : '#c0392b', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                  {warnSending ? '발송 중...' : '경고 보내기'}</button>
+              </div>
             </div>
           </div>
         )
