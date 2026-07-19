@@ -88,6 +88,8 @@ export default function MenuPage() {
     // [2] 영업 준비 중이면 담기 차단 / [3] 재료 소진(sold_out) 메뉴는 추가 불가
     if (storeClosed) return
     if (delta > 0 && item.sold_out) return
+    // [항목2] 비회원은 주문(담기) 불가 — 주문은 회원만. 담으려 하면 3초 단골등록으로 유도.
+    if (delta > 0 && !isMember) { router.push(`/store/${storeId}/login`); return }
     const cur = getQty(item.id)
     if (delta > 0) {
       try {

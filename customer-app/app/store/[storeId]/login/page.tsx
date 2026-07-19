@@ -136,8 +136,9 @@ export default function LoginPage() {
         <button className="btn-primary" onClick={handleLogin} disabled={loading}>
           {loading ? '확인 중...' : '무료 증정 받고 주문하기'}
         </button>
-        <button className="skip-btn" onClick={() => router.back()}>
-          할인 없이 그냥 주문할게요
+        {/* [항목2] 비회원 주문 비활성화 — 주문 없이 나가는 유일 선택지는 '잠깐 쉬었다 갈까요?'(허브) */}
+        <button className="skip-btn" onClick={() => router.push(`/store/${storeId}/hub`)}>
+          잠깐 쉬었다 갈까요?
         </button>
       </div>
       <LegalFooter />

@@ -16,12 +16,14 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // 오늘(KST) 그 테이블의 조리완료된 매장주문만 대상 (진행중/이미 마감 제외)
+    // 오늘(KST) 그 테이블의 조리완료 주문 대상 (진행중/이미 마감 제외).
+    // [항목3] 세션 중 포장(order_type='takeout', table_no=N>0)도 같은 테이블 세션이므로 함께 마감.
+    //   외부 픽업형(table_no=0)·배달(table_no=0)은 table_no=N 필터로 자연 제외됨.
     const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
     const { data: targets } = await admin.from('orders')
       .select('id, user_id')
       .eq('store_id', STORE_ID)
-      .eq('order_type', 'dine_in')
+      .in('order_type', ['dine_in', 'takeout'])
       .eq('table_no', table_no)
       .eq('status', 'done')
       .gte('created_at', `${today}T00:00:00+09:00`)

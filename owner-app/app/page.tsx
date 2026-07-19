@@ -798,18 +798,22 @@ export default function OwnerDashboard() {
   const acceptedOrders = orders.filter(o => o.status === 'accepted')
   const cookingOrders = orders.filter(o => o.status === 'cooking')
   // A2: 칸3(결제 대기) — 매장은 테이블별 병합, 포장은 개별, 배달은 기존 흐름 유지
-  const dineDone = orders.filter(o => o.status === 'done' && o.order_type === 'dine_in')
-  const takeoutDone = orders.filter(o => o.status === 'done' && o.order_type === 'takeout')
+  // [항목3] 세션(테이블 착석) 결제대기 = table_no>0의 조리완료 매장/포장 주문. 한 테이블 카드로 병합.
+  //   외부 픽업형(table_no=0 포장)만 개별 카드. 배달(table_no=0)은 기존 흐름.
+  const sessionDone = orders.filter(o => o.status === 'done' && o.table_no > 0 && (o.order_type === 'dine_in' || o.order_type === 'takeout'))
+  const takeoutDone = orders.filter(o => o.status === 'done' && o.order_type === 'takeout' && !(o.table_no > 0))
   const deliveryDone = orders.filter(o => (o.status === 'done' && o.order_type === 'delivery') || o.status === 'out_for_delivery')
   // 테이블별 그룹핑 (같은 테이블의 조리완료 주문 = 하나의 결제 대기 카드)
-  const dineTables = Array.from(new Set(dineDone.map(o => o.table_no))).sort((a, b) => a - b)
-  const doneCount = dineDone.length + takeoutDone.length + deliveryDone.length
+  const dineTables = Array.from(new Set(sessionDone.map(o => o.table_no))).sort((a, b) => a - b)
+  const doneCount = sessionDone.length + takeoutDone.length + deliveryDone.length
 
   const OrderCard = ({ order }: { order: Order }) => (
     <div className={`order-card ${order.status === 'pending' || order.status === 'paid' ? 'new-order' : order.status === 'cash_pending' || order.status === 'verification_failed' ? 'cash_pending' : order.status === 'accepted' ? 'accepted' : order.status === 'cooking' ? 'cooking' : 'done-card'}`}>
       <div className="order-time">{timeAgo(order.created_at)}</div>
       <div className="order-table">
-        {order.order_type === 'delivery' ? '🛵 배달' : order.order_type === 'takeout' ? '🛍️ 포장' : `${order.table_no}번`}
+        {order.order_type === 'delivery' ? '🛵 배달'
+          : order.order_type === 'takeout' ? (order.table_no > 0 ? `${order.table_no}번 · 🛍️포장` : '🛍️ 포장')
+          : `${order.table_no}번`}
         <span> {STATUS_LABEL[order.status] || order.status}</span>
       </div>
       {order.order_type === 'delivery' && (
@@ -909,22 +913,28 @@ export default function OwnerDashboard() {
 
   // A2: 칸3 테이블 병합 카드 — 그 테이블의 조리완료 주문(1차·2차·…)을 합쳐 누적 내역·총액을 한눈에, 결제완료로 일괄 마감
   const MergedTableCard = ({ tableNo }: { tableNo: number }) => {
-    const group = dineDone.filter(o => o.table_no === tableNo)
+    const group = sessionDone.filter(o => o.table_no === tableNo)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-    // 메뉴 합산 (이름 기준)
-    const itemMap = new Map<string, number>()
-    for (const o of group) for (const it of (o.items || [])) itemMap.set(it.name_snapshot, (itemMap.get(it.name_snapshot) || 0) + it.qty)
-    // 증정 합산
+    // [항목3] 매장/포장 분리 — 포장 주문 메뉴는 합산하지 않고 '🛍️ 포장' 소그룹으로 구분 표시(점주가 포장 준비 인지).
+    const dineItemMap = new Map<string, number>()
+    const takeoutItemMap = new Map<string, number>()
+    for (const o of group) {
+      const map = o.order_type === 'takeout' ? takeoutItemMap : dineItemMap
+      for (const it of (o.items || [])) map.set(it.name_snapshot, (map.get(it.name_snapshot) || 0) + it.qty)
+    }
+    // 증정 합산(매장/포장 공통)
     const giftMap = new Map<string, number>()
     for (const o of group) if (Array.isArray(o.free_gifts)) for (const g of o.free_gifts) giftMap.set(g.menu, (giftMap.get(g.menu) || 0) + (g.qty || 1))
     const total = group.reduce((s, o) => s + (o.final_amount || 0), 0)
+    const hasTakeout = takeoutItemMap.size > 0
     const mi = group.find(o => o.is_member && o.member_info)?.member_info
 
     return (
       <div className="order-card done-card">
-        <div className="order-table" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="order-table" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span>{tableNo}번</span>
           <span style={{ fontSize: 13, color: '#3ac47d', fontWeight: 700 }}>주문 {group.length}건 · 결제 대기</span>
+          {hasTakeout && <span style={{ fontSize: 12, fontWeight: 800, color: '#111', background: '#f0a000', borderRadius: 20, padding: '2px 10px' }}>🛍️ 포장 포함</span>}
         </div>
         {mi && (
           <div style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[mi.grade] || '#c8a900', marginTop: 4 }}>
@@ -932,13 +942,24 @@ export default function OwnerDashboard() {
           </div>
         )}
         <ul className="order-items-list">
-          {Array.from(itemMap.entries()).map(([name, qty], i) => (
+          {Array.from(dineItemMap.entries()).map(([name, qty], i) => (
             <li key={i}><strong>{name}</strong> × {qty}</li>
           ))}
           {Array.from(giftMap.entries()).map(([menu, qty], i) => (
             <li key={`g${i}`} style={{ color: '#3ac47d', fontWeight: 700 }}>🎁 <strong>{menu}</strong>{qty > 1 ? ` × ${qty}` : ''} <span style={{ fontSize: 11, color: '#8ab873' }}>(무료 증정)</span></li>
           ))}
         </ul>
+        {/* [항목3] 포장 회차 메뉴 — 별도 구분 표시(따로 담아 나가야 함) */}
+        {hasTakeout && (
+          <div style={{ background: '#2a2000', border: '1px solid #7a6400', borderRadius: 8, padding: '8px 10px', margin: '4px 0' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: '#f0a000', marginBottom: 4 }}>🛍️ 포장해서 나가요</div>
+            <ul className="order-items-list" style={{ margin: 0 }}>
+              {Array.from(takeoutItemMap.entries()).map(([name, qty], i) => (
+                <li key={`to${i}`}><strong>{name}</strong> × {qty}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="order-total">누적 {won(total)}</div>
         <div className="action-btns">
           <button className="action-btn btn-accept" onClick={() => closeTable(tableNo)}>💳 결제완료</button>
@@ -1288,7 +1309,7 @@ export default function OwnerDashboard() {
                     {new Date(o.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                   <span style={{ fontSize: 13, color: '#ccc', minWidth: 40 }}>
-                    {o.order_type === 'takeout' ? '🛍️포장' : `${o.table_no}번`}
+                    {o.order_type === 'takeout' ? (o.table_no > 0 ? `${o.table_no}번🛍️` : '🛍️포장') : `${o.table_no}번`}
                   </span>
                   <span style={{ flex: 1, fontSize: 13, color: '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {o.items?.[0]?.name_snapshot}{o.items && o.items.length > 1 ? ` 외 ${o.items.length - 1}` : ''}

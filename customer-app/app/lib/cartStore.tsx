@@ -14,6 +14,7 @@ type CartCtx = {
   tableNo: string
   orderType: string
   isMember: boolean
+  hydrated: boolean
   userId: string | null
   phone: string
   nickname: string
@@ -110,6 +111,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // 여기서 회원상태를 지우면 리로드 전까지 복구되지 않아 재주문이 비회원 취급됐다 (버그[1] 회귀 수정).
   const clearCart = () => {
     setItems([])
+    // [항목3] 이번 주문에서 '포장'으로 토글했더라도 다음 주문엔 눌러붙지 않게 리셋.
+    //   착석(테이블>0) 세션은 기본 매장(dine_in)으로, 외부 픽업(테이블 0) 세션은 포장 유지.
+    setOrderType(tableNo === '0' ? 'takeout' : 'dine_in')
   }
 
   const clearItems = () => setItems([])
@@ -135,6 +139,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         tableNo,
         orderType,
         isMember,
+        hydrated,
         userId,
         phone,
         nickname,

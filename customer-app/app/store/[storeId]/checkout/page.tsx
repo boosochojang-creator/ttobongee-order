@@ -38,7 +38,11 @@ const VISIBLE_PAY_OPTIONS = PAY_OPTIONS.filter(
 export default function CheckoutPage() {
   const router = useRouter()
   const storeId = useStoreId()
-  const { items, tableNo, orderType, isMember, userId, phone, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
+  const { items, tableNo, orderType, setOrderType, isMember, hydrated, userId, phone, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
+  // [항목2] 주문은 회원만 — 비회원이 직접 URL로 들어오면 로그인으로. (하이드레이션 완료 후 판정해 실회원 오리다이렉트 방지)
+  useEffect(() => {
+    if (hydrated && !isMember) router.replace(`/store/${storeId}/login`)
+  }, [hydrated, isMember, storeId, router])
   const [payMethod, setPayMethod] = useState<PayMethod>('card')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -350,8 +354,33 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* [7] 포장 픽업 예약시간 (선택) — 포장 주문에서만 */}
-        {!isDelivery && orderType === 'takeout' && (
+        {/* [항목3] 착석(테이블) 손님의 주문 단위 포장 전환 — 이 주문만 포장으로. table_no는 유지(세션 연결).
+            외부 픽업형(테이블 0, 자리선택 화면의 포장버튼)과는 별개라 여기선 예약시간 안 씀. */}
+        {!isDelivery && tableNo !== '0' && (
+          <>
+            <div className="section-title">받는 방법</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button onClick={() => { setOrderType('dine_in'); setError('') }} style={{
+                flex: 1, padding: '12px', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                background: orderType !== 'takeout' ? '#c8a900' : 'none', color: orderType !== 'takeout' ? '#111' : '#aaa',
+                border: orderType !== 'takeout' ? 'none' : '1px solid #444',
+              }}>🏪 매장에서</button>
+              <button onClick={() => { setOrderType('takeout'); setError('') }} style={{
+                flex: 1, padding: '12px', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                background: orderType === 'takeout' ? '#c8a900' : 'none', color: orderType === 'takeout' ? '#111' : '#aaa',
+                border: orderType === 'takeout' ? 'none' : '1px solid #444',
+              }}>🛍️ 이 주문 포장</button>
+            </div>
+            {orderType === 'takeout' && (
+              <div style={{ background: '#1a1200', border: '1px solid #7a6400', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#e8cf88', lineHeight: 1.6 }}>
+                🛍️ 이 주문은 <b style={{ color: '#FFD700' }}>포장</b>으로 준비돼요. 같은 테이블 주문에 합산되고, 계산은 함께 하시면 됩니다.
+              </div>
+            )}
+          </>
+        )}
+
+        {/* [7] 포장 픽업 예약시간 (선택) — 외부 픽업형(자리선택 화면 포장, 테이블 0)에서만 */}
+        {!isDelivery && orderType === 'takeout' && tableNo === '0' && (
           <div style={{ background: 'var(--bg2)', borderRadius: 'var(--radius)', padding: 14, marginBottom: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>🕒 픽업 예약시간 <span style={{ color: '#777', fontSize: 12, fontWeight: 400 }}>(선택 · 안 정하면 준비되는 대로)</span></div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

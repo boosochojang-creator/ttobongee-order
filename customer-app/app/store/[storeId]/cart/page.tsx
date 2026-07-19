@@ -72,8 +72,9 @@ export default function CartPage() {
           </div>
         )}
 
-        <button className="btn-primary" onClick={() => router.push(`/store/${storeId}/checkout`)}>
-          {PAYMENT_ENABLED ? '결제하러 가기' : '주문하러 가기'}
+        {/* [항목2] 주문은 회원만 — 비회원은 단골등록(로그인)으로 유도 */}
+        <button className="btn-primary" onClick={() => router.push(`/store/${storeId}/${isMember ? 'checkout' : 'login'}`)}>
+          {isMember ? (PAYMENT_ENABLED ? '결제하러 가기' : '주문하러 가기') : '단골 등록하고 주문하기'}
         </button>
       </div>
       <LegalFooter />
