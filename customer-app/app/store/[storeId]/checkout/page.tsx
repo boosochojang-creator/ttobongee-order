@@ -165,52 +165,23 @@ export default function CheckoutPage() {
     setLoading(true)
     setError('')
 
-    // 1. 주문 생성
-    // 결제분리: 결제 없이 바로 '접수 대기'(cash_pending 재사용)로 생성 → 점주 접수 시 매출/CRM/쿠폰used 처리.
-    const status = (!PAYMENT_ENABLED || payMethod === 'cash') ? 'cash_pending' : 'pending'
-    const { data: order, error: orderErr } = await supabase.from('orders').insert({
-      store_id: storeId,
-      table_no: isDelivery ? 0 : Number(tableNo),
-      order_type: isDelivery ? 'delivery' : orderType,
-      status,
-      total_amount: totalAmount,
-      discount_amount: discountAmount + couponApplied, // 회원 5% (쿠폰 금액할인은 폐기 → couponApplied=0)
-      final_amount: payTotal, // 회원가 + 배달료 (증정 메뉴는 0원)
-      payment_method: PAYMENT_ENABLED ? payMethod : null, // 결제분리 땐 실제 결제는 포스에서(값 미지정 — CHECK 제약 회피)
-      user_id: userId,
-      is_member: isMember,
-      // 메뉴 증정 쿠폰(다중): 적용된 쿠폰들의 증정 메뉴를 주문에 기록 → 점주 접수 시 전부 used 처리
-      ...(gifts.length ? { free_gifts: gifts.map(g => ({ coupon_id: g.id, type: g.type, menu: g.menu, qty: g.qty })) } : {}),
-      ...(!isDelivery && orderType === 'takeout' && pickupTime ? { pickup_at: pickupIso(pickupTime) } : {}), // [7] 포장 예약시각
-      ...(isDelivery ? {
-        delivery_address: `${addr.trim()} ${addrDetail.trim()}`.trim(),
-        delivery_fee: deliveryFee,
-        delivery_distance_m: deliveryDistanceM,
-        customer_phone: contactPhone.replace(/\D/g, ''),
-      } : {}),
-    }).select('id').single()
-
-    if (orderErr || !order) {
-      setError('주문 접수 중 오류가 발생했어요. 다시 시도해주세요.')
+    // 1. 주문 생성 — [항목2-2] anon 직접 insert 대신 서버 API(service role)로. 손님 흐름은 동일.
+    //    서버가 회원·영업상태 검증 + 가격 재계산(위변조 방지) 후 주문+항목을 함께 저장.
+    const res = await fetch('/api/order/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        storeId, tableNo, orderType, userId, payMethod,
+        items: items.map(i => ({ id: i.id, qty: i.qty })),
+        gifts: gifts.map(g => ({ coupon_id: g.id, type: g.type, menu: g.menu, qty: g.qty })),
+        pickupAt: (!isDelivery && orderType === 'takeout' && tableNo === '0' && pickupTime) ? pickupIso(pickupTime) : null,
+      }),
+    }).then(r => r.json()).catch(() => null)
+    if (!res?.ok) {
+      setError(res?.error || '주문 접수 중 오류가 발생했어요. 다시 시도해주세요.')
       setLoading(false)
       return
     }
-
-    // 2. 주문 상세 저장
-    const orderItems = items.map(i => ({
-      order_id: order.id,
-      menu_id: i.id,
-      name_snapshot: i.name,
-      price_snapshot: i.price,
-      qty: i.qty,
-      subtotal: i.price * i.qty,
-    }))
-    const { error: itemErr } = await supabase.from('order_items').insert(orderItems)
-    if (itemErr) {
-      setError('주문 접수 중 오류가 발생했어요. 다시 시도해주세요.')
-      setLoading(false)
-      return
-    }
+    const order = { id: res.orderId as string }
 
     // 3. 결제분리(또는 현금) → 결제 단계 없이 바로 접수. 메뉴로 복귀 후 팝업+음성 안내(그룹 C)
     if (!PAYMENT_ENABLED || payMethod === 'cash') {
