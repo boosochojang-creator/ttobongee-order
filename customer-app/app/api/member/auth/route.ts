@@ -15,15 +15,16 @@ export async function POST(req: NextRequest) {
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const hash = phoneHash(digits)
 
-    // 1) 해시로 조회
+    // 1) 해시로 조회 (탈퇴한 회원도 phone_hash는 보존돼 있어 여기서 잡힘 → 재활성화 대상)
     let { data: existing } = await admin.from('users')
-      .select('id, grade, visit_count, nickname, member_status')
+      .select('id, grade, visit_count, nickname, member_status, withdrawn_at')
       .eq('store_id', sid).eq('phone_hash', hash).maybeSingle()
 
     // 2) 폴백: 아직 백필 안 된 레거시(평문 phone만) — 있으면 hash/enc 채워주고 사용(자가치유)
+    //    (탈퇴 행은 평문 phone이 'withdrawn:'로 치환돼 있어 이 폴백엔 안 걸림)
     if (!existing) {
       const { data: legacy } = await admin.from('users')
-        .select('id, grade, visit_count, nickname, member_status')
+        .select('id, grade, visit_count, nickname, member_status, withdrawn_at')
         .eq('store_id', sid).eq('phone', digits).maybeSingle()
       if (legacy) {
         await admin.from('users').update({ phone_hash: hash, phone_encrypted: phoneEncrypt(digits) }).eq('id', legacy.id)
@@ -32,19 +33,24 @@ export async function POST(req: NextRequest) {
     }
 
     let user = existing
+    let rejoined = false
     if (user) {
-      await admin.from('users').update({ last_visit: new Date().toISOString() }).eq('id', user.id)
+      // [항목1] 탈퇴 이력이 있으면 재활성화(같은 user_id 복원) → 쿠폰 중복방지가 기존 로직으로 자동 처리(신규가입 쿠폰 미발급).
+      const patch: Record<string, any> = { last_visit: new Date().toISOString() }
+      if ((user as any).withdrawn_at) { patch.withdrawn_at = null; rejoined = true }
+      await admin.from('users').update(patch).eq('id', user.id)
     } else {
       // 3) 신규 가입 — dual-write (phone 평문은 전환 중 유지, 나중에 별도 지시로 제거)
       const { data: created, error } = await admin.from('users').insert({
         store_id: sid, phone: digits, phone_hash: hash, phone_encrypted: phoneEncrypt(digits),
-      }).select('id, grade, visit_count, nickname, member_status').single()
+      }).select('id, grade, visit_count, nickname, member_status, withdrawn_at').single()
       if (error || !created) throw error || new Error('회원 생성 실패')
       user = created
     }
 
     return NextResponse.json({
       ok: true,
+      rejoined, // [항목1] 재가입(재활성화) 여부 — 클라이언트가 '가입 이력 안내' 표시에 사용
       user: {
         id: user.id,
         grade: user.grade ?? 'bronze',

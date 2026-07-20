@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [installStep, setInstallStep] = useState<InstallStep>(null)
+  const [rejoinNotice, setRejoinNotice] = useState(false) // [항목1] 탈퇴 후 재가입(재활성화) 안내
 
   const digits = phone.replace(/\D/g, '')
 
@@ -43,6 +44,9 @@ export default function LoginPage() {
       if (u.member_status) updateMemberLocal({ status: u.member_status })
       // [2] 웹푸시 구독 — 로그인/가입과 함께 알림 권한 요청+구독(설치 유도 흐름에 자연스럽게). 거부/미지원은 조용히 스킵.
       subscribeToPush(u.id, storeId).catch(() => {})
+
+      // [항목1] 탈퇴 후 재가입(재활성화) — 이력이 있어 신규 쿠폰 미지급. 안내 후 계속.
+      if (res.rejoined) { setLoading(false); setRejoinNotice(true); return }
 
       // 가입 완료 → 같은 흐름에서 설치 승인 이어붙이기 (거부해도 가입은 그대로)
       if (isInstalled()) { router.back(); return }
@@ -69,6 +73,30 @@ export default function LoginPage() {
       setLoading(false)
     }
   }
+
+  // ── [항목1] 탈퇴 후 재가입(재활성화) 안내 ──
+  if (rejoinNotice) return (
+    <main>
+      <div className="login-page">
+        <div className="brand">🍗 또봉이통닭</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)', marginTop: 8 }}>
+          다시 오신 걸 환영해요! 👋
+        </div>
+        <div style={{
+          background: '#1c1c1c', border: '1px solid #7a6400', borderRadius: 14,
+          padding: '18px 16px', marginTop: 16, fontSize: 14, lineHeight: 1.9, color: '#e0e0e0',
+        }}>
+          이 번호로 <b style={{ color: '#FFD700' }}>가입하셨던 이력</b>이 있어요.<br />
+          단골 혜택은 그대로 이어지지만, <b style={{ color: '#FFD700' }}>신규 가입 쿠폰은 다시 지급되지 않아요.</b><br />
+          <span style={{ color: '#aaa', fontSize: 13 }}>양해 부탁드려요 🙏 오늘도 맛있게 준비할게요!</span>
+        </div>
+        <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => router.back()}>
+          확인, 주문 계속하기
+        </button>
+      </div>
+      <LegalFooter />
+    </main>
+  )
 
   // ── 가입 완료 후 설치 안내 화면 (아이폰 / 미지원 브라우저) ──
   if (installStep) return (

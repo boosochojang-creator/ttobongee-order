@@ -15,10 +15,10 @@ export async function POST(req: NextRequest) {
     if (!u) return NextResponse.json({ ok: false, error: '회원을 찾을 수 없어요' }, { status: 404 })
 
     // 1) users 행 익명화 — 개인 식별정보 파기. phone은 NOT NULL·UNIQUE 제약이라 복구불가 더미로 치환.
-    //    (더미 접두어로 같은 번호 재가입 시 이 행과 충돌/재조회되지 않음)
+    //    [항목1] phone_hash(단방향 HMAC, 번호로 복원 불가)는 '재가입 시 재활성화' 대조용으로 보존한다.
+    //    복호화 가능한 개인정보(phone_encrypted)·평문 phone·프로필은 계속 완전 파기.
     const { error: uErr } = await admin.from('users').update({
       phone: `withdrawn:${userId}`,
-      phone_hash: null,
       phone_encrypted: null,
       nickname: null,
       birthday: null,
