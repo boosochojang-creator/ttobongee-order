@@ -1701,7 +1701,8 @@ export default function OwnerDashboard() {
               style={{ flex: 1, minWidth: 140, background: '#111', border: '1px solid #444', borderRadius: 8, padding: '9px 10px', color: '#eee', fontSize: 14 }} />
             <label style={{ background: musicUploading ? '#555' : '#c8a900', color: '#111', borderRadius: 8, padding: '9px 14px', fontWeight: 700, fontSize: 13, cursor: musicUploading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
               {musicUploading ? '업로드 중…' : '＋ 업로드'}
-              <input type="file" accept="audio/*" style={{ display: 'none' }} disabled={musicUploading}
+              {/* 음악감상실은 MP3 + MP4(오디오만 재생) 허용 — 버킷 형식/크기 제한 없음 확인됨 */}
+              <input type="file" accept="audio/*,video/mp4,.mp4" style={{ display: 'none' }} disabled={musicUploading}
                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadMusic(f); e.target.value = '' }} />
             </label>
           </div>

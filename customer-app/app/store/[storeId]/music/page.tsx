@@ -9,7 +9,8 @@ export default function MusicPage() {
   const storeId = useStoreId()
   const [tracks, setTracks] = useState<any[]>([])
   const [playing, setPlaying] = useState<string | null>(null) // 재생중 track id
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  // MP3·MP4 모두 재생하려고 <video>를 쓴다(오디오 트랙만 재생, 화면엔 안 보임). <audio>는 mp4 컨테이너 재생이 브라우저마다 들쭉날쭉.
+  const audioRef = useRef<HTMLVideoElement | null>(null)
 
   useEffect(() => {
     fetch(`/api/music/list?storeId=${storeId}`).then(x => x.json()).then(r => setTracks(r?.ok ? r.tracks : [])).catch(() => {})
@@ -27,7 +28,7 @@ export default function MusicPage() {
   return (
     <main>
       <BackToOrder title="🎵 음악감상실" />
-      <audio ref={audioRef} onEnded={() => setPlaying(null)} preload="none" />
+      <video ref={audioRef} onEnded={() => setPlaying(null)} preload="none" playsInline style={{ display: 'none' }} />
       <div style={{ padding: '20px 16px 40px' }}>
         <p style={{ color: '#888', fontSize: 13, marginBottom: 16 }}>편하게 노래 들으며 기다려주세요 🎧</p>
         {tracks.length === 0 && <div style={{ color: '#888', textAlign: 'center', padding: 30 }}>등록된 음악이 없어요</div>}
