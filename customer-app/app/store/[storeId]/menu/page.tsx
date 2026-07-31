@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import ProfilePrompt from '../../../lib/ProfilePrompt'
 import { getMemberLocal, greetingLabel } from '../../../lib/memberState'
+import { useCoupons } from '../../../lib/CouponContext'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
 import { useStoreId } from '../../../lib/storeContext'
 
@@ -38,6 +39,7 @@ export default function MenuPage() {
   const router = useRouter()
   const storeId = useStoreId()
   const { addItem, updateQty, items, totalQty, finalAmount, tableNo, orderType, isMember, phone, nickname, grade, visitCount } = useCart()
+  const { usable: usableCoupons } = useCoupons() // [D] 주문 진입 시 사용가능 쿠폰 배너
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [activeCat, setActiveCat] = useState('세트메뉴')
   const [showLoginBanner, setShowLoginBanner] = useState(!isMember)
@@ -151,6 +153,22 @@ export default function MenuPage() {
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #7a6400', fontSize: 12.5, color: '#9fd39f' }}>
             🎮 지금은 주문을 받지 않지만, <b style={{ color: '#b6e6a0' }}>오락실·음악감상실·게시판</b>은 언제든 즐기실 수 있어요! (오른쪽 아래 <b>&lsquo;잠깐 쉬었다 갈까요?&rsquo;</b>)
           </div>
+        </div>
+      )}
+
+      {/* [D] 사용가능 쿠폰 배너 — 주문 화면 진입 시 바로 인지 (좌하단 🎟️ 뱃지 탭 시 목록) */}
+      {isMember && usableCoupons.length > 0 && (
+        <div style={{
+          margin: '12px 16px 0', padding: '12px 14px',
+          background: 'linear-gradient(135deg, rgba(58,196,125,0.16), rgba(200,169,0,0.08))',
+          border: '1.5px solid #3ac47d', borderRadius: 12,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 22 }}>🎟️</span>
+          <div style={{ flex: 1, fontSize: 13.5, color: '#dff3e4', lineHeight: 1.5 }}>
+            지금 쓸 수 있는 쿠폰 <b style={{ color: '#8ef0b8' }}>{usableCoupons.length}개</b> — 주문하면 증정 메뉴가 자동으로 안내돼요.
+          </div>
+          <span style={{ fontSize: 11, color: '#9fd39f', whiteSpace: 'nowrap' }}>← 🎟️ 탭</span>
         </div>
       )}
 
