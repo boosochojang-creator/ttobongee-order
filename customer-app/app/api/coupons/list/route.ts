@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js'
 const REASON: Record<string, { label: string; emoji: string }> = {
   signup:     { label: '신규가입 축하', emoji: '🎉' },
   birthday:   { label: '생일 축하',     emoji: '🎂' },
-  winback:    { label: '오랜만이에요',  emoji: '💛' },
+  revisit:    { label: '재방문 감사',   emoji: '💛' },
   vip_thanks: { label: '단골 감사',     emoji: '👑' },
 }
 

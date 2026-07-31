@@ -6,8 +6,8 @@ import { supabase } from './lib/supabase'
 import { STORE_ID } from './lib/store'
 
 const COUNTED = ['paid', 'accepted', 'cooking', 'done', 'served', 'out_for_delivery', 'delivered']
-const TYPES = ['signup', 'birthday', 'winback', 'vip_thanks'] as const
-const TYPE_LABEL: Record<string, string> = { signup: '신규가입', birthday: '생일', winback: '재방문', vip_thanks: '단골감사' }
+const TYPES = ['signup', 'birthday', 'revisit', 'vip_thanks'] as const
+const TYPE_LABEL: Record<string, string> = { signup: '신규가입', birthday: '생일', revisit: '재방문 감사', vip_thanks: '단골감사' }
 const won = (n: number) => (n || 0).toLocaleString() + '원'
 
 type Coupon = { type: string; status: string; issued_at: string; used_order_id: string | null; user_id: string }

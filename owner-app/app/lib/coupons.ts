@@ -9,21 +9,17 @@ import { sendPushToUser } from './pushSend'
 //  - 생일: 음료 택1 + 감자튀김 200g / 나머지: 음료 택1. '택1'은 카운터에서 손님이 선택.
 const DRINK_CHOICE = '생맥주 500cc / 소주 1병 / 음료(대) 중 택1'
 export const COUPON_RULES = {
-  signup:     { label: '신규가입', freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 0,     validDays: null, sameDay: false },
-  birthday:   { label: '생일',     freeMenu: `${DRINK_CHOICE} + 감자튀김 200g`,  freeQty: 1, minOrder: 0,     validDays: 7,    sameDay: true  },
-  winback:    { label: '재방문',   freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 15000, validDays: 7,    sameDay: false },
-  vip_thanks: { label: '단골감사', freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 20000, validDays: 7,    sameDay: false },
+  signup:     { label: '신규가입',   freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 0,     validDays: null, sameDay: false },
+  birthday:   { label: '생일',       freeMenu: `${DRINK_CHOICE} + 감자튀김 200g`,  freeQty: 1, minOrder: 0,     validDays: 7,    sameDay: true  },
+  // 재방문 감사(구 winback 대체): 2번째 방문 시 발급 · 10일 유효 · 당일 사용불가(다음 재방문부터).
+  revisit:    { label: '재방문 감사', freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 0,     validDays: 10,   sameDay: false },
+  vip_thanks: { label: '단골감사',   freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 20000, validDays: 7,    sameDay: false },
 } as const
 export type CouponType = keyof typeof COUPON_RULES
 
 // 더미/테스트 계정(전화번호) — 자동발급 제외. 추후 전체 재진단 때 정리 예정.
 const EXCLUDE_PHONES = new Set(['01052636119', '01094706860', '010000000000'])
 
-function daysSince(s?: string | null) {
-  if (!s) return null
-  const t = new Date(s).getTime()
-  return isNaN(t) ? null : Math.floor((Date.now() - t) / 86400000)
-}
 // 생일(월·일)이 오늘부터 within일 이내인지 (KST, 연도 무관)
 function birthdayWithin(bday: string | null | undefined, within: number) {
   if (!bday) return false
@@ -73,13 +69,15 @@ export async function runCouponAutomation(admin: SupabaseClient) {
     .eq('status', 'active').lt('expires_at', nowIso).select('id')
 
   const { data: users } = await admin.from('users')
-    .select('id, phone, nickname, birthday, customer_grade, last_visit, total_order_count').eq('store_id', STORE_ID)
+    .select('id, phone, nickname, birthday, customer_grade, last_visit, total_order_count, visit_count').eq('store_id', STORE_ID)
   const { data: existing } = await admin.from('coupons').select('user_id, type, status, expires_at')
 
   const everSignup = new Set<string>()
+  const everRevisit = new Set<string>() // 재방문 감사는 최초 1회만(중복발급 방지)
   const activeUT = new Set<string>() // `${user_id}|${type}` — active & 미만료
   for (const c of existing || []) {
     if (c.type === 'signup') everSignup.add(c.user_id)
+    if (c.type === 'revisit') everRevisit.add(c.user_id)
     if (c.status === 'active' && new Date(c.expires_at).getTime() > now.getTime()) activeUT.add(`${c.user_id}|${c.type}`)
   }
   const has = (uid: string, t: string) => activeUT.has(`${uid}|${t}`)
@@ -89,9 +87,8 @@ export async function runCouponAutomation(admin: SupabaseClient) {
     if (EXCLUDE_PHONES.has(u.phone)) continue                                                     // 더미/테스트 계정 제외
     if (!everSignup.has(u.id)) toIssue.push(newCoupon(u.id, 'signup', now))                       // 전화 가입완료 = 최초 1회
     if (birthdayWithin(u.birthday, 7) && !has(u.id, 'birthday')) toIssue.push(newCoupon(u.id, 'birthday', now))
-    const days = daysSince(u.last_visit)
-    if ((u.customer_grade === 'regular' || u.customer_grade === 'vip') && (u.total_order_count || 0) > 0
-      && days !== null && days >= 30 && !has(u.id, 'winback')) toIssue.push(newCoupon(u.id, 'winback', now))
+    // 재방문 감사: 2번째 방문(visit_count>=2) 달성 시 1회 발급. sameDay:false라 다음 재방문부터 사용.
+    if ((u.visit_count || 0) >= 2 && !everRevisit.has(u.id)) toIssue.push(newCoupon(u.id, 'revisit', now))
     if (u.customer_grade === 'vip' && !has(u.id, 'vip_thanks')) toIssue.push(newCoupon(u.id, 'vip_thanks', now))
   }
   if (toIssue.length) {

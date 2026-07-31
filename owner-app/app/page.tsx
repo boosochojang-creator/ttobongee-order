@@ -39,7 +39,7 @@ const PAY_LABELS: Record<string, string> = {
 }
 // 쿠폰 발급사유 → 사람이 읽는 라벨 (내부 조건명 노출 금지)
 const COUPON_LABEL: Record<string, string> = {
-  signup: '신규가입', birthday: '생일', winback: '재방문', vip_thanks: '단골감사',
+  signup: '신규가입', birthday: '생일', revisit: '재방문 감사', vip_thanks: '단골감사',
 }
 
 // B4: 점주 인증 지속(재진입 시 PIN 재요구 방지) + 탭 히스토리
@@ -207,6 +207,7 @@ export default function OwnerDashboard() {
   const [boardComments, setBoardComments] = useState<any[]>([])
   const [boardReply, setBoardReply] = useState('') // [6] 사장님 답글 입력
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
+  const [couponHolders, setCouponHolders] = useState<Set<string>>(new Set()) // [D] 지금 쓸 수 있는 쿠폰 보유 회원
   const [callToast, setCallToast] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -351,6 +352,13 @@ export default function OwnerDashboard() {
     })
 
     setOrders(mapped)
+
+    // [D] 이 화면 주문들의 회원 중 '지금 쓸 수 있는 쿠폰' 보유자 조회 → 카드에 뱃지
+    const memberUserIds = Array.from(new Set(mapped.filter((o: any) => o.user_id).map((o: any) => o.user_id)))
+    if (memberUserIds.length) {
+      fetch('/api/coupon/holders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userIds: memberUserIds }) })
+        .then(x => x.json()).then(r => { if (r?.ok) setCouponHolders(new Set(r.holders as string[])) }).catch(() => {})
+    } else setCouponHolders(new Set())
 
     // F2: 매출 지표 정의 통일 — '오늘 매출'과 '오늘 주문'을 모두 확정 매출(SALES_COUNTED) 기준으로
     // (요약카드·영업탭·매출탭·통계 동일 집합). 미처리 신규는 아래 '신규 주문' 카드로 별도 표시.
@@ -875,6 +883,10 @@ export default function OwnerDashboard() {
           {GRADE_LABEL[order.member_info.grade]} · {order.member_info.visit_count}번째 방문
         </div>
       )}
+      {/* [D] 쿠폰 보유 고객 표시 */}
+      {(order as any).user_id && couponHolders.has((order as any).user_id) && (
+        <div style={{ display: 'inline-block', marginTop: 4, fontSize: 11, fontWeight: 800, color: '#111', background: '#3ac47d', borderRadius: 8, padding: '2px 8px' }}>🎟️ 쿠폰 보유 고객</div>
+      )}
       <ul className="order-items-list">
         {order.items?.map((item, i) => (
           <li key={i}><strong>{item.name_snapshot}</strong> × {item.qty}</li>
@@ -971,6 +983,10 @@ export default function OwnerDashboard() {
           <div style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[mi.grade] || '#c8a900', marginTop: 4 }}>
             {GRADE_LABEL[mi.grade]} · {mi.visit_count}번째 방문
           </div>
+        )}
+        {/* [D] 쿠폰 보유 고객 표시 */}
+        {group.some(o => (o as any).user_id && couponHolders.has((o as any).user_id)) && (
+          <div style={{ display: 'inline-block', marginTop: 4, fontSize: 11, fontWeight: 800, color: '#111', background: '#3ac47d', borderRadius: 8, padding: '2px 8px' }}>🎟️ 쿠폰 보유 고객</div>
         )}
         <ul className="order-items-list">
           {Array.from(dineItemMap.entries()).map(([name, qty], i) => (
