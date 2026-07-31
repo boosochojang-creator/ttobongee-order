@@ -257,26 +257,34 @@ export default function OwnerDashboard() {
   }, [])
 
   // [항목7] 음성에서 이모지 제거 — 고객 호출 메시지가 이모지를 포함해도 점주 음성이 읽지 않게.
+  //   ★핫픽스: 구형 웹뷰(점주 태블릿 등)는 유니코드 속성 이스케이프(\p{...})를 지원 안 해 new RegExp가
+  //   런타임에 throw → 이 throw가 speak 호출까지 막아 전체 무음이 됐다. 반드시 throw를 삼켜 원문이라도 반환한다.
+  //   (신규주문 문구엔 이모지가 없고, 고객 호출은 이미 제거된 speech를 받으므로 폴백해도 실사용 영향 없음.)
   function stripEmoji(text: string) {
-    // eslint-disable-next-line
-    return text.replace(new RegExp('[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]', 'gu'), '').replace(/\s+/g, ' ').trim()
+    try {
+      // eslint-disable-next-line
+      return text.replace(new RegExp('[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]', 'gu'), '').replace(/\s+/g, ' ').trim()
+    } catch {
+      return text.replace(/\s+/g, ' ').trim()
+    }
   }
 
   // [항목9] 점주 안내음성은 2회 낭독(주방 소음 속 놓침 방지). 고객 화면은 1회 유지.
-  //   큐잉만 하면 뭉개질 수 있어 첫 발화 onend에서 두 번째를 발화한다(미지원 시 즉시 큐잉 폴백).
+  //   큐잉만 하면 뭉개질 수 있어 첫 발화 onend에서 두 번째를 발화한다.
+  //   ★핫픽스: stripEmoji를 catch 밖으로 빼고, speak만 개별 try로 감싼다 — 전처리 예외가 speak를 막지 못하게.
   function speakKo(text: string, times = 1) {
-    try {
-      const clean = stripEmoji(text)
-      let count = 0
-      const once = () => {
+    const clean = stripEmoji(text) // 이제 절대 throw 안 함
+    let count = 0
+    const once = () => {
+      try {
         const u = new SpeechSynthesisUtterance(clean)
         u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.85
         count += 1
         if (count < times) u.onend = () => setTimeout(once, 250)
         window.speechSynthesis.speak(u)
-      }
-      once()
-    } catch {}
+      } catch {}
+    }
+    once()
   }
 
   function speakOrder(tableNo: number, orderType: string, paymentMethod: string) {
