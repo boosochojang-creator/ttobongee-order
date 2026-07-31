@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { CartProvider } from './lib/cartStore'
 import { BgmProvider } from './lib/BgmContext'
+import { VideoPlayerProvider } from './lib/VideoPlayerContext'
 import GlobalActionFab from './lib/GlobalActionFab'
 import PWAPrompt from './lib/PWAPrompt'
 import InAppBanner from './lib/InAppBanner'
@@ -31,12 +32,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <CartProvider>
           <BgmProvider>
+           <VideoPlayerProvider>
             {children}
             <GlobalActionFab />
             <InAppBanner />
             <PWAPrompt />
             <SWRegister />
             <OrderWatcher />
+           </VideoPlayerProvider>
           </BgmProvider>
         </CartProvider>
       </body>
