@@ -256,18 +256,37 @@ export default function OwnerDashboard() {
     } catch {}
   }, [])
 
-  function speakOrder(tableNo: number, orderType: string, paymentMethod: string) {
+  // [항목7] 음성에서 이모지 제거 — 고객 호출 메시지가 이모지를 포함해도 점주 음성이 읽지 않게.
+  function stripEmoji(text: string) {
+    // eslint-disable-next-line
+    return text.replace(new RegExp('[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]', 'gu'), '').replace(/\s+/g, ' ').trim()
+  }
+
+  // [항목9] 점주 안내음성은 2회 낭독(주방 소음 속 놓침 방지). 고객 화면은 1회 유지.
+  //   큐잉만 하면 뭉개질 수 있어 첫 발화 onend에서 두 번째를 발화한다(미지원 시 즉시 큐잉 폴백).
+  function speakKo(text: string, times = 1) {
     try {
-      const label = orderType === 'delivery' ? '배달' : orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
-      const message = !PAYMENT_ENABLED
-        ? `${label} 신규 주문입니다. 확인 후 접수해 주세요.` // 결제분리: 결제는 포스에서
-        : paymentMethod === 'cash'
-          ? `${label} 신규 주문입니다 — 현금결제입니다. 확인 후 접수해 주세요.`
-          : `${label} 신규 주문입니다`
-      const u = new SpeechSynthesisUtterance(message)
-      u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.85
-      window.speechSynthesis.speak(u)
+      const clean = stripEmoji(text)
+      let count = 0
+      const once = () => {
+        const u = new SpeechSynthesisUtterance(clean)
+        u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.85
+        count += 1
+        if (count < times) u.onend = () => setTimeout(once, 250)
+        window.speechSynthesis.speak(u)
+      }
+      once()
     } catch {}
+  }
+
+  function speakOrder(tableNo: number, orderType: string, paymentMethod: string) {
+    const label = orderType === 'delivery' ? '배달' : orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
+    const message = !PAYMENT_ENABLED
+      ? `${label} 신규 주문입니다. 확인 후 접수해 주세요.` // 결제분리: 결제는 포스에서
+      : paymentMethod === 'cash'
+        ? `${label} 신규 주문입니다 — 현금결제입니다. 확인 후 접수해 주세요.`
+        : `${label} 신규 주문입니다`
+    speakKo(message, 2) // [항목9]
   }
 
   const loadOrders = useCallback(async () => {
@@ -317,10 +336,7 @@ export default function OwnerDashboard() {
         pickupAlerted.current.add(o.id)
         playAlert()
         const hhmm = new Date(o.pickup_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-        try {
-          const u = new SpeechSynthesisUtterance(`포장 예약 15분 전입니다. ${hhmm} 픽업 주문을 준비해주세요`)
-          u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.85; window.speechSynthesis.speak(u)
-        } catch {}
+        speakKo(`포장 예약 15분 전입니다. ${hhmm} 픽업 주문을 준비해주세요`, 2) // [항목9]
         setCallToast(`🕒 포장 예약 15분 전 — ${hhmm} 픽업 준비!`)
         setTimeout(() => setCallToast(null), 6000)
       }
@@ -364,15 +380,12 @@ export default function OwnerDashboard() {
 
     const callCh = supabase.channel('customer-calls')
       .on('broadcast', { event: 'call' }, ({ payload }) => {
-        const { tableNo, message } = payload
+        const { tableNo, message, speech } = payload
+        // 토스트는 이모지 포함 원본 표시(시각). 음성은 speech(이모지 제거본) 우선, 없으면 stripEmoji 폴백. [항목7]
         setCallToast(`🔔 ${tableNo}번 테이블 - ${message}`)
         setTimeout(() => setCallToast(null), 3000)
         playAlert()
-        try {
-          const u = new SpeechSynthesisUtterance(`${tableNo}번 테이블 ${message}`)
-          u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.85
-          window.speechSynthesis.speak(u)
-        } catch {}
+        speakKo(`${tableNo}번 테이블 ${speech ?? message}`, 2) // [항목7·9]
       })
       .subscribe()
 
@@ -1102,7 +1115,10 @@ export default function OwnerDashboard() {
           ...Object.keys(byCat).filter(c => !CAT_ORDER.includes(c)),
         ]
 
-        const MenuRow = ({ m }: { m: any }) => (
+        // [항목8] 컴포넌트(<MenuRow/>)로 두면 부모 리렌더(8초 폴링 등)마다 새 함수 참조 → 언마운트/리마운트 →
+        //   텍스트 입력칸 포커스 소실(키보드 닫힘). 일반 함수로 호출(renderMenuRow(m))하면 host 엘리먼트가
+        //   부모에 인라인돼 재조정만 되므로 포커스가 유지된다. (이미지 input은 네이티브 파일선택이라 무관했음)
+        const renderMenuRow = (m: any) => (
           <div key={m.id} className="menu-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
             {editingId === m.id ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1260,7 +1276,7 @@ export default function OwnerDashboard() {
                 <div style={{ fontSize: 13, fontWeight: 800, color: '#c8a900', padding: '16px 0 6px' }}>
                   {cat} <span style={{ color: '#666', fontWeight: 600 }}>({byCat[cat].length})</span>
                 </div>
-                {byCat[cat].map(m => <MenuRow key={m.id} m={m} />)}
+                {byCat[cat].map(m => renderMenuRow(m))}
               </div>
             ))}
 
@@ -1270,7 +1286,7 @@ export default function OwnerDashboard() {
                 <div style={{ fontSize: 12, color: '#555', padding: '14px 0 6px', borderTop: '1px solid #2a2a2a', marginTop: 4 }}>
                   품절 처리된 메뉴 ({inactiveMenus.length})
                 </div>
-                {inactiveMenus.map(m => <MenuRow key={m.id} m={m} />)}
+                {inactiveMenus.map(m => renderMenuRow(m))}
               </>
             )}
           </div>

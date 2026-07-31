@@ -55,7 +55,8 @@ export default function GlobalActionFab() {
       const ch = supabase.channel('customer-calls')
       ch.subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          ch.send({ type: 'broadcast', event: 'call', payload: { tableNo, message: item } })
+          // message=원본(점주 토스트 표시용), speech=이모지 제거본(점주 음성용). [항목7]
+          ch.send({ type: 'broadcast', event: 'call', payload: { tableNo, message: item, speech: stripEmoji(item) } })
           setTimeout(() => supabase.removeChannel(ch), 1000)
         }
       })
