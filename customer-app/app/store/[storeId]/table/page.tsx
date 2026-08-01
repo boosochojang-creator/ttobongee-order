@@ -83,14 +83,7 @@ export default function TablePage() {
     setOrderType('dine_in')
     router.push(`/store/${storeId}/menu`)
   }
-
-  function takeout() {
-    beep()
-    clearItems()
-    setTableNo('0')
-    setOrderType('takeout')
-    router.push(`/store/${storeId}/menu`)
-  }
+  // [고객상태 ⑤] '포장' 버튼은 입구 첫 화면(/entry)으로 이동 → 이 화면에선 제거.
 
   return (
     <main>
@@ -148,10 +141,6 @@ export default function TablePage() {
             </button>
           ))}
         </div>
-
-        <button className="takeout-btn" onClick={takeout}>
-          🛍️ 포장 주문
-        </button>
 
         <div style={{
           marginTop:28, padding:'20px 16px',

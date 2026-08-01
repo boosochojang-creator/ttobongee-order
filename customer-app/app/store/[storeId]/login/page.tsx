@@ -171,24 +171,24 @@ export default function LoginPage() {
               </span>
               <span style={{ fontSize: 12, color: '#ccc' }}>카카오</span>
             </button>
-            {/* 구글 (준비중) */}
+            {/* 구글 (준비중) — 아이콘만 흐리게, 라벨은 선명하게 */}
             <button onClick={() => handleSocial('google')} aria-label="구글 로그인 준비중"
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: 0.4 }}>
-              <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#fff', border: '1px solid #ddd', display: 'flex', alignItems: 'center', justifyContent: 'center', filter: 'grayscale(1)' }}>
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#fff', border: '1px solid #ddd', display: 'flex', alignItems: 'center', justifyContent: 'center', filter: 'grayscale(1)', opacity: 0.45 }}>
                 <span style={{ fontSize: 26, fontWeight: 800, color: '#4285F4' }}>G</span>
               </span>
-              <span style={{ fontSize: 11, color: '#777' }}>구글 · 준비중</span>
+              <span style={{ fontSize: 11, color: '#bbb' }}>구글 · 준비중</span>
             </button>
             {/* 네이버 (준비중) */}
             <button onClick={() => handleSocial('naver')} aria-label="네이버 로그인 준비중"
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: 0.4 }}>
-              <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#03C75A', display: 'flex', alignItems: 'center', justifyContent: 'center', filter: 'grayscale(1)' }}>
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#03C75A', display: 'flex', alignItems: 'center', justifyContent: 'center', filter: 'grayscale(1)', opacity: 0.45 }}>
                 <span style={{ fontSize: 24, fontWeight: 900, color: '#fff' }}>N</span>
               </span>
-              <span style={{ fontSize: 11, color: '#777' }}>네이버 · 준비중</span>
+              <span style={{ fontSize: 11, color: '#bbb' }}>네이버 · 준비중</span>
             </button>
           </div>
-          {soon && <div style={{ fontSize: 12.5, color: '#c8a900', textAlign: 'center', marginTop: 10 }}>{soon} 로그인은 준비 중이에요 — 지금은 카카오로 시작해 주세요 🙏</div>}
+          {soon && <div style={{ fontSize: 13, fontWeight: 600, color: '#f0d890', textAlign: 'center', marginTop: 10 }}>{soon} 로그인은 준비 중이에요 — 지금은 카카오로 시작해 주세요 🙏</div>}
         </div>
 
         {/* 구분선 — 기존 전화가입 회원용(병행 운영, 점차 소셜로 전환) */}
