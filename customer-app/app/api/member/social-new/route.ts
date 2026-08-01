@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyToken } from '../../../lib/authToken'
 import { issueSignupCoupon } from '../../../lib/signupCoupon'
+import { sanitizeNickname } from '../../../lib/nickname'
 
 // [그룹2 새로시작] 신규 소셜신원 → 새 회원 생성(phone=null) + signup 쿠폰 즉시발급.
 //   전화 연결을 안 한 진짜 신규만 이 경로. (전화 미수집)
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
     if (!user) {
       const { data: nu, error } = await admin.from('users').insert({
         store_id: sid, auth_provider: v.provider, provider_uid: v.uidHash,
-        nickname: v.nickname || null, device_id: deviceId || null,
+        nickname: sanitizeNickname(v.nickname) || null, device_id: deviceId || null, // 전화 패턴 마스킹
         // phone 없음(null) — 소셜 전용 회원
       }).select('id, grade, visit_count, nickname, member_status').single()
       if (error || !nu) throw error || new Error('회원 생성 실패')

@@ -49,7 +49,7 @@ export default function LoginPage() {
       if (res.rejoined) { setLoading(false); setRejoinNotice(true); return }
 
       // 가입 완료 → 같은 흐름에서 설치 승인 이어붙이기 (거부해도 가입은 그대로)
-      if (isInstalled()) { router.back(); return }
+      if (isInstalled()) { router.replace(`/store/${storeId}/menu`); return }
 
       if (isIOS()) { setLoading(false); setInstallStep('ios'); return }
 
@@ -61,7 +61,7 @@ export default function LoginPage() {
           if (choice?.outcome === 'accepted') markInstalled()
           clearDeferredPrompt()
         } catch {}
-        router.back()
+        router.replace(`/store/${storeId}/menu`)
         return
       }
 
@@ -90,7 +90,7 @@ export default function LoginPage() {
           단골 혜택은 그대로 이어지지만, <b style={{ color: '#FFD700' }}>신규 가입 쿠폰은 다시 지급되지 않아요.</b><br />
           <span style={{ color: '#aaa', fontSize: 13 }}>양해 부탁드려요 🙏 오늘도 맛있게 준비할게요!</span>
         </div>
-        <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => router.back()}>
+        <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => router.replace(`/store/${storeId}/menu`)}>
           확인, 주문 계속하기
         </button>
       </div>
@@ -124,7 +124,7 @@ export default function LoginPage() {
             <>브라우저 메뉴(⋮)에서 <span style={{ color: '#FFD700' }}>&lsquo;홈 화면에 추가&rsquo;</span> 또는 <span style={{ color: '#FFD700' }}>&lsquo;앱 설치&rsquo;</span>를 눌러주세요.</>
           )}
         </div>
-        <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => router.back()}>
+        <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => router.replace(`/store/${storeId}/menu`)}>
           확인했어요, 주문 계속하기
         </button>
       </div>

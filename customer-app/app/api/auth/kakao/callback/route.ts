@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { signToken, verifyToken } from '../../../../lib/authToken'
 import { oauthHash } from '../../../../lib/phoneCrypto'
+import { sanitizeNickname } from '../../../../lib/nickname'
 
 // 카카오 콜백 — ① 인가코드 → 토큰 발급 ② 사용자 정보 조회 ③ 기존 users 매핑.
 //   provider_uid 매핑이 있으면=재방문 로그인, 없으면=신규 소셜신원(연결/새로시작 선택으로).
@@ -48,7 +49,8 @@ export async function GET(req: NextRequest) {
     }).then(r => r.json()).catch(() => null)
     const kakaoId = me?.id
     if (!kakaoId) return finish('err=profile')
-    const nickname: string = me?.kakao_account?.profile?.nickname || me?.properties?.nickname || ''
+    // 전화번호 패턴 마스킹 — 카카오 닉네임에 전화번호가 있어도 우리 DB(및 서명토큰)에 남지 않게. [개인정보 원칙]
+    const nickname: string = sanitizeNickname(me?.kakao_account?.profile?.nickname || me?.properties?.nickname || '')
     const uidHash = oauthHash('kakao', kakaoId)
 
     // ③ 기존 users 매핑 조회

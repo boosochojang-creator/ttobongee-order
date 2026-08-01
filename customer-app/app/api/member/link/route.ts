@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyToken } from '../../../lib/authToken'
 import { phoneHash, phoneDigits } from '../../../lib/phoneCrypto'
+import { sanitizeNickname } from '../../../lib/nickname'
 
 // [그룹2 연결] 신규 소셜신원 + 전화 1회 입력 → 기존 전화 단골과 매칭.
 //   매칭되면 기존 user_id에 provider 부착 + 전화(phone/phone_encrypted) 자동 파기(2c).
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
       phone: null, phone_encrypted: null,
       last_visit: new Date().toISOString(),
     }
-    if (!(existing as any).nickname && v.nickname) patch.nickname = v.nickname
+    if (!(existing as any).nickname) { const nn = sanitizeNickname(v.nickname); if (nn) patch.nickname = nn } // 전화 패턴 마스킹
     if ((existing as any).withdrawn_at) patch.withdrawn_at = null
     if (deviceId) patch.device_id = deviceId
     const { error: uErr } = await admin.from('users').update(patch).eq('id', existing.id)
