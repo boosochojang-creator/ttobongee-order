@@ -17,10 +17,19 @@ type InstallStep = null | 'ios' | 'guide'
 export default function LoginPage() {
   const router = useRouter()
   const storeId = useStoreId()
-  const { setMember } = useCart()
+  const { setMember, isMember } = useCart()
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [soon, setSoon] = useState('') // 구글·네이버 '준비중' 안내
+
+  // [고객상태 ③] 소셜 아이콘 클릭 — 이미 로그인(known)이면 OAuth 없이 바로 메뉴로, 아니면 인증 플로우.
+  const handleSocial = (provider: 'kakao' | 'google' | 'naver') => {
+    if (provider !== 'kakao') { setSoon(provider === 'google' ? '구글' : '네이버'); return }
+    setSoon('')
+    if (isMember) { router.replace(`/store/${storeId}/menu`); return }
+    window.location.href = `/api/auth/kakao/start?storeId=${storeId}`
+  }
   const [installStep, setInstallStep] = useState<InstallStep>(null)
   const [rejoinNotice, setRejoinNotice] = useState(false) // [항목1] 탈퇴 후 재가입(재활성화) 안내
 
@@ -139,7 +148,7 @@ export default function LoginPage() {
         <div className="sub">백운역점</div>
         <div className="discount-badge">🎁 단골 등록하면 무료 쿠폰 (다음 방문 때 사용 가능)</div>
         <p style={{ fontSize: 14, color: 'var(--text2)', textAlign: 'center', lineHeight: 1.6 }}>
-          전화번호만 입력하면 끝!<br />첫 방문도 자동으로 단골 등록됩니다
+3초 간편로그인으로 끝!<br />첫 방문도 자동으로 단골 등록됩니다
         </p>
         <div style={{
           fontSize: 13, color: '#c8a900', textAlign: 'center', lineHeight: 1.9,
@@ -150,17 +159,37 @@ export default function LoginPage() {
           가입 한 번이면 다음 주문은 눌러서 바로 —<br />
           포장도, 배달도, 이벤트 소식도 여기서 편하게 만나요.
         </div>
-        {/* [그룹2] 카카오 로그인(기본) — 소셜 인증으로 전환. 전화번호는 미수집. */}
-        <button
-          onClick={() => { window.location.href = `/api/auth/kakao/start?storeId=${storeId}` }}
-          style={{
-            width: '100%', marginTop: 4, padding: '14px', background: '#FEE500', color: '#191600',
-            border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 800, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 18 }}>💬</span> 카카오로 시작하기
-        </button>
+        {/* [고객상태 ③] 간편로그인 — 비활성 라벨 + 소셜 아이콘 3개(카카오만 활성, 구글·네이버 준비중) */}
+        <div style={{ width: '100%', marginTop: 8 }}>
+          <div style={{ fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 12, letterSpacing: 1 }}>간편로그인</div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 22 }}>
+            {/* 카카오 (활성) */}
+            <button onClick={() => handleSocial('kakao')} aria-label="카카오로 로그인"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#FEE500', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+                <svg viewBox="0 0 40 40" width="30" height="30" aria-hidden="true"><path d="M20 8.5c-7 0-12.7 4.4-12.7 9.9 0 3.5 2.4 6.6 5.9 8.3-.2.8-1 3.4-1 3.7-.1.4.2.4.4.3.15-.1 3.8-2.6 4.6-3.1.9.12 1.8.2 2.8.2 7 0 12.7-4.4 12.7-9.9S27 8.5 20 8.5z" fill="#3C1E1E"/></svg>
+              </span>
+              <span style={{ fontSize: 12, color: '#ccc' }}>카카오</span>
+            </button>
+            {/* 구글 (준비중) */}
+            <button onClick={() => handleSocial('google')} aria-label="구글 로그인 준비중"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: 0.4 }}>
+              <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#fff', border: '1px solid #ddd', display: 'flex', alignItems: 'center', justifyContent: 'center', filter: 'grayscale(1)' }}>
+                <span style={{ fontSize: 26, fontWeight: 800, color: '#4285F4' }}>G</span>
+              </span>
+              <span style={{ fontSize: 11, color: '#777' }}>구글 · 준비중</span>
+            </button>
+            {/* 네이버 (준비중) */}
+            <button onClick={() => handleSocial('naver')} aria-label="네이버 로그인 준비중"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: 0.4 }}>
+              <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#03C75A', display: 'flex', alignItems: 'center', justifyContent: 'center', filter: 'grayscale(1)' }}>
+                <span style={{ fontSize: 24, fontWeight: 900, color: '#fff' }}>N</span>
+              </span>
+              <span style={{ fontSize: 11, color: '#777' }}>네이버 · 준비중</span>
+            </button>
+          </div>
+          {soon && <div style={{ fontSize: 12.5, color: '#c8a900', textAlign: 'center', marginTop: 10 }}>{soon} 로그인은 준비 중이에요 — 지금은 카카오로 시작해 주세요 🙏</div>}
+        </div>
 
         {/* 구분선 — 기존 전화가입 회원용(병행 운영, 점차 소셜로 전환) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', margin: '14px 0 4px' }}>
