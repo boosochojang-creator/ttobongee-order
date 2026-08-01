@@ -3,6 +3,7 @@ import { CartProvider } from './lib/cartStore'
 import { BgmProvider } from './lib/BgmContext'
 import { VideoPlayerProvider } from './lib/VideoPlayerContext'
 import { CouponProvider } from './lib/CouponContext'
+import { MemberStateProvider } from './lib/MemberStateContext'
 import GlobalActionFab from './lib/GlobalActionFab'
 import PWAPrompt from './lib/PWAPrompt'
 import InAppBanner from './lib/InAppBanner'
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <CartProvider>
+         <MemberStateProvider>
           <BgmProvider>
            <CouponProvider>
             <VideoPlayerProvider>
@@ -44,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </VideoPlayerProvider>
            </CouponProvider>
           </BgmProvider>
+         </MemberStateProvider>
         </CartProvider>
       </body>
     </html>
