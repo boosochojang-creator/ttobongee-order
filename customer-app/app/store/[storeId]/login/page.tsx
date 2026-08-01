@@ -137,7 +137,7 @@ export default function LoginPage() {
       <div className="login-page">
         <div className="brand">🍗 또봉이통닭</div>
         <div className="sub">백운역점</div>
-        <div className="discount-badge">🎁 단골 등록 시 생맥주·소주·음료 중 1잔 무료</div>
+        <div className="discount-badge">🎁 단골 등록하면 무료 쿠폰 (다음 방문 때 사용 가능)</div>
         <p style={{ fontSize: 14, color: 'var(--text2)', textAlign: 'center', lineHeight: 1.6 }}>
           전화번호만 입력하면 끝!<br />첫 방문도 자동으로 단골 등록됩니다
         </p>
@@ -162,7 +162,7 @@ export default function LoginPage() {
         </div>
         {error && <p style={{ fontSize: 13, color: 'var(--red)' }}>{error}</p>}
         <button className="btn-primary" onClick={handleLogin} disabled={loading}>
-          {loading ? '확인 중...' : '무료 증정 받고 주문하기'}
+          {loading ? '확인 중...' : '가입하고 쿠폰 받기'}
         </button>
         {/* [항목2] 비회원 주문 비활성화 — 주문 없이 나가는 유일 선택지는 '잠깐 쉬었다 갈까요?'(허브) */}
         <button className="skip-btn" onClick={() => router.push(`/store/${storeId}/hub`)}>

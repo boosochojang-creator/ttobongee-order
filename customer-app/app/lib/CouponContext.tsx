@@ -93,7 +93,9 @@ export function CouponProvider({ children }: { children: ReactNode }) {
   }, [coupons])
 
   const onStore = !!pathname && pathname.startsWith('/store/')
-  const showBadge = onStore && usable.length > 0
+  // 뱃지는 '보유' 기준(usable + upcoming) — 다음날부터 쓰는 신규가입 쿠폰도 즉시 보이게(가입 직후 뱃지 미표시 수정).
+  const heldCount = usable.length + upcoming.length
+  const showBadge = onStore && heldCount > 0
 
   return (
     <CouponContext.Provider value={{ usable, upcoming, count: usable.length, refresh }}>
@@ -135,7 +137,7 @@ export function CouponProvider({ children }: { children: ReactNode }) {
             position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, padding: '0 5px',
             background: '#e84040', color: '#fff', fontSize: 12, fontWeight: 800,
             borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>{usable.length}</span>
+          }}>{heldCount}</span>
         </button>
       )}
 

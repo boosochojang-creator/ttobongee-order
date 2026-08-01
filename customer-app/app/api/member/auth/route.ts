@@ -46,6 +46,24 @@ export async function POST(req: NextRequest) {
       }).select('id, grade, visit_count, nickname, member_status, withdrawn_at').single()
       if (error || !created) throw error || new Error('회원 생성 실패')
       user = created
+
+      // 신규가입 쿠폰 즉시 발급(최초 1회). 기존엔 점주 영업시작 배치에서만 발급돼 가입 직후엔 쿠폰이 없었다(뱃지 미표시 원인).
+      //   규칙은 owner coupons.ts COUPON_RULES.signup과 동일: 무기한 + 다음날부터 사용(당일 사용불가).
+      //   best-effort — 발급 실패가 가입을 막지 않는다. 재가입(재활성화)/기존 회원은 이 분기를 안 타므로 재발급 없음.
+      try {
+        const now = new Date()
+        const kst = new Date(now.getTime() + 9 * 3600 * 1000)
+        const usableFrom = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1, 0, 0, 0) - 9 * 3600 * 1000) // 다음 KST 자정
+        const expiresAt = new Date(now.getTime() + 100 * 365 * 86400000) // 무기한(validDays:null → 100년)
+        await admin.from('coupons').insert({
+          user_id: created.id, type: 'signup',
+          discount_amount: 0,
+          free_menu: '생맥주 500cc / 소주 1병 / 음료(대) 중 택1', free_qty: 1,
+          min_order_amount: 0,
+          status: 'active', issued_at: now.toISOString(),
+          usable_from: usableFrom.toISOString(), expires_at: expiresAt.toISOString(),
+        })
+      } catch {}
     }
 
     return NextResponse.json({

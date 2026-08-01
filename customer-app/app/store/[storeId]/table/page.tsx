@@ -162,9 +162,9 @@ export default function TablePage() {
             <>오늘도 <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다 😊</>
           ) : (
             <>🎁 주문 전{' '}
-              <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>으로{' '}
-              <span style={{color:'#FF6B00', fontWeight:700}}>생맥주·소주·음료 중 1잔 무료 증정</span>{' '}
-              받으세요!<br/>
+              <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>하면{' '}
+              <span style={{color:'#FF6B00', fontWeight:700}}>생맥주·소주·음료 중 1잔 무료 쿠폰</span>{' '}
+              드려요 <span style={{fontSize:13, color:'#bbb'}}>(다음 방문 때 사용 가능)</span><br/>
               오늘도{' '}
               <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다.
             </>
