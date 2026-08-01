@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { phoneHash, phoneEncrypt, phoneDigits } from '../../../lib/phoneCrypto'
+import { issueSignupCoupon } from '../../../lib/signupCoupon'
 
 // E2: 회원 로그인/가입 — 전화번호 해시 조회 + dual-write. 서버 전용(HMAC/AES 키가 서버 비밀).
 // 기존 클라이언트(anon) 직접 조회/insert를 대체. 조회는 phone_hash로, 저장은 phone+phone_hash+phone_encrypted 동시(전환 중 안전장치).
@@ -48,22 +49,8 @@ export async function POST(req: NextRequest) {
       user = created
 
       // 신규가입 쿠폰 즉시 발급(최초 1회). 기존엔 점주 영업시작 배치에서만 발급돼 가입 직후엔 쿠폰이 없었다(뱃지 미표시 원인).
-      //   규칙은 owner coupons.ts COUPON_RULES.signup과 동일: 무기한 + 다음날부터 사용(당일 사용불가).
-      //   best-effort — 발급 실패가 가입을 막지 않는다. 재가입(재활성화)/기존 회원은 이 분기를 안 타므로 재발급 없음.
-      try {
-        const now = new Date()
-        const kst = new Date(now.getTime() + 9 * 3600 * 1000)
-        const usableFrom = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1, 0, 0, 0) - 9 * 3600 * 1000) // 다음 KST 자정
-        const expiresAt = new Date(now.getTime() + 100 * 365 * 86400000) // 무기한(validDays:null → 100년)
-        await admin.from('coupons').insert({
-          user_id: created.id, type: 'signup',
-          discount_amount: 0,
-          free_menu: '생맥주 500cc / 소주 1병 / 음료(대) 중 택1', free_qty: 1,
-          min_order_amount: 0,
-          status: 'active', issued_at: now.toISOString(),
-          usable_from: usableFrom.toISOString(), expires_at: expiresAt.toISOString(),
-        })
-      } catch {}
+      //   재가입(재활성화)/기존 회원은 이 분기를 안 타므로 재발급 없음. best-effort(발급 실패가 가입을 막지 않음).
+      await issueSignupCoupon(admin, created.id)
     }
 
     return NextResponse.json({

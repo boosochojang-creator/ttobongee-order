@@ -150,6 +150,24 @@ export default function LoginPage() {
           가입 한 번이면 다음 주문은 눌러서 바로 —<br />
           포장도, 배달도, 이벤트 소식도 여기서 편하게 만나요.
         </div>
+        {/* [그룹2] 카카오 로그인(기본) — 소셜 인증으로 전환. 전화번호는 미수집. */}
+        <button
+          onClick={() => { window.location.href = `/api/auth/kakao/start?storeId=${storeId}` }}
+          style={{
+            width: '100%', marginTop: 4, padding: '14px', background: '#FEE500', color: '#191600',
+            border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 800, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 18 }}>💬</span> 카카오로 시작하기
+        </button>
+
+        {/* 구분선 — 기존 전화가입 회원용(병행 운영, 점차 소셜로 전환) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', margin: '14px 0 4px' }}>
+          <span style={{ flex: 1, height: 1, background: '#333' }} />
+          <span style={{ fontSize: 12, color: '#777' }}>기존 전화번호 회원</span>
+          <span style={{ flex: 1, height: 1, background: '#333' }} />
+        </div>
         <div className="input-wrap" style={{ width: '100%' }}>
           <input
             type="tel"
@@ -162,7 +180,7 @@ export default function LoginPage() {
         </div>
         {error && <p style={{ fontSize: 13, color: 'var(--red)' }}>{error}</p>}
         <button className="btn-primary" onClick={handleLogin} disabled={loading}>
-          {loading ? '확인 중...' : '가입하고 쿠폰 받기'}
+          {loading ? '확인 중...' : '전화번호로 로그인'}
         </button>
         {/* [항목2] 비회원 주문 비활성화 — 주문 없이 나가는 유일 선택지는 '잠깐 쉬었다 갈까요?'(허브) */}
         <button className="skip-btn" onClick={() => router.push(`/store/${storeId}/hub`)}>

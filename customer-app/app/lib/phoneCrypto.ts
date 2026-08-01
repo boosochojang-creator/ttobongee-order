@@ -15,6 +15,11 @@ export function phoneHash(phone: string | null | undefined): string {
   return crypto.createHmac('sha256', HASH_SECRET).update(phoneDigits(phone)).digest('hex')
 }
 
+// 소셜 로그인 식별자 해시 — provider 고유 id 원문을 저장하지 않고 조회키로만 사용(phoneHash와 동일 단방향).
+export function oauthHash(provider: string, uid: string | number): string {
+  return crypto.createHmac('sha256', HASH_SECRET).update(`${provider}:${uid}`).digest('hex')
+}
+
 // 저장용: iv(12) + authTag(16) + ciphertext 를 base64로. 복호화 가능.
 export function phoneEncrypt(phone: string | null | undefined): string | null {
   const d = phoneDigits(phone)
