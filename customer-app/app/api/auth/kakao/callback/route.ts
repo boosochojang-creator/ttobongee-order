@@ -9,19 +9,22 @@ import { oauthHash } from '../../../../lib/phoneCrypto'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const origin = req.nextUrl.origin
+  // dev를 -H 0.0.0.0으로 띄우면 req.nextUrl.origin이 '0.0.0.0:3000'으로 잡혀 리다이렉트가 깨진다.
+  // OAuth 콜백은 redirect_uri와 동일 호스트에서만 도착하므로, KAKAO_REDIRECT_URI의 origin을 기준으로 삼는다
+  // (프로덕션에선 프로덕션 도메인이 자동 반영됨). env 없을 때만 요청 origin으로 폴백.
+  const base = (() => { try { return new URL(process.env.KAKAO_REDIRECT_URI!).origin } catch { return req.nextUrl.origin } })()
   const sp = req.nextUrl.searchParams
   const code = sp.get('code')
   const state = verifyToken<{ t: string; storeId: string }>(sp.get('state'))
   if (sp.get('error')) {
     // 사용자가 동의 취소 등
-    return NextResponse.redirect(`${origin}/store/baegun/auth/finish?err=denied`)
+    return NextResponse.redirect(`${base}/store/baegun/auth/finish?err=denied`)
   }
   if (!code || !state || state.t !== 'state') {
-    return NextResponse.redirect(`${origin}/store/baegun/auth/finish?err=state`)
+    return NextResponse.redirect(`${base}/store/baegun/auth/finish?err=state`)
   }
   const storeId = state.storeId || 'baegun'
-  const finish = (q: string) => NextResponse.redirect(`${origin}/store/${storeId}/auth/finish?${q}`)
+  const finish = (q: string) => NextResponse.redirect(`${base}/store/${storeId}/auth/finish?${q}`)
 
   try {
     // ① 토큰 발급

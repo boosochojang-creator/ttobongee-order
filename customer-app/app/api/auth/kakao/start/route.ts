@@ -10,7 +10,9 @@ export async function GET(req: NextRequest) {
   const key = process.env.KAKAO_REST_API_KEY
   const redirect = process.env.KAKAO_REDIRECT_URI
   if (!key || !redirect) {
-    return NextResponse.redirect(`${req.nextUrl.origin}/store/${storeId}/auth/finish?err=config`)
+    // origin은 -H 0.0.0.0 바인딩 시 0.0.0.0으로 잡히므로, 가능하면 redirect_uri 호스트 기준.
+    const base = (() => { try { return new URL(redirect!).origin } catch { return req.nextUrl.origin } })()
+    return NextResponse.redirect(`${base}/store/${storeId}/auth/finish?err=config`)
   }
   const state = signToken({ t: 'state', storeId, n: Math.random().toString(36).slice(2) }, 600)
   const url = new URL('https://kauth.kakao.com/oauth/authorize')
