@@ -53,32 +53,12 @@ export async function GET(req: NextRequest) {
     const nickname: string = sanitizeNickname(me?.kakao_account?.profile?.nickname || me?.properties?.nickname || '')
     const uidHash = oauthHash('kakao', kakaoId)
 
-    // ③ 기존 users 매핑 조회
+    // ③ 기존 users 매핑 조회 — 재방문이면 여기서 잡혀 바로 로그인(선택화면 없이 메뉴).
+    //   (adminClient의 no-store fetch로 Next 캐시 우회 — 캐시된 빈 결과로 매번 신규 처리되던 버그 방지.)
     const admin = adminClient()
-    const { data: existing, error: lookErr } = await admin.from('users')
+    const { data: existing } = await admin.from('users')
       .select('id, withdrawn_at')
       .eq('store_id', storeId).eq('auth_provider', 'kakao').eq('provider_uid', uidHash).maybeSingle()
-
-    // [진단 로그] 실제 재로그인 시 provider_uid 조회가 기존 매핑을 찾는지 확인용.
-    console.log('[kakao-callback]', JSON.stringify({
-      kakaoId: String(kakaoId), kakaoIdType: typeof kakaoId,
-      storeId, uidHashHead: uidHash.slice(0, 12),
-      lookupError: lookErr?.message || null,
-      existing: existing ? { id: existing.id, withdrawn: !!(existing as any).withdrawn_at } : null,
-      branch: existing ? 'SESSION(메뉴 직행)' : 'PENDING(선택화면)',
-    }))
-    // [강화 진단] 콜백 클라이언트가 실제로 보는 것: 접속 URL/서비스키 유무/full 해시/카카오 행 전체+일치여부
-    try {
-      const rawAll = await admin.from('users').select('id, store_id, auth_provider, provider_uid').eq('auth_provider', 'kakao')
-      console.log('[kakao-callback-raw]', JSON.stringify({
-        supaUrl: (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace('https://', '').slice(0, 24),
-        hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        serviceKeyLen: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').length,
-        fullUidHash: uidHash,
-        rawErr: rawAll.error?.message || null,
-        kakaoRows: (rawAll.data || []).map((u: any) => ({ id: u.id.slice(0, 8), store: u.store_id, uidHead: (u.provider_uid || '').slice(0, 16), match: u.provider_uid === uidHash })),
-      }))
-    } catch (e: any) { console.log('[kakao-callback-raw] ERR', e?.message) }
 
     if (existing) {
       // 재방문 로그인 — 탈퇴상태면 재활성화. (소셜 재활성화 시 탈퇴흔적 phone 잔재도 정리)
