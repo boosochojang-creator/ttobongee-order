@@ -55,9 +55,18 @@ export async function GET(req: NextRequest) {
 
     // ③ 기존 users 매핑 조회
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-    const { data: existing } = await admin.from('users')
+    const { data: existing, error: lookErr } = await admin.from('users')
       .select('id, withdrawn_at')
       .eq('store_id', storeId).eq('auth_provider', 'kakao').eq('provider_uid', uidHash).maybeSingle()
+
+    // [진단 로그] 실제 재로그인 시 provider_uid 조회가 기존 매핑을 찾는지 확인용.
+    console.log('[kakao-callback]', JSON.stringify({
+      kakaoId: String(kakaoId), kakaoIdType: typeof kakaoId,
+      storeId, uidHashHead: uidHash.slice(0, 12),
+      lookupError: lookErr?.message || null,
+      existing: existing ? { id: existing.id, withdrawn: !!(existing as any).withdrawn_at } : null,
+      branch: existing ? 'SESSION(메뉴 직행)' : 'PENDING(선택화면)',
+    }))
 
     if (existing) {
       // 재방문 로그인 — 탈퇴상태면 재활성화

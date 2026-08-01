@@ -16,14 +16,18 @@ export async function POST(req: NextRequest) {
     const sid = storeId || 'baegun'
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-    // 이미 연결된 소셜이면(중복 콜백/뒤로가기) 그 회원 반환 — 중복 생성 방지
+    // 이미 이 provider_uid로 가입 이력이 있으면(탈퇴 포함) 새 계정/쿠폰 만들지 않고 그 회원 재사용.
+    // (콜백이 정상이면 여기 도달 전에 걸리지만, 어뷰징/엣지 방어로 한 번 더.)
     const { data: dupe } = await admin.from('users')
-      .select('id, grade, visit_count, nickname, member_status')
+      .select('id, grade, visit_count, nickname, member_status, withdrawn_at')
       .eq('store_id', sid).eq('auth_provider', v.provider).eq('provider_uid', v.uidHash).maybeSingle()
 
     let user = dupe as any
     let created = false
-    if (!user) {
+    if (user) {
+      // 탈퇴 상태면 재활성화(재가입) — 신규쿠폰은 발급하지 않음(이력 있음)
+      if ((user as any).withdrawn_at) await admin.from('users').update({ withdrawn_at: null, last_visit: new Date().toISOString() }).eq('id', user.id)
+    } else {
       const { data: nu, error } = await admin.from('users').insert({
         store_id: sid, auth_provider: v.provider, provider_uid: v.uidHash,
         nickname: sanitizeNickname(v.nickname) || null, device_id: deviceId || null, // 전화 패턴 마스킹
@@ -33,7 +37,21 @@ export async function POST(req: NextRequest) {
       user = nu; created = true
     }
 
-    if (created) await issueSignupCoupon(admin, user.id) // 신규만 signup 쿠폰(연결 회원은 재발급 안 함)
+    // [쿠폰 무한발급 방지] '완전히 처음 보는 신원'일 때만 signup 쿠폰.
+    //   - 같은 provider_uid 이력: 위 dupe로 이미 created=false → 발급 안 함.
+    //   - 같은 device_id로 과거 signup 받은 이력: 아래에서 차단(다른 카카오로 기기 어뷰징 방지).
+    if (created) {
+      let allowSignup = true
+      if (deviceId) {
+        const { data: sameDev } = await admin.from('users').select('id').eq('store_id', sid).eq('device_id', deviceId).neq('id', user.id)
+        const priorIds = (sameDev || []).map((x: any) => x.id)
+        if (priorIds.length) {
+          const { data: had } = await admin.from('coupons').select('id').eq('type', 'signup').in('user_id', priorIds).limit(1)
+          if (had && had.length) allowSignup = false
+        }
+      }
+      if (allowSignup) await issueSignupCoupon(admin, user.id)
+    }
 
     return NextResponse.json({
       ok: true,
