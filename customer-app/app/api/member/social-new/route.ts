@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     let user = dupe as any
     let created = false
     if (user) {
-      // 탈퇴 상태면 재활성화(재가입) — 신규쿠폰은 발급하지 않음(이력 있음)
-      if ((user as any).withdrawn_at) await admin.from('users').update({ withdrawn_at: null, last_visit: new Date().toISOString() }).eq('id', user.id)
+      // 탈퇴 상태면 재활성화(재가입) — 신규쿠폰은 발급하지 않음(이력 있음). 탈퇴흔적 phone 잔재도 정리.
+      if ((user as any).withdrawn_at) await admin.from('users').update({ withdrawn_at: null, phone: null, phone_encrypted: null, last_visit: new Date().toISOString() }).eq('id', user.id)
     } else {
       const { data: nu, error } = await admin.from('users').insert({
         store_id: sid, auth_provider: v.provider, provider_uid: v.uidHash,

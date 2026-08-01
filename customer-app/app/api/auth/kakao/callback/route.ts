@@ -69,9 +69,9 @@ export async function GET(req: NextRequest) {
     }))
 
     if (existing) {
-      // 재방문 로그인 — 탈퇴상태면 재활성화
+      // 재방문 로그인 — 탈퇴상태면 재활성화. (소셜 재활성화 시 탈퇴흔적 phone 잔재도 정리)
       const patch: Record<string, any> = { last_visit: new Date().toISOString() }
-      if ((existing as any).withdrawn_at) patch.withdrawn_at = null
+      if ((existing as any).withdrawn_at) { patch.withdrawn_at = null; patch.phone = null; patch.phone_encrypted = null }
       await admin.from('users').update(patch).eq('id', existing.id)
       const session = signToken({ t: 'session', uid: existing.id }, 300)
       return finish(`token=${encodeURIComponent(session)}`)
