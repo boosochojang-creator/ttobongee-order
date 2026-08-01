@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { adminClient } from '../../../lib/supabaseAdmin'
 import { verifyToken } from '../../../lib/authToken'
 import { phoneHash, phoneDigits } from '../../../lib/phoneCrypto'
 import { sanitizeNickname } from '../../../lib/nickname'
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: '전화번호를 정확히 입력해주세요' }, { status: 400 })
     }
     const sid = storeId || 'baegun'
-    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const admin = adminClient()
 
     // 기존 전화회원 조회(탈퇴 포함 — 재활성화 대상)
     const hash = phoneHash(digits)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { adminClient } from '../../../lib/supabaseAdmin'
 import { verifyToken } from '../../../lib/authToken'
 import { issueSignupCoupon } from '../../../lib/signupCoupon'
 import { sanitizeNickname } from '../../../lib/nickname'
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: '인증이 만료됐어요. 다시 로그인해주세요' }, { status: 401 })
     }
     const sid = storeId || 'baegun'
-    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const admin = adminClient()
 
     // 이미 이 provider_uid로 가입 이력이 있으면(탈퇴 포함) 새 계정/쿠폰 만들지 않고 그 회원 재사용.
     // (콜백이 정상이면 여기 도달 전에 걸리지만, 어뷰징/엣지 방어로 한 번 더.)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { adminClient } from '../../../lib/supabaseAdmin'
 import { phoneHash, phoneEncrypt, phoneDigits } from '../../../lib/phoneCrypto'
 import { issueSignupCoupon } from '../../../lib/signupCoupon'
 
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: '전화번호를 정확히 입력해주세요' }, { status: 400 })
     }
     const sid = storeId || 'baegun'
-    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const admin = adminClient()
     const hash = phoneHash(digits)
 
     // 1) 해시로 조회 (탈퇴한 회원도 phone_hash는 보존돼 있어 여기서 잡힘 → 재활성화 대상)

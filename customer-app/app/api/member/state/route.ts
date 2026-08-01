@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_noStore as noStore } from 'next/cache'
-import { createClient } from '@supabase/supabase-js'
+import { adminClient } from '../../../lib/supabaseAdmin'
 
 // [고객상태 통합] 모든 진입/안내 화면이 참조하는 단일 상태 소스.
 //   2축으로 정규화: 신원(guest|known) × 프로필(incomplete|complete).
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ ok: true, identity: 'guest', profile: 'incomplete', greeting: null, banners: { profileHint: false } })
     }
-    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const admin = adminClient()
     const { data: u } = await admin.from('users')
       .select('id, nickname, birthday, marketing_opt_in, withdrawn_at, profile_prompt_dismiss_count, visit_count, grade')
       .eq('id', userId).maybeSingle()
