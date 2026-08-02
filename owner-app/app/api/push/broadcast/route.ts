@@ -3,10 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { sendPushToUser } from '../../../lib/pushSend'
 import { STORE_ID } from '../../../lib/store'
 
-// [항목2-부속] 웹푸시 임의 발송 — 일괄(이벤트)/개별(경고).
-//  kind='event'  : 이벤트/공지. 수신동의(marketing_opt_in=true)자만 발송.
-//  kind='warning': 개별 경고. 운영 목적이라 수신동의 무관하게 발송.
-// 발송 후 push_logs에 이력 기록. 구독 없는 회원은 조용히 skip(에러 아님).
+// [항목6] 웹푸시 3종 체계 — push_logs.kind로 구분:
+//  ① 'event'  : 일괄발송(이벤트/공지). 광고성 → 수신동의(marketing_opt_in=true)자만. (야간 21~08 발송제한은 발송화면에서 안내/차단)
+//  ② 'warning': 개인발송(1:1). 운영/CS 목적(비광고)이라 수신동의 무관. ※ 항목6-③에서 messages 양방향(답장)으로 대체 예정.
+//  ③ 'system' : 시스템 자동발송(쿠폰/영수증/상태). coupons.ts·send-receipt에서 기록. (이 라우트 밖)
+// 이 라우트는 ①·② 담당. 발송 후 push_logs 기록. 구독 없는 회원은 조용히 skip(에러 아님).
 export async function POST(req: NextRequest) {
   try {
     const { userIds, kind, target, title, body, url } = await req.json()

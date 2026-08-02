@@ -101,12 +101,22 @@ export async function runCouponAutomation(admin: SupabaseClient) {
       if (!byUser.has(c.user_id)) byUser.set(c.user_id, [])
       byUser.get(c.user_id)!.push(`${label} · ${gift}`)
     }
+    let pushed = 0
     for (const [uid, lines] of Array.from(byUser.entries())) {
-      await sendPushToUser(admin, {
+      const pr = await sendPushToUser(admin, {
         storeId: STORE_ID, userId: uid,
         payload: { title: '🎁 또봉이 쿠폰이 도착했어요!', body: `${lines.join('\n')}\n앱에서 확인하세요`, url: `/store/${STORE_ID}/profile`, tag: 'coupon' },
       })
+      if (pr.sent > 0) pushed++
     }
+    // [항목6] 웹푸시 3종 중 '시스템자동'(쿠폰 발급 알림) 이력 기록. best-effort.
+    try {
+      await admin.from('push_logs').insert({
+        store_id: STORE_ID, kind: 'system', target: 'coupon:auto',
+        title: '🎁 쿠폰 발급 알림', body: `쿠폰 발급 ${byUser.size}명 대상`,
+        sent_count: pushed, skipped_count: byUser.size - pushed, failed_count: 0,
+      })
+    } catch {}
   }
 
   // 오늘(KST) 발급된 쿠폰을 회원명과 함께 반환 (여러 번 눌러도 '오늘 발급분'을 일관되게 표시)

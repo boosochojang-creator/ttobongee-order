@@ -34,6 +34,18 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // [항목6] 웹푸시 3종(일괄=event / 개인=warning / 시스템자동=system) 중 '시스템자동' 이력 기록.
+    //   회원 대상일 때만(비회원은 구독 없어 스킵). best-effort — push_logs 없어도 발송엔 영향 없음.
+    if (order.user_id) {
+      try {
+        await admin.from('push_logs').insert({
+          store_id: storeId, kind: 'system', target: `receipt:${orderId}`,
+          title: '🍗 주문 접수 알림', body: itemSummary,
+          sent_count: push.sent, skipped_count: push.skipped ? 1 : 0, failed_count: 0,
+        })
+      } catch {}
+    }
+
     return NextResponse.json({ ok: true, sent: push.sent, skipped: push.skipped })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
