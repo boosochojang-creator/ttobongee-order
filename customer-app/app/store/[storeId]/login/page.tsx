@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import LegalFooter from '../../../lib/LegalFooter'
@@ -7,7 +7,7 @@ import {
   getDeferredPrompt, clearDeferredPrompt, isInstalled, isIOS,
   markInstalled, setMemberFlag,
 } from '../../../lib/pwaInstall'
-import { updateMemberLocal } from '../../../lib/memberState'
+import { updateMemberLocal, getMemberLocal } from '../../../lib/memberState'
 import { useStoreId } from '../../../lib/storeContext'
 import { subscribeToPush } from '../../../lib/pushClient'
 
@@ -32,6 +32,15 @@ export default function LoginPage() {
   }
   const [installStep, setInstallStep] = useState<InstallStep>(null)
   const [rejoinNotice, setRejoinNotice] = useState(false) // [항목1] 탈퇴 후 재가입(재활성화) 안내
+  const [gateChecked, setGateChecked] = useState(false)
+
+  // [항목7] 이미 가입된(영구 기록 보유) 회원이 로그인/가입 화면에 도달하면 회원가입 프롬프트가
+  //   중복 노출되던 문제 → 영구 회원기록(MEMBER_KEY)이 있으면 곧장 메뉴로. (3시간 장바구니 상태가 아닌 영구값 기준)
+  useEffect(() => {
+    if (getMemberLocal()) { router.replace(`/store/${storeId}/menu`); return }
+    setGateChecked(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const digits = phone.replace(/\D/g, '')
 
@@ -140,6 +149,9 @@ export default function LoginPage() {
       <LegalFooter />
     </main>
   )
+
+  // [항목7] 회원 여부 확인 전에는 가입폼을 그리지 않음(이미 회원이면 깜빡임 없이 메뉴로 리다이렉트)
+  if (!gateChecked) return <main><div className="login-page"><div className="brand">🍗 또봉이통닭</div></div></main>
 
   return (
     <main>

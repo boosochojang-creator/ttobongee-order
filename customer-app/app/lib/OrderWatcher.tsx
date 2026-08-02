@@ -136,7 +136,11 @@ export default function OrderWatcher() {
             </div>
             <div style={{ fontSize: 14, color: '#aaa', lineHeight: 1.7, marginBottom: 20 }}>
               {popup === 'canceled' && cancelReason
-                ? <>사유: <span style={{ color: '#f0d890', fontWeight: 700 }}>{cancelReason}</span><br />불편을 드려 죄송합니다. 궁금한 점은 직원에게 문의해주세요.</>
+                ? <>사유: <span style={{ color: '#f0d890', fontWeight: 700 }}>{cancelReason}</span><br />
+                    {/(장난|허위)/.test(cancelReason)
+                      ? <>반복될 경우 <b style={{ color: '#e0c060' }}>업무방해 등 관련 법</b>에 따라 이용이 제한될 수 있으니 양해 부탁드려요. 🙏</>
+                      : <>불편을 드려 죄송합니다. 궁금한 점은 직원에게 문의해주세요.</>}
+                  </>
                 : POPUPS[popup].desc}
             </div>
             <button className="btn-primary" onClick={() => setPopup(null)}>

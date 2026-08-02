@@ -235,9 +235,17 @@ function StatusContent() {
             사유: <b>{cancelReason}</b>
           </div>
         )}
-        <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 24 }}>
-          불편을 드려 죄송합니다.<br />직원에게 문의해주세요.
-        </p>
+        {/* [항목2] 장난·허위 주문 사유일 때만 순화된 법적 주의 안내(단방향, 위협조 아님) */}
+        {/(장난|허위)/.test(cancelReason) ? (
+          <p style={{ color: 'var(--text2)', fontSize: 13.5, marginBottom: 24, lineHeight: 1.75, maxWidth: 340, marginLeft: 'auto', marginRight: 'auto' }}>
+            이번 주문은 장난·허위 주문으로 확인되어 취소되었어요.<br />
+            반복될 경우 <b style={{ color: '#e0c060' }}>업무방해 등 관련 법</b>에 따라 이용이 제한될 수 있으니 양해 부탁드려요. 🙏
+          </p>
+        ) : (
+          <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 24 }}>
+            불편을 드려 죄송합니다.<br />직원에게 문의해주세요.
+          </p>
+        )}
         <button className="btn-primary" onClick={() => router.push(`/store/${storeId}/menu`)}>
           다시 주문하기
         </button>

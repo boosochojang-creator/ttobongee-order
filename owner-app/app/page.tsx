@@ -64,6 +64,7 @@ const REJECT_REASONS = [
   '영업 마감 임박',
   '주문 폭주로 조리 지연',
   '해당 메뉴 일시 품절',
+  '장난·허위 주문', // [항목2] 이 사유를 고르면 고객 화면에 순화된 법적 주의 안내가 함께 표시된다
   '기타',
 ]
 // 5-1 보류(배달대행 API 확인 중): 라이더 UI 숨김. true로 바꾸면 라이더 관리/배차 UI 즉시 복원.
@@ -1089,6 +1090,11 @@ export default function OwnerDashboard() {
                 </button>
               ))}
             </div>
+            {/* [항목2] 장난·허위 주문 대응 — 정적 안내(순화). 형사 위협조가 아니라 사실 고지 톤. */}
+            <div style={{ marginTop: 14, padding: '12px 14px', background: '#211a12', border: '1px solid #4a3a1a', borderRadius: 10, fontSize: 12, color: '#c9b060', lineHeight: 1.7 }}>
+              ※ 반복적인 <b style={{ color: '#e0c060' }}>장난·허위 주문</b>은 매장 운영에 피해를 주며, 업무방해(형법)·정보통신망법에
+              저촉될 수 있어요. &lsquo;장난·허위 주문&rsquo; 사유를 고르면 고객 화면에 <b style={{ color: '#e0c060' }}>정중한 주의 안내</b>가 함께 표시됩니다.
+            </div>
             <button onClick={() => setCancelTargetId(null)}
               style={{ width: '100%', marginTop: 14, padding: 12, background: 'none', color: '#666', border: '1px solid #333', borderRadius: 10, fontSize: 13, cursor: 'pointer' }}>
               닫기 (거절 안 함)
@@ -1290,7 +1296,7 @@ export default function OwnerDashboard() {
                     onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}
                     style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #444', borderRadius: 8, padding: '10px 12px', fontSize: 14 }}
                   >
-                    {['세트메뉴', '치킨류', '안주류', '음료', '주류'].map(c => <option key={c}>{c}</option>)}
+                    {['세트메뉴', '치킨류', '안주류', '소스류', '주류', '음료'].map(c => <option key={c}>{c}</option>)}
                   </select>
                   <input
                     placeholder="메뉴명"

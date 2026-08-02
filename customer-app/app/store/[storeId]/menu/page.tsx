@@ -12,11 +12,13 @@ import { useStoreId } from '../../../lib/storeContext'
 
 type MenuItem = { id: number; category: string; name: string; price: number; is_available: boolean; sold_out?: boolean; image_url?: string | null }
 
-const CATS = ['세트메뉴', '치킨류', '안주류', '음료', '주류']
+// [항목6] 주류(소주·맥주·생맥주)를 음료보다 앞에 — 종류별 정렬. [항목3] 소스류 신설(안주류 뒤).
+const CATS = ['세트메뉴', '치킨류', '안주류', '소스류', '주류', '음료']
 const CAT_ICONS: Record<string, string> = {
   '세트메뉴': '🔥',
   '치킨류': '🍗',
   '안주류': '🥘',
+  '소스류': '🧂',
   '음료': '🥤',
   '주류': '🍺',
   '음료/주류': '🍺', // 구 카테고리 폴백(마이그레이션 전 데이터 안전)
