@@ -78,10 +78,14 @@ export default function TablePage() {
 
   function select(t: { no: number }) {
     beep()
-    clearItems()
+    // 주문 확정 게이트에서 넘어왔으면 장바구니 유지 + 선택 후 체크아웃 복귀
+    let ret = false
+    try { ret = sessionStorage.getItem('tb-order-return') === 'checkout' } catch {}
+    if (!ret) clearItems()
     setTableNo(String(t.no))
     setOrderType('dine_in')
-    router.push(`/store/${storeId}/menu`)
+    if (ret) { try { sessionStorage.removeItem('tb-order-return') } catch {}; router.replace(`/store/${storeId}/checkout`) }
+    else router.push(`/store/${storeId}/menu`)
   }
   // [고객상태 ⑤] '포장' 버튼은 입구 첫 화면(/entry)으로 이동 → 이 화면에선 제거.
 

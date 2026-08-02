@@ -39,10 +39,19 @@ export default function CheckoutPage() {
   const router = useRouter()
   const storeId = useStoreId()
   const { items, tableNo, orderType, setOrderType, isMember, hydrated, userId, phone, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
-  // [항목2] 주문은 회원만 — 비회원이 직접 URL로 들어오면 로그인으로. (하이드레이션 완료 후 판정해 실회원 오리다이렉트 방지)
+  // [진입흐름] 주문 확정 게이트: 자리(매장/포장·테이블)를 아직 안 정한 손님이 '주문하기'까지 왔을 때 처리.
+  //   ① dine_in인데 table_no=0(자리 미정) → 매장/포장→자리선택 먼저(/entry?from=order). 0번 dine_in 원천 차단.
+  //   ② 자리 확정 후 비회원이면 로그인으로. (자리 → 인증 순서. 이미 정한 손님은 다시 안 물음: table_no·orderType이
+  //      localStorage에 유지돼 게이트가 재발동 안 함)
   useEffect(() => {
-    if (hydrated && !isMember) router.replace(`/store/${storeId}/login`)
-  }, [hydrated, isMember, storeId, router])
+    if (!hydrated) return
+    if (orderType === 'dine_in' && tableNo === '0') {
+      try { sessionStorage.setItem('tb-order-return', 'checkout') } catch {}
+      router.replace(`/store/${storeId}/entry`)
+      return
+    }
+    if (!isMember) router.replace(`/store/${storeId}/login`)
+  }, [hydrated, isMember, orderType, tableNo, storeId, router])
   const [payMethod, setPayMethod] = useState<PayMethod>('card')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

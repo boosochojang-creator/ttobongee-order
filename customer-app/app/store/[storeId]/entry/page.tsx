@@ -15,16 +15,21 @@ export default function EntryPage() {
   const { setTableNo, setOrderType, clearItems } = useCart()
   const { identity, greeting } = useMemberState()
 
+  // 주문 확정 게이트에서 넘어온 경우(장바구니 유지 + 선택 후 체크아웃 복귀)인지
+  const inOrder = () => { try { return sessionStorage.getItem('tb-order-return') === 'checkout' } catch { return false } }
+
   const goDineIn = () => {
-    clearItems()
+    if (!inOrder()) clearItems() // 신규 진입만 초기화; 주문 중이면 장바구니 유지
     setOrderType('dine_in')
-    router.push(`/store/${storeId}/table`)
+    router.push(`/store/${storeId}/table`) // 자리선택 → (주문 중이면) 체크아웃 복귀는 table에서 처리
   }
   const goTakeout = () => {
-    clearItems()
+    const ret = inOrder()
+    if (!ret) clearItems()
     setTableNo('0')
     setOrderType('takeout')
-    router.push(`/store/${storeId}/menu`)
+    if (ret) { try { sessionStorage.removeItem('tb-order-return') } catch {}; router.replace(`/store/${storeId}/checkout`) }
+    else router.push(`/store/${storeId}/menu`)
   }
 
   return (

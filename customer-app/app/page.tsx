@@ -4,7 +4,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { useCart, CART_STORAGE_KEY } from './lib/cartStore'
 import { DEFAULT_STORE } from './lib/storeContext'
-import { getMemberLocal } from './lib/memberState'
 
 function Home() {
   const router = useRouter()
@@ -28,8 +27,9 @@ function Home() {
     } else if (qr) {
       router.replace(`/store/${DEFAULT_STORE}/entry`)
     } else {
-      const known = !!getMemberLocal()
-      router.replace(`/store/${DEFAULT_STORE}/${known ? 'menu' : 'login'}`)
+      // [진입흐름] 아이콘/즐겨찾기/직접(미재인쇄 입구QR 포함): 로그인 강제 없이 '메뉴부터'(누구나 구경).
+      //   자리(매장/포장·테이블)와 인증은 '주문하기' 시점 게이트에서 확정 → 자리 미정 dine_in(0번) 원천 차단.
+      router.replace(`/store/${DEFAULT_STORE}/menu`)
     }
   }, [])
 
