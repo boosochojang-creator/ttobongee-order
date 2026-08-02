@@ -86,6 +86,21 @@ function kstDay(iso?: string | Date | null) {
   const t = new Date(iso).getTime()
   return isNaN(t) ? '-' : new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10)
 }
+
+// [항목6-②] 오늘(KST)부터 within일 이내의 기념일/공휴일 — 일괄발송 스케줄 참고용.
+//   the_date(확정일자) 또는 month/day(매년 고정) 매칭. D-day와 함께 반환.
+function upcomingCalendar(days: any[], within = 14) {
+  const now = new Date(Date.now() + 9 * 3600 * 1000) // KST
+  const out: { name: string; kind: string; inDays: number; label: string }[] = []
+  for (let i = 0; i <= within; i++) {
+    const d = new Date(now.getTime() + i * 86400000)
+    const mm = d.getUTCMonth() + 1, dd = d.getUTCDate(), ymd = d.toISOString().slice(0, 10)
+    for (const c of days || []) {
+      if ((c.month === mm && c.day === dd) || c.the_date === ymd) out.push({ name: c.name, kind: c.kind, inDays: i, label: `${mm}/${dd}` })
+    }
+  }
+  return out
+}
 // 표시 등급: 주문 이력이 있고 오래 미방문이면 휴면/휴면주의를 우선 표시(주문기반 등급 위에 덧씌움)
 function crmDisplayGrade(customerGrade: string, lastVisit?: string | null, orderCount = 0) {
   const days = daysSince(lastVisit)
@@ -184,6 +199,7 @@ export default function OwnerDashboard() {
   const [pushSending, setPushSending] = useState(false)
   const [pushResult, setPushResult] = useState<string | null>(null)
   const [pushOpen, setPushOpen] = useState(false)
+  const [calDays, setCalDays] = useState<any[]>([]) // [항목6-②] 기념일/공휴일(일괄발송 스케줄 참고)
   const [warnModal, setWarnModal] = useState<any | null>(null)           // 개별 경고 대상 회원
   const [warnBody, setWarnBody] = useState('')
   const [warnSending, setWarnSending] = useState(false)
@@ -387,6 +403,8 @@ export default function OwnerDashboard() {
     if (!authed) return
     loadOrders()
     loadMenus()
+    // [항목6-②] 기념일/공휴일 로드(일괄발송 참고) — 정적이라 1회. anon 읽기 허용.
+    supabase.from('calendar_days').select('the_date, month, day, name, kind').then(({ data }) => { if (data) setCalDays(data) })
 
     // 아렌: Realtime + 8초 폴링 이중 구조
     const ch = supabase.channel('owner-orders')
@@ -1843,6 +1861,19 @@ export default function OwnerDashboard() {
                     받는 대상: <b style={{ color: '#cde' }}>{segFilter ? `${SEGMENT_LABEL[segFilter]?.label} 세그먼트` : '전체 회원'} {visible.length}명</b>
                     <span style={{ color: '#668' }}> · 수신거부 회원은 자동 제외돼요</span>
                   </div>
+                  {/* [항목6-②] 다가오는 기념일 참고 — 일괄발송 스케줄에 활용 */}
+                  {(() => {
+                    const up = upcomingCalendar(calDays, 14)
+                    if (!up.length) return null
+                    return (
+                      <div style={{ fontSize: 12, color: '#e0c890', background: '#1a1200', border: '1px solid #4a3a10', borderRadius: 8, padding: '8px 10px', lineHeight: 1.7 }}>
+                        📅 다가오는 기념일: {up.map((u, i) => (
+                          <span key={i}>{u.label} <b style={{ color: '#FFD700' }}>{u.name}</b>{u.inDays === 0 ? '(오늘!)' : ` (D-${u.inDays})`}{i < up.length - 1 ? ' · ' : ''}</span>
+                        ))}
+                        <span style={{ color: '#8a7a4a' }}> — 이벤트 발송 참고</span>
+                      </div>
+                    )
+                  })()}
                   <input value={pushTitle} onChange={e => setPushTitle(e.target.value)} placeholder="제목 (예: 🍗 이번 주 단골 감사 이벤트)"
                     style={{ background: '#0b1218', border: '1px solid #2a3a4a', borderRadius: 8, padding: '10px 12px', color: '#eee', fontSize: 14, outline: 'none' }} />
                   <textarea value={pushBody} onChange={e => setPushBody(e.target.value)} placeholder="내용" rows={2}

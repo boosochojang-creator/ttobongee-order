@@ -5,7 +5,7 @@ import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import ProfilePrompt from '../../../lib/ProfilePrompt'
-import { getMemberLocal, greetingLabel } from '../../../lib/memberState'
+import { getMemberLocal, greetingLabel, isReturningGuest } from '../../../lib/memberState'
 import { useCoupons } from '../../../lib/CouponContext'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
 import { useStoreId } from '../../../lib/storeContext'
@@ -46,7 +46,8 @@ export default function MenuPage() {
   // phone_member 이상(영구 가입 기록 보유)에게는 회원가입 문구를 절대 다시 안 띄움
   // (isMember는 3시간짜리 장바구니 상태라, 시간이 지난 회원에게 가입 배너가 재노출되던 허점 보완)
   const [isJoined, setIsJoined] = useState(false)
-  useEffect(() => { setIsJoined(!!getMemberLocal()) }, [])
+  const [returningGuest, setReturningGuest] = useState(false) // [항목6-②] 미가입 재방문 여부(안내 문구 차등)
+  useEffect(() => { setIsJoined(!!getMemberLocal()); setReturningGuest(isReturningGuest()) }, [])
 
   // [2] 영업상태 — 마감 중이면 안내 배너(주문 하드차단은 결제화면에서). 마운트 조회 + 20초 폴링.
   const [storeClosed, setStoreClosed] = useState(false)
@@ -215,12 +216,14 @@ export default function MenuPage() {
           display:'flex', flexDirection:'column', gap:8
         }}>
           <div style={{fontSize:20, fontWeight:900, color:'#c8a900'}}>
-            🎁 단골 등록하면 무료 쿠폰
+            {returningGuest ? '🙌 또 오셨네요! 아직 미가입이에요' : '🎁 단골 등록하면 무료 쿠폰'}
           </div>
           <div style={{fontSize:15, color:'#ccc', lineHeight:1.7}}>
-            전화번호 3초 입력으로 끝!<br/>
-            가입하면 <span style={{color:'#FF6B00', fontWeight:700}}>무료 쿠폰</span>을 드려요{' '}
-            <span style={{fontSize:13, color:'#999'}}>(다음 방문 때 사용 가능)</span>
+            {returningGuest
+              ? <>지금 <span style={{color:'#FFD700', fontWeight:700}}>3초 간편가입</span>하면 <span style={{color:'#FF6B00', fontWeight:700}}>무료 쿠폰</span>을 드려요{' '}<span style={{fontSize:13, color:'#999'}}>(다음 방문 때 사용)</span></>
+              : <>3초 간편가입으로 끝!<br/>가입하면 <span style={{color:'#FF6B00', fontWeight:700}}>무료 쿠폰</span>을 드려요{' '}<span style={{fontSize:13, color:'#999'}}>(다음 방문 때 사용 가능)</span></>}
+            <br/>
+            <span style={{fontSize:12.5, color:'#8a8a8a'}}>※ 쿠폰·이벤트 혜택은 <b style={{color:'#aaa'}}>단골 회원 전용</b>이에요</span>
           </div>
           <div style={{display:'flex', gap:8, marginTop:4}}>
             <button

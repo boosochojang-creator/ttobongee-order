@@ -24,6 +24,16 @@ export function greetingLabel(nickname: string | null | undefined, phone: string
   return nk || (phone || '').slice(-4)
 }
 
+// [항목6-②] 재방문(비회원) 판별 — 첫 진입 시 방문 flag 세팅, 이후 true. 미가입 안내 문구를 첫방문/재방문 차등.
+//   (계정이 없어 서버로는 못 가르므로 기기 로컬 flag로 근사. 부수효과 있으니 useEffect에서 호출.)
+export function isReturningGuest(): boolean {
+  try {
+    const seen = localStorage.getItem('ttobongee-visited') === '1'
+    if (!seen) localStorage.setItem('ttobongee-visited', '1')
+    return seen
+  } catch { return false }
+}
+
 export function getMemberLocal(): MemberLocal | null {
   try {
     const raw = localStorage.getItem(MEMBER_KEY)
