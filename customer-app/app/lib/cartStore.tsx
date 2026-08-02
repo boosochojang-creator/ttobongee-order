@@ -111,9 +111,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // 여기서 회원상태를 지우면 리로드 전까지 복구되지 않아 재주문이 비회원 취급됐다 (버그[1] 회귀 수정).
   const clearCart = () => {
     setItems([])
-    // [항목3] 이번 주문에서 '포장'으로 토글했더라도 다음 주문엔 눌러붙지 않게 리셋.
-    //   착석(테이블>0) 세션은 기본 매장(dine_in)으로, 외부 픽업(테이블 0) 세션은 포장 유지.
-    setOrderType(tableNo === '0' ? 'takeout' : 'dine_in')
+    // [그룹3 0번+포장 버그 수정] 예전엔 table_no==='0'이면 무조건 'takeout'으로 뒤집었는데,
+    //   table_no=0은 '외부 픽업(포장)'뿐 아니라 '자리 미지정 매장 손님'도 해당돼서,
+    //   자리 없는 dine_in 손님의 2차 주문이 포장으로 찍혀 "0번테이블+포장"이 동시에 뜨는 버그가 났다.
+    //   → 착석(table>0)은 dine_in으로 리셋(주문단위 포장 토글 눌러붙음 방지), 자리 없으면 '현재 orderType 유지'
+    //     (포장 선택자만 포장 유지, dine_in은 dine_in 유지).
+    setOrderType(tableNo !== '0' ? 'dine_in' : orderType)
   }
 
   const clearItems = () => setItems([])
