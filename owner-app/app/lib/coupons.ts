@@ -91,11 +91,26 @@ export async function runCouponAutomation(admin: SupabaseClient) {
     if ((u.visit_count || 0) >= 2 && !everRevisit.has(u.id)) toIssue.push(newCoupon(u.id, 'revisit', now))
     if (u.customer_grade === 'vip' && !has(u.id, 'vip_thanks')) toIssue.push(newCoupon(u.id, 'vip_thanks', now))
   }
+  let issuedCount = 0
   if (toIssue.length) {
-    await admin.from('coupons').insert(toIssue)
+    // [중복발급 방지] signup은 '1인 1장' — 개별 insert로, coupons(user_id) WHERE type='signup'
+    //   부분 유니크 인덱스와 충돌하면(배치가 짧은 시간에 두 번 실행되는 경쟁 등) 조용히 스킵한다.
+    //   (예전엔 bulk insert라 배치 2회 실행 시 같은 회원에게 signup이 2장 발급됐음.)
+    //   나머지(birthday/revisit/vip)는 제약이 없어 기존대로 일괄 insert.
+    const inserted: typeof toIssue = []
+    for (const row of toIssue.filter(c => c.type === 'signup')) {
+      const { error } = await admin.from('coupons').insert(row)
+      if (!error) inserted.push(row) // 실제 발급된 것만 푸시 대상(중복 스킵분 제외)
+    }
+    const otherRows = toIssue.filter(c => c.type !== 'signup')
+    if (otherRows.length) {
+      const { error } = await admin.from('coupons').insert(otherRows)
+      if (!error) inserted.push(...otherRows)
+    }
+    issuedCount = inserted.length
     // [2] 웹푸시: 발급받은 회원에게 알림(회원별 1건 요약). 구독 없으면 조용히 스킵.
     const byUser = new Map<string, string[]>()
-    for (const c of toIssue) {
+    for (const c of inserted) {
       const label = COUPON_RULES[c.type as CouponType]?.label || c.type
       const gift = c.free_qty && c.free_qty > 1 ? `${c.free_menu} ${c.free_qty}개` : (c.free_menu || '증정')
       if (!byUser.has(c.user_id)) byUser.set(c.user_id, [])
@@ -130,5 +145,5 @@ export async function runCouponAutomation(admin: SupabaseClient) {
     label: COUPON_RULES[c.type as CouponType]?.label || c.type,
     gift: c.free_qty && c.free_qty > 1 ? `${c.free_menu} ${c.free_qty}개` : (c.free_menu || '증정'),
   }))
-  return { expiredCount: expired?.length || 0, issuedNow: toIssue.length, todayIssued }
+  return { expiredCount: expired?.length || 0, issuedNow: issuedCount, todayIssued }
 }
