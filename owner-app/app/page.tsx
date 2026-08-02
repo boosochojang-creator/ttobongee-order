@@ -200,10 +200,12 @@ export default function OwnerDashboard() {
   const [pushResult, setPushResult] = useState<string | null>(null)
   const [pushOpen, setPushOpen] = useState(false)
   const [calDays, setCalDays] = useState<any[]>([]) // [항목6-②] 기념일/공휴일(일괄발송 스케줄 참고)
-  const [warnModal, setWarnModal] = useState<any | null>(null)           // 개별 경고 대상 회원
-  const [warnBody, setWarnBody] = useState('')
-  const [warnSending, setWarnSending] = useState(false)
-  const [warnResult, setWarnResult] = useState<string | null>(null)
+  // [항목6-③] 개인 1:1 메시지(양방향) — 기존 단방향 '경고(warning)' 대체
+  const [msgModal, setMsgModal] = useState<any | null>(null)            // 대화 대상 회원
+  const [msgBody, setMsgBody] = useState('')
+  const [msgSending, setMsgSending] = useState(false)
+  const [msgThread, setMsgThread] = useState<any[]>([])                 // 현재 대화 스레드
+  const [msgUnread, setMsgUnread] = useState<Set<string>>(new Set())    // 안 읽은 답장 보유 회원 id
   const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats' | 'content'>('orders')
   // B4: 탭 이동을 URL 히스토리에 남겨 뒤로가기 시 이전 탭으로 돌아가게(앱 이탈/PIN 튕김 방지)
   const navTab = (t: typeof tab) => {
@@ -386,6 +388,24 @@ export default function OwnerDashboard() {
     })
   }, [playAlert])
 
+  // [항목6-③] 개인 메시지 — 안읽은 답장 회원 조회 / 스레드 열기 / 발송
+  const loadMsgUnread = useCallback(() => {
+    fetch('/api/messages/unread').then(r => r.json()).then(r => { if (r?.ok) setMsgUnread(new Set(r.userIds as string[])) }).catch(() => {})
+  }, [])
+  const loadMsgThread = useCallback((userId: string) => {
+    fetch('/api/messages/thread', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) })
+      .then(r => r.json()).then(r => { if (r?.ok) { setMsgThread(r.messages); setMsgUnread(prev => { const n = new Set(prev); n.delete(userId); return n }) } }).catch(() => {})
+  }, [])
+  const openMsg = (m: any) => { setMsgModal(m); setMsgBody(''); setMsgThread([]); loadMsgThread(m.id) }
+  const sendMsg = async () => {
+    if (!msgModal || !msgBody.trim()) return
+    setMsgSending(true)
+    const r = await fetch('/api/messages/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: msgModal.id, body: msgBody.trim() }) })
+      .then(x => x.json()).catch(() => null)
+    setMsgSending(false)
+    if (r?.ok) { setMsgBody(''); loadMsgThread(msgModal.id) }
+  }
+
   const loadMonthlyReports = useCallback(async (year: number, month: number) => {
     const pad = (n: number) => String(n).padStart(2, '0')
     const { data } = await supabase.from('daily_reports').select('*')
@@ -405,8 +425,9 @@ export default function OwnerDashboard() {
     loadMenus()
     // [항목6-②] 기념일/공휴일 로드(일괄발송 참고) — 정적이라 1회. anon 읽기 허용.
     supabase.from('calendar_days').select('the_date, month, day, name, kind').then(({ data }) => { if (data) setCalDays(data) })
-
-    // 아렌: Realtime + 8초 폴링 이중 구조
+    // [항목6-③] 안 읽은 손님 답장 회원 — 진입 + 20초 폴링(회원목록 뱃지)
+    loadMsgUnread()
+    const msgPoll = setInterval(loadMsgUnread, 20000)
     const ch = supabase.channel('owner-orders')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, loadOrders)
       .subscribe()
@@ -423,7 +444,7 @@ export default function OwnerDashboard() {
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(ch); supabase.removeChannel(callCh); clearInterval(poll) }
+    return () => { supabase.removeChannel(ch); supabase.removeChannel(callCh); clearInterval(poll); clearInterval(msgPoll) }
   }, [authed, loadOrders, playAlert])
 
   useEffect(() => {
@@ -1831,7 +1852,7 @@ export default function OwnerDashboard() {
           const target = segFilter ? `segment:${segFilter}` : 'all'
           const r = await fetch('/api/push/broadcast', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userIds: ids, kind: 'event', target, title: pushTitle.trim(), body: pushBody.trim() }),
+            body: JSON.stringify({ userIds: ids, target, title: pushTitle.trim(), body: pushBody.trim() }),
           }).then(x => x.json()).catch(() => null)
           setPushSending(false)
           if (!r?.ok) { setPushResult(r?.error || '발송에 실패했어요'); return }
@@ -1996,11 +2017,11 @@ export default function OwnerDashboard() {
                 ))
               )}
 
-              {/* [항목2-부속] 개별 경고 발송 — 이벤트 일괄발송과 분리(오발송 방지). 수신동의 무관 발송. */}
+              {/* [항목6-③] 개인 1:1 메시지(양방향) — 사과/안내 등. 손님 답장 확인 가능. (구 단방향 '경고' 대체) */}
               <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 14 }}>
-                <button onClick={() => { setWarnModal(m); setWarnBody(''); setWarnResult(null) }}
-                  style={{ width: '100%', padding: '11px', background: '#2a1414', color: '#e0736a', fontWeight: 800, fontSize: 14, border: '1px solid #6a2a2a', borderRadius: 10, cursor: 'pointer' }}>
-                  ⚠️ 이 회원에게 경고 알림 보내기
+                <button onClick={() => openMsg(m)}
+                  style={{ position: 'relative', width: '100%', padding: '11px', background: '#101820', color: '#7fd4ff', fontWeight: 800, fontSize: 14, border: '1px solid #2a3a4a', borderRadius: 10, cursor: 'pointer' }}>
+                  💬 이 회원과 메시지 {msgUnread.has(m.id) && <span style={{ marginLeft: 6, background: '#e84040', color: '#fff', fontSize: 11, fontWeight: 800, borderRadius: 10, padding: '1px 7px' }}>새 답장</span>}
                 </button>
               </div>
             </div>
@@ -2008,42 +2029,39 @@ export default function OwnerDashboard() {
         )
       })()}
 
-      {/* [항목2-부속] 개별 경고 발송 모달 (이벤트 발송과 물리 분리) */}
-      {warnModal && (() => {
-        const m = warnModal
-        const sendWarn = async () => {
-          if (!warnBody.trim()) { setWarnResult('경고 내용을 입력해주세요'); return }
-          setWarnSending(true); setWarnResult(null)
-          const r = await fetch('/api/push/broadcast', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userIds: [m.id], kind: 'warning', target: `user:${m.id}`, title: '⚠️ 또봉이통닭 주문 관련 안내', body: warnBody.trim() }),
-          }).then(x => x.json()).catch(() => null)
-          setWarnSending(false)
-          if (!r?.ok) { setWarnResult(r?.error || '발송에 실패했어요'); return }
-          setWarnResult(r.reached > 0 ? '✅ 경고 알림을 보냈어요' : '⚠️ 이 회원은 푸시 구독이 없어 도달하지 못했어요')
-        }
-        return (
-          <div onClick={() => setWarnModal(null)}
-            style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <div onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 380, background: '#1a1212', border: '1px solid #6a2a2a', borderRadius: 16, padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: 17, fontWeight: 900, color: '#e0736a' }}>⚠️ 경고 알림 발송</div>
-              <div style={{ fontSize: 13, color: '#c9a' }}>대상: <b style={{ color: '#eee' }}>{m.nickname || m.phone}</b> · 개별 발송(수신동의 무관)</div>
-              <textarea value={warnBody} onChange={e => setWarnBody(e.target.value)} rows={3}
-                placeholder="경고 내용 (예: 반복적인 장난 주문이 확인돼요. 계속되면 이용이 제한될 수 있습니다.)"
-                style={{ background: '#0f0a0a', border: '1px solid #6a2a2a', borderRadius: 8, padding: '10px 12px', color: '#eee', fontSize: 14, outline: 'none', resize: 'vertical' }} />
-              {warnResult && <div style={{ fontSize: 13, color: warnResult.startsWith('✅') ? '#3ac47d' : '#e88' }}>{warnResult}</div>}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setWarnModal(null)} disabled={warnSending}
-                  style={{ flex: 1, padding: '12px', background: '#2a2a2a', color: '#eee', border: '1px solid #444', borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>닫기</button>
-                <button onClick={sendWarn} disabled={warnSending}
-                  style={{ flex: 1, padding: '12px', background: warnSending ? '#5a2a2a' : '#c0392b', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
-                  {warnSending ? '발송 중...' : '경고 보내기'}</button>
-              </div>
+      {/* [항목6-③] 개인 1:1 메시지 스레드 모달 (양방향·답장) */}
+      {msgModal && (
+        <div onClick={() => setMsgModal(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 440, background: '#141a1f', border: '1px solid #2a3a4a', borderRadius: '16px 16px 0 0', display: 'flex', flexDirection: 'column', maxHeight: '82vh' }}>
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #2a3a4a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: '#cde' }}>💬 {msgModal.nickname || msgModal.phone || '손님'}님과 대화</span>
+              <button onClick={() => setMsgModal(null)} style={{ background: 'none', border: 'none', color: '#888', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 120 }}>
+              <div style={{ fontSize: 11.5, color: '#668', textAlign: 'center', lineHeight: 1.6 }}>개인 메시지는 사과·안내 등 CS 목적이에요(수신동의 무관). 손님이 답장할 수 있어요.</div>
+              {msgThread.length === 0 && <div style={{ color: '#778', fontSize: 13, textAlign: 'center', padding: 14 }}>아직 대화가 없어요. 첫 메시지를 보내보세요.</div>}
+              {msgThread.map((t: any) => (
+                <div key={t.id} style={{ alignSelf: t.sender === 'owner' ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                  <div style={{ background: t.sender === 'owner' ? '#2b7fc0' : '#243', color: '#f0f0f0', borderRadius: 14, padding: '9px 13px', fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{t.body}</div>
+                  <div style={{ fontSize: 10, color: '#667', marginTop: 2, textAlign: t.sender === 'owner' ? 'right' : 'left' }}>
+                    {t.sender === 'owner' ? '나(사장님)' : '손님'} · {new Date(t.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '10px 12px', borderTop: '1px solid #2a3a4a', display: 'flex', gap: 8 }}>
+              <textarea value={msgBody} onChange={e => setMsgBody(e.target.value)} rows={2} maxLength={500}
+                placeholder="메시지 (예: 오늘 불편을 드려 죄송합니다. 다음에 더 잘 챙기겠습니다.)"
+                style={{ flex: 1, background: '#0b1218', border: '1px solid #2a3a4a', borderRadius: 8, padding: '9px 11px', color: '#eee', fontSize: 14, outline: 'none', resize: 'none' }} />
+              <button onClick={sendMsg} disabled={msgSending || !msgBody.trim()}
+                style={{ padding: '10px 16px', background: msgSending || !msgBody.trim() ? '#245' : '#2b7fc0', color: '#fff', fontWeight: 800, fontSize: 14, border: 'none', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                {msgSending ? '...' : '보내기'}</button>
             </div>
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       {/* 영업시작 시 오늘 자동발급된 쿠폰 (확인용 · 승인 불필요) */}
       {issuedPopup && (

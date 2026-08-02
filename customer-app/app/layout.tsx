@@ -4,6 +4,7 @@ import { BgmProvider } from './lib/BgmContext'
 import { VideoPlayerProvider } from './lib/VideoPlayerContext'
 import { CouponProvider } from './lib/CouponContext'
 import { MemberStateProvider } from './lib/MemberStateContext'
+import { MessageProvider } from './lib/MessageContext'
 import GlobalActionFab from './lib/GlobalActionFab'
 import PWAPrompt from './lib/PWAPrompt'
 import InAppBanner from './lib/InAppBanner'
@@ -36,14 +37,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
          <MemberStateProvider>
           <BgmProvider>
            <CouponProvider>
-            <VideoPlayerProvider>
+            <MessageProvider>
+             <VideoPlayerProvider>
              {children}
              <GlobalActionFab />
              <InAppBanner />
              <PWAPrompt />
              <SWRegister />
              <OrderWatcher />
-            </VideoPlayerProvider>
+             </VideoPlayerProvider>
+            </MessageProvider>
            </CouponProvider>
           </BgmProvider>
          </MemberStateProvider>
