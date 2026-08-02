@@ -112,7 +112,8 @@ export default function MenuPage() {
     else updateQty(item.id, cur + delta)
   }
 
-  const label = orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
+  // 자리 미선택(table_no=0) dine_in은 '0번 테이블'이 아니라 '자리 선택 전'으로 — 주문 시 게이트가 자리를 확정한다.
+  const label = orderType === 'takeout' ? '포장' : (tableNo && tableNo !== '0' ? `${tableNo}번 테이블` : '자리 선택 전')
 
   return (
     <main>

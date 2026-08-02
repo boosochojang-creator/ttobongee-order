@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// 회원탈퇴 — 개인정보 비식별화(익명화). 개인 식별정보만 복구불가 처리하고, 주문/쿠폰 등 이력은
+// 회원탈퇴 — 개인정보 비식별화(익명화). 개인 식별정보만 복구불가 처리하고, 매출/주문 이력은
 // 통계·정산 목적상 익명 shell(users 행)에 연결된 채 보존한다.
-// 재가입: phone_hash·phone을 스크럽하므로 같은 번호로 로그인 시 조회 실패 → 신규 회원으로 재가입(신규가입 쿠폰 새로 발급).
+// 재가입 정책([항목1] 재활성화 방식): phone_hash·provider_uid는 '중복가입 방지 대조용'으로 보존한다.
+//   → 같은 번호/같은 카카오로 재로그인하면 같은 user_id를 되살리고(재활성화), 신규가입 쿠폰은 다시 안 준다.
+//   ★ [쿠폰 재발급 버그 수정] 재활성화는 user_id를 그대로 되살리므로, 탈퇴 때 쿠폰을 지우지 않으면
+//     예전 signup 쿠폰이 그 user_id에 그대로 붙어있다가 재가입 시 '다시 발급된 것처럼' 되살아난다.
+//     탈퇴 안내문("보유 쿠폰이 모두 사라져요")과 정책에 맞춰 탈퇴 시 쿠폰을 삭제한다.
 export async function POST(req: NextRequest) {
   try {
     const { userId } = await req.json()
@@ -32,6 +36,10 @@ export async function POST(req: NextRequest) {
 
     // 1-b) 탈퇴 마커. 마이그 024(withdrawn_at) 실행 전이면 컬럼이 없어 실패할 수 있으므로 best-effort(개인정보 파기는 이미 완료).
     try { await admin.from('users').update({ withdrawn_at: new Date().toISOString() }).eq('id', userId) } catch {}
+
+    // 1-c) [쿠폰 재발급 버그 수정] 보유 쿠폰 삭제 — 재활성화 시 옛 signup 쿠폰이 되살아나지 않도록.
+    //   (탈퇴 안내문 "보유 쿠폰이 모두 사라져요"와 일치. 사용내역은 주문의 free_gifts 스냅샷으로 이미 보존됨.)
+    await admin.from('coupons').delete().eq('user_id', userId)
 
     // 2) 주문에 남은 연락처/주소 사본 파기(금액·메뉴 등 매출 이력은 보존). best-effort.
     await admin.from('orders').update({
