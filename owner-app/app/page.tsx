@@ -307,13 +307,14 @@ export default function OwnerDashboard() {
     once()
   }
 
-  function speakOrder(tableNo: number, orderType: string, paymentMethod: string) {
+  function speakOrder(tableNo: number, orderType: string, paymentMethod: string, hasGift = false) {
     const label = orderType === 'delivery' ? '배달' : orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
+    const gift = hasGift ? ' 무료 증정 쿠폰이 포함된 주문이에요.' : '' // 쿠폰 사용 안내 음성
     const message = !PAYMENT_ENABLED
-      ? `${label} 신규 주문입니다. 확인 후 접수해 주세요.` // 결제분리: 결제는 포스에서
+      ? `${label} 신규 주문입니다.${gift} 확인 후 접수해 주세요.` // 결제분리: 결제는 포스에서
       : paymentMethod === 'cash'
-        ? `${label} 신규 주문입니다 — 현금결제입니다. 확인 후 접수해 주세요.`
-        : `${label} 신규 주문입니다`
+        ? `${label} 신규 주문입니다 — 현금결제입니다.${gift} 확인 후 접수해 주세요.`
+        : `${label} 신규 주문입니다.${gift}`
     speakKo(message, 2) // [항목9]
   }
 
@@ -348,7 +349,7 @@ export default function OwnerDashboard() {
       mapped.forEach(o => {
         if (!seenIds.current.has(o.id) && (o.status === 'paid' || o.status === 'cash_pending' || o.status === 'verification_failed')) {
           playAlert()
-          speakOrder(o.table_no, o.order_type, o.payment_method)
+          speakOrder(o.table_no, o.order_type, o.payment_method, Array.isArray(o.free_gifts) && o.free_gifts.length > 0)
         }
       })
     }
