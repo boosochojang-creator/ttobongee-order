@@ -11,6 +11,7 @@ import InAppBanner from './lib/InAppBanner'
 import SWRegister from './lib/SWRegister'
 import OrderWatcher from './lib/OrderWatcher'
 import OrderSessionBell from './lib/OrderSessionBell'
+import VersionWatcher from './lib/VersionWatcher'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
              <SWRegister />
              <OrderWatcher />
              <OrderSessionBell />
+             <VersionWatcher />
              </VideoPlayerProvider>
             </MessageProvider>
            </CouponProvider>
