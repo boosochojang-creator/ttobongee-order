@@ -186,6 +186,54 @@ a { text-decoration: none; color: inherit; }
   font-weight: 700;
 }
 
+/* ===== 나무+골드 테마 — 매장/포장·테이블·로그인 화면 전용(.wood-screen 스코프, 타 화면 무영향) ===== */
+.wood-screen {
+  background-color: #2a1a0e;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.28) 0 2px, rgba(0,0,0,0) 2px 33.33%),   /* 널판 이음새(3판) */
+    repeating-linear-gradient(0deg, rgba(255,220,150,0.035) 0 2px, rgba(0,0,0,0.05) 2px 6px), /* 결 */
+    linear-gradient(115deg, #4a2e18, #331f0e 45%, #452a16 75%, #2a1a0e);
+  background-attachment: fixed;
+}
+.wood-screen .top-bar {
+  background: linear-gradient(180deg, #4a2e18, #2b190c);
+  border-bottom: 2px solid #b8912f;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.55);
+}
+.wood-screen .top-bar .logo { color: #f4d98a; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+.wood-screen .table-badge {
+  background: linear-gradient(145deg, #d9b24a, #a5771f);
+  color: #2a1a0e; border: 1px solid #e8c66a;
+  box-shadow: inset 0 1px 0 rgba(255,240,200,0.6), 0 2px 5px rgba(0,0,0,0.4);
+}
+.wood-screen h2 { color: #f4d98a; text-shadow: 0 2px 5px rgba(0,0,0,0.75); }
+.wood-screen .table-map p { color: #e8d4a8; }
+
+/* 골드 엠보싱 타일 — 테이블 버튼 / 매장·포장 옵션 공통 */
+.wood-screen .table-btn, .wood-tile {
+  background:
+    linear-gradient(160deg, rgba(255,220,150,0.10), rgba(0,0,0,0.12)),
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.10) 0 2px, rgba(0,0,0,0) 2px 6px),
+    linear-gradient(150deg, #5c3d23, #331f0e);
+  border: 1.5px solid #b8912f;
+  border-radius: 14px;
+  color: #f4d898;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  box-shadow: 0 5px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,224,160,0.22), inset 0 -3px 8px rgba(0,0,0,0.35);
+}
+.wood-screen .table-btn:active, .wood-tile:active {
+  transform: translateY(1px);
+  border-color: #e8c66a;
+  background: linear-gradient(150deg, #6a4828, #3d2612);
+}
+.wood-screen .table-btn .tnum { color: #f4d98a; }
+
+/* 양피지 푸터(감성 문구용) */
+.parchment {
+  background: linear-gradient(180deg, #ece0c6, #d8c6a0);
+  color: #4a3320; border-top: 2px solid #b8912f; border-radius: 14px;
+}
+
 /* 메뉴 리스트 */
 .menu-list { padding: 8px 0 120px; }
 .menu-list > div { scroll-margin-top: 114px; }

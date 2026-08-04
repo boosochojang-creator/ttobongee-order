@@ -33,7 +33,7 @@ export default function EntryPage() {
   }
 
   return (
-    <main>
+    <main className="wood-screen">
       <div className="top-bar">
         <span className="logo">🍗 또봉이통닭 백운역점</span>
       </div>
@@ -42,34 +42,35 @@ export default function EntryPage() {
         <h2 style={{ fontSize: 26, fontWeight: 900, marginBottom: 8 }}>
           {identity === 'known' && greeting ? `${greeting} 👋` : '어서오세요! 👋'}
         </h2>
-        <p style={{ fontSize: 16, color: '#aaa', marginBottom: 28, lineHeight: 1.7 }}>
+        <p style={{ fontSize: 16, color: '#e8d4a8', marginBottom: 28, lineHeight: 1.7 }}>
           매장에서 드시나요, 포장하시나요?
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 420, margin: '0 auto' }}>
-          <button onClick={goDineIn} style={{
-            padding: '26px 18px', borderRadius: 18, border: '2px solid #c8a900',
-            background: 'linear-gradient(135deg, rgba(200,169,0,0.18), rgba(200,169,0,0.06))',
-            color: '#f0f0f0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16,
+          <button onClick={goDineIn} className="wood-tile" style={{
+            padding: '26px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, width: '100%',
           }}>
             <span style={{ fontSize: 40 }}>🍗</span>
             <span style={{ textAlign: 'left' }}>
-              <span style={{ display: 'block', fontSize: 20, fontWeight: 900, color: '#FFD700' }}>매장에서 먹을게요</span>
-              <span style={{ display: 'block', fontSize: 13, color: '#bbb', marginTop: 4 }}>자리 번호를 고르고 주문해요</span>
+              <span style={{ display: 'block', fontSize: 20, fontWeight: 900, color: '#FFD86A' }}>매장에서 먹을게요</span>
+              <span style={{ display: 'block', fontSize: 13, color: '#e0c88a', marginTop: 4 }}>자리 번호를 고르고 주문해요</span>
             </span>
           </button>
 
-          <button onClick={goTakeout} style={{
-            padding: '26px 18px', borderRadius: 18, border: '2px solid #7a6400',
-            background: '#1a1200', color: '#f0f0f0', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 16,
+          <button onClick={goTakeout} className="wood-tile" style={{
+            padding: '26px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, width: '100%',
           }}>
             <span style={{ fontSize: 40 }}>🛍️</span>
             <span style={{ textAlign: 'left' }}>
-              <span style={{ display: 'block', fontSize: 20, fontWeight: 900, color: '#f0d890' }}>포장할게요</span>
-              <span style={{ display: 'block', fontSize: 13, color: '#bbb', marginTop: 4 }}>픽업 시간은 주문할 때 정할 수 있어요</span>
+              <span style={{ display: 'block', fontSize: 20, fontWeight: 900, color: '#FFD86A' }}>포장할게요</span>
+              <span style={{ display: 'block', fontSize: 13, color: '#e0c88a', marginTop: 4 }}>픽업 시간은 주문할 때 정할 수 있어요</span>
             </span>
           </button>
+        </div>
+
+        {/* 1번사진 감성 — 양피지 서명 문구 */}
+        <div className="parchment" style={{ maxWidth: 420, margin: '28px auto 0', padding: '16px', textAlign: 'center' }}>
+          <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.5px' }}>&ldquo;옛날 맛 그대로 추억을 튀깁니다&rdquo;</div>
         </div>
       </div>
       <LegalFooter />

@@ -90,7 +90,7 @@ export default function TablePage() {
   // [고객상태 ⑤] '포장' 버튼은 입구 첫 화면(/entry)으로 이동 → 이 화면에선 제거.
 
   return (
-    <main>
+    <main className="wood-screen">
       <div className="top-bar">
         <span className="logo">🍗 또봉이통닭 백운역점</span>
       </div>
@@ -146,22 +146,18 @@ export default function TablePage() {
           ))}
         </div>
 
-        <div style={{
-          marginTop:28, padding:'20px 16px',
-          textAlign:'center', fontSize:14,
-          lineHeight:1.9, color:'#CCCCCC'
-        }}>
-          {isMember ? (
-            <>오늘도 <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다 😊</>
-          ) : (
-            <>🎁 주문 전{' '}
-              <span style={{color:'#FFD700', fontWeight:700}}>3초 로그인</span>하면{' '}
-              <span style={{color:'#FF6B00', fontWeight:700}}>생맥주·소주·음료 중 1잔 무료 쿠폰</span>{' '}
-              드려요 <span style={{fontSize:13, color:'#bbb'}}>(다음 방문 때 사용 가능)</span><br/>
-              오늘도{' '}
-              <span style={{color:'#FFD700', fontWeight:700}}>최고의 바삭함</span>으로 보답하겠습니다.
-            </>
-          )}
+        {!isMember && (
+          <div style={{ marginTop:24, padding:'16px', textAlign:'center', fontSize:14, lineHeight:1.9, color:'#e8d4a8' }}>
+            🎁 주문 전{' '}
+            <span style={{color:'#FFD86A', fontWeight:700}}>3초 로그인</span>하면{' '}
+            <span style={{color:'#FF9A3C', fontWeight:700}}>생맥주·소주·음료 중 1잔 무료 쿠폰</span>{' '}
+            드려요 <span style={{fontSize:13, color:'#c9b48a'}}>(다음 방문 때 사용 가능)</span>
+          </div>
+        )}
+        {/* 1번사진 감성 — 양피지 서명 문구 */}
+        <div className="parchment" style={{ margin:'18px 16px 8px', padding:'18px 16px', textAlign:'center' }}>
+          <div style={{ fontSize:19, fontWeight:900, letterSpacing:'-0.5px' }}>&ldquo;옛날 맛 그대로 추억을 튀깁니다&rdquo;</div>
+          <div style={{ fontSize:13, marginTop:6, color:'#6b5330' }}>오늘도 최고의 바삭함으로 보답하겠습니다 😊</div>
         </div>
       </div>
       <LegalFooter />
