@@ -114,7 +114,7 @@ function Finish() {
             <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--gold)', marginTop: 8 }}>
               {nickname ? `${nickname}님, 환영해요!` : '환영해요!'}
             </div>
-            <div style={{ background: '#1c1c1c', border: '1px solid #7a6400', borderRadius: 14, padding: '18px 16px', marginTop: 16, fontSize: 14, lineHeight: 1.8, color: '#e0e0e0' }}>
+            <div style={{ background: 'var(--bg2)', border: '1px solid var(--gold-dim)', borderRadius: 14, padding: '18px 16px', marginTop: 16, fontSize: 14, lineHeight: 1.8, color: '#e0e0e0' }}>
               혹시 <b style={{ color: '#FFD700' }}>예전에 전화번호로 단골 등록</b>하신 적 있으세요?<br />
               전화번호로 연결하면 <b style={{ color: '#FFD700' }}>기존 단골 혜택·쿠폰이 그대로</b> 이어져요.
             </div>

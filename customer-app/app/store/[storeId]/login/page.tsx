@@ -99,7 +99,7 @@ export default function LoginPage() {
           다시 오신 걸 환영해요! 👋
         </div>
         <div style={{
-          background: '#1c1c1c', border: '1px solid #7a6400', borderRadius: 14,
+          background: 'var(--bg2)', border: '1px solid var(--gold-dim)', borderRadius: 14,
           padding: '18px 16px', marginTop: 16, fontSize: 14, lineHeight: 1.9, color: '#e0e0e0',
         }}>
           이 번호로 <b style={{ color: '#FFD700' }}>가입하셨던 이력</b>이 있어요.<br />
@@ -123,7 +123,7 @@ export default function LoginPage() {
           🎉 단골 등록 완료!
         </div>
         <div style={{
-          background: '#1c1c1c', border: '1px solid #c8a900', borderRadius: 14,
+          background: 'var(--bg2)', border: '1px solid var(--gold-dim)', borderRadius: 14,
           padding: '18px 16px', marginTop: 16, fontSize: 14, lineHeight: 1.9, color: '#e0e0e0',
         }}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>📲 이제 또봉이, 바탕화면에 담아두세요</div>

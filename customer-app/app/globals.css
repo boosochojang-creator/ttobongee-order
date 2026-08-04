@@ -1,15 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
 
 :root {
-  --gold: #c8a900;
-  --gold-light: #f0d060;
-  --gold-dim: #7a6400;
-  --bg: #111111;
-  --bg2: #1c1c1c;
-  --bg3: #262626;
-  --border: #333333;
-  --text: #f0f0f0;
-  --text2: #aaaaaa;
+  /* 나무+골드 테마(2026-08) — 고객앱 전역. 매장/포장·테이블 화면과 톤 통일. 점주앱은 별도 globals(불변). */
+  --gold: #d9b24a;        /* 주 골드(버튼·강조) */
+  --gold-light: #f4d98a;  /* 밝은 골드(헤딩·텍스트) */
+  --gold-dim: #a5771f;    /* 딥 골드(테두리·active) */
+  --bg: #2a1a0e;          /* 나무 베이스(헤더·평면 채움) */
+  --bg2: #38240f;         /* 카드 표면(브라운) */
+  --bg3: #4a2e18;         /* 인풋·칩·떠있는 표면(밝은 브라운) */
+  --border: #6b5220;      /* 골드-브라운 테두리 */
+  --text: #f3e9d6;        /* 따뜻한 오프화이트 */
+  --text2: #c6b389;       /* 따뜻한 뮤트 */
   --red: #e84040;
   --green: #3ac47d;
   --radius: 12px;
@@ -19,7 +20,13 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-  background: var(--bg);
+  /* 나무결 배경 — 전 화면 공통(main은 투명이라 콘텐츠 영역에도 결이 비침) */
+  background-color: #2a1a0e;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.28) 0 2px, rgba(0,0,0,0) 2px 33.33%),      /* 널판 이음새(3판) */
+    repeating-linear-gradient(0deg, rgba(255,220,150,0.035) 0 2px, rgba(0,0,0,0.05) 2px 6px), /* 결 */
+    linear-gradient(115deg, #4a2e18, #331f0e 45%, #452a16 75%, #2a1a0e);
+  background-attachment: fixed;
   color: var(--text);
   font-family: 'Noto Sans KR', sans-serif;
   font-size: 15px;
@@ -46,16 +53,19 @@ a { text-decoration: none; color: inherit; }
   display: block;
   width: 100%;
   padding: 16px;
-  background: var(--gold);
-  color: #111;
+  background: linear-gradient(150deg, #e8c66a, #d9b24a 45%, #a5771f);
+  color: #2a1a0e;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 800;
+  border: 1px solid #e8c66a;
   border-radius: var(--radius);
   text-align: center;
-  transition: background 0.15s;
+  text-shadow: 0 1px 0 rgba(255,240,200,0.4);
+  box-shadow: inset 0 1px 0 rgba(255,244,210,0.6), 0 4px 12px rgba(0,0,0,0.4);
+  transition: transform 0.12s, filter 0.15s;
 }
-.btn-primary:active { background: var(--gold-dim); }
-.btn-primary:disabled { background: #444; color: #777; }
+.btn-primary:active { transform: translateY(1px); filter: brightness(0.92); }
+.btn-primary:disabled { background: #4a3a22; color: #8a7a55; border-color: #5a482a; box-shadow: none; text-shadow: none; }
 
 .btn-ghost {
   display: block;
@@ -74,14 +84,15 @@ a { text-decoration: none; color: inherit; }
   position: sticky;
   top: 0;
   z-index: 100;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #4a2e18, #2b190c);
+  border-bottom: 2px solid #b8912f;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.55);
   display: flex;
   align-items: center;
   padding: 14px 16px;
   gap: 12px;
 }
-.top-bar .logo { font-size: 17px; font-weight: 900; color: var(--gold); }
+.top-bar .logo { font-size: 17px; font-weight: 900; color: var(--gold-light); text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
 .top-bar .table-badge {
   margin-left: auto;
   background: var(--bg3);
@@ -99,16 +110,17 @@ a { text-decoration: none; color: inherit; }
   transform: translateX(-50%);
   width: calc(var(--max-w) - 32px);
   max-width: calc(100vw - 32px);
-  background: var(--gold);
-  color: #111;
-  font-weight: 700;
+  background: linear-gradient(150deg, #e8c66a, #d9b24a 45%, #a5771f);
+  color: #2a1a0e;
+  font-weight: 800;
   font-size: 15px;
   padding: 16px 20px;
+  border: 1px solid #e8c66a;
   border-radius: 50px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 8px 32px rgba(200,169,0,0.35);
+  box-shadow: inset 0 1px 0 rgba(255,244,210,0.5), 0 8px 28px rgba(0,0,0,0.5);
   z-index: 50;
   transition: transform 0.2s;
 }
@@ -181,9 +193,11 @@ a { text-decoration: none; color: inherit; }
   transition: all 0.15s;
 }
 .cat-tabs button.active {
-  background: var(--gold);
-  color: #111;
-  font-weight: 700;
+  background: linear-gradient(150deg, #e8c66a, #d9b24a 50%, #a5771f);
+  color: #2a1a0e;
+  font-weight: 800;
+  border: 1px solid #e8c66a;
+  box-shadow: inset 0 1px 0 rgba(255,244,210,0.5);
 }
 
 /* ===== 나무+골드 테마 — 매장/포장·테이블·로그인 화면 전용(.wood-screen 스코프, 타 화면 무영향) ===== */
@@ -484,15 +498,15 @@ a { text-decoration: none; color: inherit; }
   gap: 24px;
   min-height: 100dvh;
 }
-.login-page .brand { font-size: 24px; font-weight: 900; color: var(--gold); }
+.login-page .brand { font-size: 26px; font-weight: 900; color: var(--gold-light); text-shadow: 0 2px 8px rgba(0,0,0,0.6), 0 0 18px rgba(217,178,74,0.35); }
 .login-page .sub { font-size: 14px; color: var(--text2); margin-top: -16px; }
 .login-page .discount-badge {
-  background: rgba(200,169,0,0.15);
+  background: linear-gradient(150deg, rgba(232,198,106,0.18), rgba(165,119,31,0.12));
   border: 1px solid var(--gold-dim);
   border-radius: 50px;
   padding: 6px 16px;
   font-size: 13px;
-  color: var(--gold);
+  color: var(--gold-light);
   font-weight: 700;
 }
 .input-wrap { width: 100%; position: relative; }
