@@ -175,8 +175,9 @@ a { text-decoration: none; color: inherit; }
   border-radius: 22px;
   background: var(--bg3);
   color: var(--text2);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 15px;   /* 카테고리 탭 글자 키움(13→15) — 3열 그리드 버튼 안에 들어오는 범위 */
+  font-weight: 600;
+  letter-spacing: -0.3px;
   transition: all 0.15s;
 }
 .cat-tabs button.active {
