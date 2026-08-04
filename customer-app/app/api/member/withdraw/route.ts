@@ -37,9 +37,11 @@ export async function POST(req: NextRequest) {
     // 1-b) 탈퇴 마커. 마이그 024(withdrawn_at) 실행 전이면 컬럼이 없어 실패할 수 있으므로 best-effort(개인정보 파기는 이미 완료).
     try { await admin.from('users').update({ withdrawn_at: new Date().toISOString() }).eq('id', userId) } catch {}
 
-    // 1-c) [쿠폰 재발급 버그 수정] 보유 쿠폰 삭제 — 재활성화 시 옛 signup 쿠폰이 되살아나지 않도록.
-    //   (탈퇴 안내문 "보유 쿠폰이 모두 사라져요"와 일치. 사용내역은 주문의 free_gifts 스냅샷으로 이미 보존됨.)
-    await admin.from('coupons').delete().eq('user_id', userId)
+    // 1-c) [쿠폰 재발급 버그 수정 v2] 보유 쿠폰을 '만료' 처리(삭제 아님).
+    //   - 고객 쿠폰함/적용은 active만 노출하므로 만료시키면 화면에서 사라짐(안내문 "쿠폰 사라짐"과 일치).
+    //   - ★삭제하지 않는 이유: 점주 쿠폰배치가 'signup 받은 적 있는지'를 coupons 행 존재로 판단한다.
+    //     삭제하면 그 신호가 사라져 재활성화(재가입) 회원에게 signup이 재발급된다. 행을 남겨 신호를 보존.
+    await admin.from('coupons').update({ status: 'expired' }).eq('user_id', userId)
 
     // 2) 주문에 남은 연락처/주소 사본 파기(금액·메뉴 등 매출 이력은 보존). best-effort.
     await admin.from('orders').update({

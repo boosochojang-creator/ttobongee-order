@@ -68,8 +68,10 @@ export async function runCouponAutomation(admin: SupabaseClient) {
   const { data: expired } = await admin.from('coupons').update({ status: 'expired' })
     .eq('status', 'active').lt('expires_at', nowIso).select('id')
 
+  // 탈퇴 회원(withdrawn_at)은 쿠폰 발급 대상에서 제외 — 재활성화 전까지 어떤 쿠폰도 새로 주지 않는다.
   const { data: users } = await admin.from('users')
-    .select('id, phone, nickname, birthday, customer_grade, last_visit, total_order_count, visit_count').eq('store_id', STORE_ID)
+    .select('id, phone, nickname, birthday, customer_grade, last_visit, total_order_count, visit_count')
+    .eq('store_id', STORE_ID).is('withdrawn_at', null)
   const { data: existing } = await admin.from('coupons').select('user_id, type, status, expires_at')
 
   const everSignup = new Set<string>()
