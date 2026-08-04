@@ -36,6 +36,7 @@ function Finish() {
   const pending = params.get('pending') || ''
   const provider = params.get('provider') || 'kakao'
   const providerLabel = PROVIDER_LABEL[provider] || '소셜'
+  const connect = params.get('connect') === '1' // 기존 전화회원의 계정연결 진입(전화연결부터, '새로시작' 미노출)
   const ran = useRef(false)
 
   // 로그인 확정 → MEMBER_KEY 저장(기존 login 페이지와 동일 처리) 후 메뉴 복귀
@@ -61,7 +62,8 @@ function Finish() {
         }).catch(() => { setError(errMsg('server', providerLabel)); setMode('error') })
       return
     }
-    if (pending) { setMode('choose'); return }
+    // connect(기존 전화회원 계정연결)이면 '새로시작' 트랩 없이 전화연결 입력부터. 일반 신규는 선택화면.
+    if (pending) { setMode(connect ? 'linkInput' : 'choose'); return }
     setError(errMsg('state', providerLabel)); setMode('error')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -128,8 +130,18 @@ function Finish() {
 
         {mode === 'linkInput' && (
           <>
+            {connect && (
+              <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)', marginTop: 8 }}>
+                {providerLabel} 계정 연결하기
+              </div>
+            )}
             <div style={{ fontSize: 15, fontWeight: 700, color: '#f0f0f0', marginTop: 12 }}>기존에 쓰시던 전화번호를 입력해주세요</div>
-            <div style={{ fontSize: 12.5, color: '#999', marginTop: 4, lineHeight: 1.6 }}>확인되면 카카오 계정에 연결하고, 전화번호는 <b>자동으로 삭제</b>돼요.</div>
+            <div style={{ fontSize: 12.5, color: '#999', marginTop: 4, lineHeight: 1.6 }}>확인되면 {providerLabel} 계정에 연결하고, 전화번호는 <b>자동으로 삭제</b>돼요.</div>
+            {connect && (
+              <div style={{ fontSize: 13, color: '#8ef0b8', marginTop: 8, lineHeight: 1.6 }}>
+                🥤 연결 완료하면 <b>콜라/사이다 500ml 중 택1</b> 쿠폰을 바로 드려요!
+              </div>
+            )}
             <div className="input-wrap" style={{ width: '100%', marginTop: 12 }}>
               <input type="tel" inputMode="numeric" placeholder="010-0000-0000" value={phone}
                 onChange={e => { setPhone(e.target.value); setError('') }}
@@ -139,7 +151,10 @@ function Finish() {
             <button className="btn-primary" style={{ marginTop: 14 }} onClick={doLink} disabled={busy}>
               {busy ? '연결 중…' : '연결하기'}
             </button>
-            <button className="skip-btn" onClick={doSocialNew} disabled={busy}>연결 없이 새로 시작</button>
+            {/* connect(계정연결) 진입이면 '새로 시작'은 숨김 — 실수로 새 계정 만들어 기존 쿠폰/등급을 잃는 것 방지 */}
+            {connect
+              ? <button className="skip-btn" onClick={() => router.replace(`/store/${storeId}/menu`)} disabled={busy}>나중에 할게요</button>
+              : <button className="skip-btn" onClick={doSocialNew} disabled={busy}>연결 없이 새로 시작</button>}
           </>
         )}
       </div>

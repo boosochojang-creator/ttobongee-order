@@ -5,6 +5,7 @@ import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import ProfilePrompt from '../../../lib/ProfilePrompt'
+import SocialConnectPrompt from '../../../lib/SocialConnectPrompt'
 import { getMemberLocal, greetingLabel, isReturningGuest } from '../../../lib/memberState'
 import { useCoupons } from '../../../lib/CouponContext'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
@@ -245,11 +246,14 @@ export default function MenuPage() {
             </button>
           </div>
           <div style={{fontSize:12, color:'#555', marginTop:2}}>
-            📱 카카오 로그인은 준비 중이에요 (곧 추가될 예정)
+            📱 카카오·구글·네이버로 3초 만에 가입할 수 있어요
           </div>
         </div>
       )}
 
+
+      {/* [로그인정책 2026-08] 재방문 소셜 계정연결 유도 박스(+음성) — 기존 전화회원 미연결에게만(서버 판정) */}
+      <SocialConnectPrompt />
 
       {/* 추가정보(생일·주소) 입력 유도 카드 — phone_member/profile_incomplete 회원에게만 */}
       <ProfilePrompt />

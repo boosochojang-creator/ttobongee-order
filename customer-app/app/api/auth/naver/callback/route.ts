@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const code = sp.get('code')
   const rawState = sp.get('state')
-  const state = verifyToken<{ t: string; storeId: string }>(rawState)
+  const state = verifyToken<{ t: string; storeId: string; connect?: boolean }>(rawState)
   if (sp.get('error')) {
     return NextResponse.redirect(`${base}/store/baegun/auth/finish?err=denied&provider=naver`)
   }
@@ -65,9 +65,9 @@ export async function GET(req: NextRequest) {
       return finish(`token=${encodeURIComponent(session)}`)
     }
 
-    // 신규 소셜신원 — 연결/새로시작 선택 후 확정(social-new·link는 provider 무관 공용)
+    // 신규 소셜신원 — 연결/새로시작 선택 후 확정(social-new·link는 provider 무관 공용). connect면 finish가 전화연결부터.
     const pending = signToken({ t: 'pending', provider: 'naver', uidHash, nickname }, 600)
-    return finish(`pending=${encodeURIComponent(pending)}&nickname=${encodeURIComponent(nickname)}`)
+    return finish(`pending=${encodeURIComponent(pending)}&nickname=${encodeURIComponent(nickname)}${state.connect ? '&connect=1' : ''}`)
   } catch {
     return finish('err=server')
   }

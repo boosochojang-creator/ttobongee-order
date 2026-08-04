@@ -10,6 +10,7 @@ const REASON: Record<string, { label: string; emoji: string }> = {
   birthday:   { label: '생일 축하',     emoji: '🎂' },
   revisit:    { label: '재방문 감사',   emoji: '💛' },
   vip_thanks: { label: '단골 감사',     emoji: '👑' },
+  connect:    { label: '계정연결 축하', emoji: '🔗' },
 }
 
 export async function GET(req: NextRequest) {

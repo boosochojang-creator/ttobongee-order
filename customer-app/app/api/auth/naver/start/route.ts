@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
     const base = (() => { try { return new URL(redirect!).origin } catch { return req.nextUrl.origin } })()
     return NextResponse.redirect(`${base}/store/${storeId}/auth/finish?err=config&provider=naver`)
   }
-  const state = signToken({ t: 'state', storeId, n: Math.random().toString(36).slice(2) }, 600)
+  const connect = req.nextUrl.searchParams.get('mode') === 'connect' // 기존 전화회원의 계정연결 진입
+  const state = signToken({ t: 'state', storeId, connect, n: Math.random().toString(36).slice(2) }, 600)
   const url = new URL('https://nid.naver.com/oauth2.0/authorize')
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('client_id', clientId)

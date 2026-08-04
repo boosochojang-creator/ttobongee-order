@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     }
     const admin = adminClient()
     const { data: u } = await admin.from('users')
-      .select('id, nickname, birthday, marketing_opt_in, withdrawn_at, profile_prompt_dismiss_count, visit_count, grade')
+      .select('id, nickname, birthday, marketing_opt_in, withdrawn_at, profile_prompt_dismiss_count, visit_count, grade, auth_provider')
       .eq('id', userId).maybeSingle()
 
     // 계정 없음/탈퇴 = 사실상 guest 취급(클라가 재로그인 유도)
@@ -45,13 +45,17 @@ export async function GET(req: NextRequest) {
     const dismissCount = Number((u as any).profile_prompt_dismiss_count) || 0
     const profileHint = profile === 'incomplete' && dismissCount < MAX_HINT_DISMISS
 
+    // [로그인정책 2026-08] 소셜 계정연결 유도 대상 — 기존 전화회원(=소셜 provider 없음)이고 미탈퇴.
+    //   연결 완료(auth_provider 세팅) 순간부터 대상에서 제외됨. 재노출 규칙은 클라(매번 노출)에서 처리.
+    const socialConnect = !(u as any).auth_provider
+
     const name = displayName((u as any).nickname)
     return NextResponse.json({
       ok: true,
       identity: 'known',
       profile,
       greeting: name ? `${name}님, 또 오셨군요` : '또 오셨군요',
-      banners: { profileHint },
+      banners: { profileHint, socialConnect },
       // 참고 정보(화면 표시용)
       member: { grade: (u as any).grade ?? 'bronze', visit_count: (u as any).visit_count ?? 0, nickname: name },
     })

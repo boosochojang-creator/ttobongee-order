@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const base = (() => { try { return new URL(process.env.KAKAO_REDIRECT_URI!).origin } catch { return req.nextUrl.origin } })()
   const sp = req.nextUrl.searchParams
   const code = sp.get('code')
-  const state = verifyToken<{ t: string; storeId: string }>(sp.get('state'))
+  const state = verifyToken<{ t: string; storeId: string; connect?: boolean }>(sp.get('state'))
   if (sp.get('error')) {
     // 사용자가 동의 취소 등
     return NextResponse.redirect(`${base}/store/baegun/auth/finish?err=denied`)
@@ -69,9 +69,9 @@ export async function GET(req: NextRequest) {
       return finish(`token=${encodeURIComponent(session)}`)
     }
 
-    // 신규 소셜신원 — 아직 user 생성 안 함(연결/새로시작 선택 후 확정)
+    // 신규 소셜신원 — 아직 user 생성 안 함(연결/새로시작 선택 후 확정). connect=계정연결 진입이면 finish가 전화연결부터.
     const pending = signToken({ t: 'pending', provider: 'kakao', uidHash, nickname }, 600)
-    return finish(`pending=${encodeURIComponent(pending)}&nickname=${encodeURIComponent(nickname)}`)
+    return finish(`pending=${encodeURIComponent(pending)}&nickname=${encodeURIComponent(nickname)}${state.connect ? '&connect=1' : ''}`)
   } catch {
     return finish('err=server')
   }

@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 // 메뉴 증정 쿠폰 — 이 주문에 지금 적용 가능한 쿠폰 '전체'를 반환(다중 증정).
 // 조건: 본인 · status='active' · 사용가능일(usable_from) 지남 · 미만료(expires_at>now) · 최소주문 충족.
 export const dynamic = 'force-dynamic'
-const LABEL: Record<string, string> = { signup: '신규가입', birthday: '생일', revisit: '재방문 감사', vip_thanks: '단골감사' }
+const LABEL: Record<string, string> = { signup: '신규가입', birthday: '생일', revisit: '재방문 감사', vip_thanks: '단골감사', connect: '계정연결' }
 
 export async function GET(req: NextRequest) {
   noStore()
