@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminClient } from '../../../lib/supabaseAdmin'
 import { phoneHash, phoneEncrypt, phoneDigits } from '../../../lib/phoneCrypto'
-import { issueSignupCoupon } from '../../../lib/signupCoupon'
 
 // E2: 회원 로그인/가입 — 전화번호 해시 조회 + dual-write. 서버 전용(HMAC/AES 키가 서버 비밀).
 // 기존 클라이언트(anon) 직접 조회/insert를 대체. 조회는 phone_hash로, 저장은 phone+phone_hash+phone_encrypted 동시(전환 중 안전장치).
@@ -41,16 +40,13 @@ export async function POST(req: NextRequest) {
       if ((user as any).withdrawn_at) { patch.withdrawn_at = null; rejoined = true }
       await admin.from('users').update(patch).eq('id', user.id)
     } else {
-      // 3) 신규 가입 — dual-write (phone 평문은 전환 중 유지, 나중에 별도 지시로 제거)
-      const { data: created, error } = await admin.from('users').insert({
-        store_id: sid, phone: digits, phone_hash: hash, phone_encrypted: phoneEncrypt(digits),
-      }).select('id, grade, visit_count, nickname, member_status, withdrawn_at').single()
-      if (error || !created) throw error || new Error('회원 생성 실패')
-      user = created
-
-      // 신규가입 쿠폰 즉시 발급(최초 1회). 기존엔 점주 영업시작 배치에서만 발급돼 가입 직후엔 쿠폰이 없었다(뱃지 미표시 원인).
-      //   재가입(재활성화)/기존 회원은 이 분기를 안 타므로 재발급 없음. best-effort(발급 실패가 가입을 막지 않음).
-      await issueSignupCoupon(admin, created.id)
+      // [로그인정책 2026-08] 신규 전화번호 가입 창구 폐지 — 소셜(카카오/구글/네이버)만 신규 가입 가능.
+      //   기존 전화회원(위 해시/평문 조회로 매칭)만 로그인 통과. 매칭 안 되는 번호 = 신규 → 차단.
+      //   (신규 user 생성·signup 쿠폰 발급 로직 제거 → 전화 경로 쿠폰 재발급 여지도 함께 제거)
+      return NextResponse.json({
+        ok: false, code: 'phone_signup_closed',
+        error: '이제 전화번호 신규가입은 종료됐어요. 카카오·구글·네이버로 3초 만에 시작해주세요 🙏',
+      }, { status: 403 })
     }
 
     return NextResponse.json({

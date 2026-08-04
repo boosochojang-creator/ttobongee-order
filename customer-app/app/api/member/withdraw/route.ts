@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { phoneHash, phoneDigits } from '../../../lib/phoneCrypto'
 
 // 회원탈퇴 — 개인정보 비식별화(익명화). 개인 식별정보만 복구불가 처리하고, 매출/주문 이력은
 // 통계·정산 목적상 익명 shell(users 행)에 연결된 채 보존한다.
@@ -14,15 +15,23 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ ok: false, error: 'userId가 필요합니다' }, { status: 400 })
     const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-    // 존재 확인(이미 탈퇴여도 idempotent하게 성공 처리)
-    const { data: u } = await admin.from('users').select('id').eq('id', userId).maybeSingle()
+    // 존재 확인(이미 탈퇴여도 idempotent하게 성공 처리). phone/phone_hash도 함께 읽어 재활성화 대조키 보정.
+    const { data: u } = await admin.from('users').select('id, phone, phone_hash').eq('id', userId).maybeSingle()
     if (!u) return NextResponse.json({ ok: false, error: '회원을 찾을 수 없어요' }, { status: 404 })
 
+    // [전화 재발급버그 근본수정] 평문 phone을 'withdrawn:'로 덮기 전에 phone_hash가 비어있으면 지금 채운다.
+    //   레거시(해시 백필 전) 회원이 그대로 탈퇴하면 phone_hash가 null인 채 평문까지 사라져,
+    //   같은 번호로 재로그인해도 매칭이 안 돼 '신규회원'으로 잡히고 signup 쿠폰이 재발급된다.
+    //   여기서 해시를 확정해두면 재로그인이 항상 기존 user_id를 되살려(재활성화) 재발급을 막는다.
+    const digits = phoneDigits((u as any).phone)
+    const backfillHash = (!(u as any).phone_hash && digits.length >= 10) ? phoneHash(digits) : null
+
     // 1) users 행 익명화 — 개인 식별정보 파기. phone은 NOT NULL·UNIQUE 제약이라 복구불가 더미로 치환.
-    //    [항목1] phone_hash(단방향 HMAC, 번호로 복원 불가)는 '재가입 시 재활성화' 대조용으로 보존한다.
+    //    [항목1] phone_hash(단방향 HMAC, 번호로 복원 불가)는 '재가입 시 재활성화' 대조용으로 보존/보정한다.
     //    복호화 가능한 개인정보(phone_encrypted)·평문 phone·프로필은 계속 완전 파기.
     const { error: uErr } = await admin.from('users').update({
       phone: `withdrawn:${userId}`,
+      ...(backfillHash ? { phone_hash: backfillHash } : {}),
       phone_encrypted: null,
       nickname: null,
       birthday: null,
