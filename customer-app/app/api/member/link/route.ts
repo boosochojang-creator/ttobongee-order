@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
     const { data: dupe } = await admin.from('users')
       .select('id').eq('store_id', sid).eq('auth_provider', v.provider).eq('provider_uid', v.uidHash).maybeSingle()
     if (dupe && dupe.id !== existing.id) {
-      return NextResponse.json({ ok: false, error: '이미 다른 계정에 연결된 카카오예요' }, { status: 409 })
+      const plabel = ({ kakao: '카카오', google: '구글', naver: '네이버' } as Record<string, string>)[v.provider] || '소셜 계정'
+      return NextResponse.json({ ok: false, error: `이미 다른 계정에 연결된 ${plabel}예요` }, { status: 409 })
     }
 
     // 기존 user_id에 provider 부착 + 전화 파기(2c). 탈퇴였으면 재활성화. 표시명 없으면 카카오 닉네임으로.

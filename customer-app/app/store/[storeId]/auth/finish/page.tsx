@@ -12,14 +12,16 @@ import { subscribeToPush } from '../../../../lib/pushClient'
 import { getDeviceId } from '../../../../lib/deviceId'
 import LegalFooter from '../../../../lib/LegalFooter'
 
-const ERR_MSG: Record<string, string> = {
-  config: '카카오 로그인 설정이 아직 준비되지 않았어요.',
+// 소셜 3사 공용 — provider별 표시명. 콜백이 붙여주는 ?provider= 로 분기.
+const PROVIDER_LABEL: Record<string, string> = { kakao: '카카오', google: '구글', naver: '네이버' }
+const errMsg = (err: string, label: string): string => ({
+  config: `${label} 로그인 설정이 아직 준비되지 않았어요.`,
   state: '보안 확인에 실패했어요. 다시 시도해주세요.',
-  token: '카카오 인증에 실패했어요. 다시 시도해주세요.',
-  profile: '카카오 프로필을 가져오지 못했어요.',
-  denied: '카카오 로그인을 취소하셨어요.',
+  token: `${label} 인증에 실패했어요. 다시 시도해주세요.`,
+  profile: `${label} 프로필을 가져오지 못했어요.`,
+  denied: `${label} 로그인을 취소하셨어요.`,
   server: '오류가 발생했어요. 다시 시도해주세요.',
-}
+}[err] || '오류가 발생했어요. 다시 시도해주세요.')
 
 function Finish() {
   const router = useRouter()
@@ -32,6 +34,8 @@ function Finish() {
   const [busy, setBusy] = useState(false)
   const nickname = params.get('nickname') || ''
   const pending = params.get('pending') || ''
+  const provider = params.get('provider') || 'kakao'
+  const providerLabel = PROVIDER_LABEL[provider] || '소셜'
   const ran = useRef(false)
 
   // 로그인 확정 → MEMBER_KEY 저장(기존 login 페이지와 동일 처리) 후 메뉴 복귀
@@ -47,18 +51,18 @@ function Finish() {
     if (ran.current) return
     ran.current = true
     const err = params.get('err')
-    if (err) { setError(ERR_MSG[err] || ERR_MSG.server); setMode('error'); return }
+    if (err) { setError(errMsg(err, providerLabel)); setMode('error'); return }
     const token = params.get('token')
     if (token) {
       fetch('/api/auth/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
         .then(r => r.json()).then(r => {
           if (r?.ok) finalize(r.user)
-          else { setError(r?.error || ERR_MSG.server); setMode('error') }
-        }).catch(() => { setError(ERR_MSG.server); setMode('error') })
+          else { setError(r?.error || errMsg('server', providerLabel)); setMode('error') }
+        }).catch(() => { setError(errMsg('server', providerLabel)); setMode('error') })
       return
     }
     if (pending) { setMode('choose'); return }
-    setError(ERR_MSG.state); setMode('error')
+    setError(errMsg('state', providerLabel)); setMode('error')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -69,7 +73,7 @@ function Finish() {
       body: JSON.stringify({ pending, storeId, deviceId: getDeviceId() }),
     }).then(x => x.json()).catch(() => null)
     if (r?.ok) finalize(r.user)
-    else { setError(r?.error || ERR_MSG.server); setBusy(false) }
+    else { setError(r?.error || errMsg('server', providerLabel)); setBusy(false) }
   }
 
   const doLink = async () => {
@@ -81,7 +85,7 @@ function Finish() {
     }).then(x => x.json()).catch(() => null)
     if (r?.ok) finalize(r.user)
     else if (r?.code === 'no_match') { setError(r.error); setBusy(false) } // 새로 시작 유도
-    else { setError(r?.error || ERR_MSG.server); setBusy(false) }
+    else { setError(r?.error || errMsg('server', providerLabel)); setBusy(false) }
   }
 
   return (
@@ -96,8 +100,8 @@ function Finish() {
         {mode === 'error' && (
           <>
             <div style={{ fontSize: 15, color: '#e84040', marginTop: 16, lineHeight: 1.7, textAlign: 'center' }}>{error}</div>
-            <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => { window.location.href = `/api/auth/kakao/start?storeId=${storeId}` }}>
-              카카오로 다시 시도
+            <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => { window.location.href = `/api/auth/${provider}/start?storeId=${storeId}` }}>
+              {providerLabel}로 다시 시도
             </button>
             <button className="skip-btn" onClick={() => router.replace(`/store/${storeId}/menu`)}>메뉴로 돌아가기</button>
           </>
