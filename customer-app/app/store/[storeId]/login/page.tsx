@@ -23,8 +23,18 @@ export default function LoginPage() {
   const [error, setError] = useState('')
 
   // [고객상태 ③] 소셜 아이콘 클릭 — 이미 로그인(known)이면 OAuth 없이 바로 메뉴로, 아니면 인증 플로우.
-  //   카카오·구글·네이버 3사 공용(각 provider의 start 라우트로). 확정 로직(연결/새로시작)은 provider 무관.
+  //   카카오·구글은 활성. 네이버는 상용전환 검수 완료 전까지 '준비중' 안내+음성만(버튼은 활성 유지).
+  //   ※ 개발중 상태라 누르기 전엔 관리자/일반 구분 불가 → 탭하면 안내가 뜨고, 관리자는 안내 속 링크로 로그인.
+  const [naverSoon, setNaverSoon] = useState(false)
+  const speakSoon = () => {
+    try {
+      const u = new SpeechSynthesisUtterance('네이버 로그인은 준비중이에요. 곧 이용하실 수 있어요.')
+      u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.95
+      window.speechSynthesis.speak(u)
+    } catch {}
+  }
   const handleSocial = (provider: 'kakao' | 'google' | 'naver') => {
+    if (provider === 'naver') { setNaverSoon(true); speakSoon(); return } // 검수 전: 안내+음성
     if (isMember) { router.replace(`/store/${storeId}/menu`); return }
     window.location.href = `/api/auth/${provider}/start?storeId=${storeId}`
   }
@@ -189,7 +199,7 @@ export default function LoginPage() {
               </span>
               <span style={{ fontSize: 12, color: '#ccc' }}>구글</span>
             </button>
-            {/* 네이버 (활성) */}
+            {/* 네이버 (활성 유지 — 탭 시 '준비중' 안내+음성. 관리자는 안내 속 링크로 로그인) */}
             <button onClick={() => handleSocial('naver')} aria-label="네이버로 로그인"
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#03C75A', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
@@ -198,6 +208,14 @@ export default function LoginPage() {
               <span style={{ fontSize: 12, color: '#ccc' }}>네이버</span>
             </button>
           </div>
+          {naverSoon && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#f0d890', textAlign: 'center', marginTop: 10, lineHeight: 1.7 }}>
+              네이버 로그인은 준비중이에요, 곧 이용하실 수 있어요 🙏
+              <br />
+              <a href={`/api/auth/naver/start?storeId=${storeId}`}
+                style={{ fontSize: 11.5, color: '#7a6a45', textDecoration: 'underline' }}>관리자 로그인</a>
+            </div>
+          )}
         </div>
 
         {/* 구분선 — 기존 전화가입 회원용(병행 운영, 점차 소셜로 전환) */}

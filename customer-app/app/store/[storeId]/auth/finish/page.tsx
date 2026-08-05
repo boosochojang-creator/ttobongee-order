@@ -139,7 +139,7 @@ function Finish() {
             <div style={{ fontSize: 12.5, color: '#999', marginTop: 4, lineHeight: 1.6 }}>확인되면 {providerLabel} 계정에 연결하고, 전화번호는 <b>자동으로 삭제</b>돼요.</div>
             {connect && (
               <div style={{ fontSize: 13, color: '#8ef0b8', marginTop: 8, lineHeight: 1.6 }}>
-                🥤 연결 완료하면 <b>콜라/사이다 500ml 중 택1</b> 쿠폰을 바로 드려요!
+                🥤 연결 완료하면 <b>콜라/사이다 330ml 캔 중 택1</b> 쿠폰을 바로 드려요!
               </div>
             )}
             <div className="input-wrap" style={{ width: '100%', marginTop: 12 }}>

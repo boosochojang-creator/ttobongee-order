@@ -2,7 +2,7 @@
 // [로그인정책 2026-08] 재방문 소셜 계정연결 유도 박스 (+음성안내).
 //   대상: 기존 전화회원이면서 아직 소셜 미연결(서버 member/state의 banners.socialConnect=true).
 //   재노출 규칙: "확인"은 이번 화면만 닫음 → 앱 재진입(재마운트)마다 다시 노출. 실제 연결해야만 서버에서 대상 제외되어 사라짐.
-//   혜택: 연결 완료 시 콜라/사이다 500ml 택1 쿠폰 자동 지급(member/link에서 발급).
+//   혜택: 연결 완료 시 콜라/사이다 330ml 캔 택1 쿠폰 자동 지급(member/link에서 발급).
 import { useEffect, useRef, useState } from 'react'
 import { useStoreId } from './storeContext'
 import { getMemberLocal } from './memberState'
@@ -19,6 +19,7 @@ function speakSafe(text: string) {
 export default function SocialConnectPrompt() {
   const storeId = useStoreId()
   const [show, setShow] = useState(false)
+  const [naverSoon, setNaverSoon] = useState(false)
   const spoke = useRef(false)
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function SocialConnectPrompt() {
           setShow(true)
           if (!spoke.current) {
             spoke.current = true
-            speakSafe('또봉이 보안 안내입니다. 이제 카카오, 구글, 네이버로 간편하고 안전하게 연결해 주세요. 지금 연결하시면 콜라 또는 사이다를 드려요.')
+            speakSafe('또봉이 보안 안내입니다. 이제 카카오 또는 구글로 간편하고 안전하게 연결해 주세요. 지금 연결하시면 콜라 또는 사이다를 드려요.')
           }
         }
       })
@@ -44,6 +45,11 @@ export default function SocialConnectPrompt() {
   if (!show) return null
 
   const startConnect = (provider: 'kakao' | 'google' | 'naver') => {
+    if (provider === 'naver') { // 검수 전: 준비중 안내+음성(버튼은 활성)
+      setNaverSoon(true)
+      speakSafe('네이버 로그인은 준비중이에요. 곧 이용하실 수 있어요.')
+      return
+    }
     window.location.href = `/api/auth/${provider}/start?storeId=${storeId}&mode=connect`
   }
 
@@ -73,7 +79,7 @@ export default function SocialConnectPrompt() {
         background: 'rgba(58,196,125,0.14)', border: '1px solid #3ac47d66', borderRadius: 10,
         padding: '9px 12px', fontSize: 13, color: '#a9f0c6', lineHeight: 1.5,
       }}>
-        🥤 지금 연결하면 <b>콜라 / 사이다 500ml 중 택1</b>을 드려요!
+        🥤 지금 연결하면 <b>콜라 / 사이다 330ml 캔 중 택1</b>을 드려요!
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 26, marginTop: 4 }}>
         {iconBtn('kakao', '#FEE500', '카카오',
@@ -81,6 +87,11 @@ export default function SocialConnectPrompt() {
         {iconBtn('google', '#fff', '구글', <span style={{ fontSize: 23, fontWeight: 800, color: '#4285F4' }}>G</span>)}
         {iconBtn('naver', '#03C75A', '네이버', <span style={{ fontSize: 21, fontWeight: 900, color: '#fff' }}>N</span>)}
       </div>
+      {naverSoon && (
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: '#f0d890', textAlign: 'center', lineHeight: 1.6 }}>
+          네이버 연결은 준비중이에요, 곧 이용하실 수 있어요 🙏 (지금은 카카오·구글로 연결해 주세요)
+        </div>
+      )}
       <button
         onClick={() => setShow(false)}
         style={{
