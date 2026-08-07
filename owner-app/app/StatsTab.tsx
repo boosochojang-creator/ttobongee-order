@@ -3,7 +3,7 @@
 // 그룹 F-1: 매출/메뉴/테이블/주문유형 통계 + 자재마이닝 (정부 지원금·본사 보고용)
 // 날짜 경계는 매장 운영시간 기준(KST, UTC+9)으로 명시적으로 고정한다 — UTC/KST 혼동 방지.
 // 집계 대상: canceled / pending / verification_failed 제외 (금액이 확정되지 않은 주문 제외)
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from './lib/supabase'
 import CouponStats from './CouponStats'
 import { SALES_COUNTED } from './lib/salesStatus'
@@ -25,7 +25,7 @@ type OrderRow = {
 type Ingredient = { menu_id: string; ingredient_name: string; amount_per_serving: number; unit: string }
 
 // F-2: 고객관리 통계용
-type UserRow = { id: string; created_at: string; marketing_opt_in: boolean | null; member_status: string | null; last_visit: string | null }
+type UserRow = { id: string; created_at: string; marketing_opt_in: boolean | null; member_status: string | null; last_visit: string | null; nickname: string | null; grade: string | null }
 type UserOrderRow = { user_id: string; created_at: string }
 
 const KST = '+09:00'
@@ -137,7 +137,7 @@ export default function StatsTab() {
   const [memberOrders, setMemberOrders] = useState<UserOrderRow[]>([])
   useEffect(() => {
     supabase.from('users')
-      .select('id, created_at, marketing_opt_in, member_status, last_visit')
+      .select('id, created_at, marketing_opt_in, member_status, last_visit, nickname, grade')
       .eq('store_id', STORE_ID)
       .then(({ data }) => setMembers((data as UserRow[]) || []))
     supabase.from('orders')
@@ -148,13 +148,16 @@ export default function StatsTab() {
       .then(({ data }) => setMemberOrders((data as UserOrderRow[]) || []))
   }, [])
 
-  // F-2 집계
+  // F-2 집계 (+ 드릴다운용 회원 명단)
   const crm = useMemo(() => {
+    const byId = new Map<string, UserRow>()
+    for (const u of members) byId.set(u.id, u)
+
     // 신규회원: 기간 내 가입 (KST 경계는 range와 동일)
-    const newMembers = members.filter(u => {
+    const newList = members.filter(u => {
       const t = new Date(u.created_at).getTime()
       return t >= range.start && t < range.end
-    }).length
+    })
 
     // 재방문: 기간 내 주문한 회원 중, 기간 시작 전에도 주문 이력이 있는 회원
     const firstOrder = new Map<string, number>()
@@ -164,38 +167,50 @@ export default function StatsTab() {
       if (!firstOrder.has(o.user_id) || t < firstOrder.get(o.user_id)!) firstOrder.set(o.user_id, t)
       if (!lastOrder.has(o.user_id) || t > lastOrder.get(o.user_id)!) lastOrder.set(o.user_id, t)
     }
-    const visitors = new Set<string>()
+    const visitorSet = new Set<string>()
     for (const o of memberOrders) {
       const t = new Date(o.created_at).getTime()
-      if (t >= range.start && t < range.end) visitors.add(o.user_id)
+      if (t >= range.start && t < range.end) visitorSet.add(o.user_id)
     }
-    let revisit = 0
-    visitors.forEach(uid => { if ((firstOrder.get(uid) ?? Infinity) < range.start) revisit += 1 })
+    const visitorList: UserRow[] = []
+    const revisitList: UserRow[] = []
+    visitorSet.forEach(uid => {
+      const u = byId.get(uid); if (!u) return
+      visitorList.push(u)
+      if ((firstOrder.get(uid) ?? Infinity) < range.start) revisitList.push(u)
+    })
 
     // 마케팅 동의
-    const optIn = members.filter(u => u.marketing_opt_in === true).length
+    const optInList = members.filter(u => u.marketing_opt_in === true)
 
     // 상태별 분포 (status 없는 옛 데이터 = phone_member)
-    const statusDist: Record<string, number> = { phone_member: 0, profile_incomplete: 0, profile_complete: 0 }
+    const statusLists: Record<string, UserRow[]> = { phone_member: [], profile_incomplete: [], profile_complete: [] }
     for (const u of members) {
       const s = u.member_status || 'phone_member'
-      statusDist[s] = (statusDist[s] || 0) + 1
+      ;(statusLists[s] = statusLists[s] || []).push(u)
     }
 
     // 휴면: 마지막 활동(주문 이력 우선, 없으면 last_visit/가입일)로부터 경과일 — CRM 트리거 구간(10일/45~60일) 기준
     const now = Date.now()
-    const dormant = { active: 0, d10: 0, d45: 0, d60: 0 }
+    const dormantLists = { active: [] as UserRow[], d10: [] as UserRow[], d45: [] as UserRow[], d60: [] as UserRow[] }
     for (const u of members) {
       const last = lastOrder.get(u.id)
         ?? (u.last_visit ? new Date(u.last_visit).getTime() : new Date(u.created_at).getTime())
       const days = Math.floor((now - last) / DAY_MS)
-      if (days < 10) dormant.active += 1
-      else if (days < 45) dormant.d10 += 1
-      else if (days <= 60) dormant.d45 += 1
-      else dormant.d60 += 1
+      if (days < 10) dormantLists.active.push(u)
+      else if (days < 45) dormantLists.d10.push(u)
+      else if (days <= 60) dormantLists.d45.push(u)
+      else dormantLists.d60.push(u)
     }
 
-    return { newMembers, visitors: visitors.size, revisit, revisitRate: visitors.size ? Math.round(revisit / visitors.size * 100) : 0, optIn, total: members.length, statusDist, dormant }
+    const statusDist = { phone_member: statusLists.phone_member.length, profile_incomplete: statusLists.profile_incomplete.length, profile_complete: statusLists.profile_complete.length }
+    const dormant = { active: dormantLists.active.length, d10: dormantLists.d10.length, d45: dormantLists.d45.length, d60: dormantLists.d60.length }
+    return {
+      newMembers: newList.length, visitors: visitorSet.size, revisit: revisitList.length,
+      revisitRate: visitorSet.size ? Math.round(revisitList.length / visitorSet.size * 100) : 0,
+      optIn: optInList.length, total: members.length, statusDist, dormant,
+      byId, lastOrder, newList, visitorList, revisitList, optInList, statusLists, dormantLists,
+    }
   }, [members, memberOrders, range.start, range.end])
 
   const agg = useMemo(() => {
@@ -316,8 +331,108 @@ export default function StatsTab() {
     w.document.close()
   }
 
+  // ===== 드릴다운(총계 → 상세 명단) =====
+  const [detail, setDetail] = useState<{ title: string; body: ReactNode } | null>(null)
+  const nameOf = (u: UserRow) => (u.nickname || '').trim() || `손님 ${u.id.slice(0, 6)}`
+  const nameById = (uid: string | null) => { if (!uid) return '비회원'; const u = crm.byId.get(uid); return u ? nameOf(u) : `손님 ${uid.slice(0, 6)}` }
+  const kstDate = (t?: number | string | null) => t ? new Date(new Date(t).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) : '-'
+  const kstTime = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(11, 16)
+  const GRADE_KO: Record<string, string> = { gold: '골드', silver: '실버', bronze: '브론즈' }
+
+  // 특정 회원에게 알림(1:1 메시지 + 웹푸시) — 기존 messages/send 재사용
+  const sendAlert = async (uid: string, who: string) => {
+    const msg = window.prompt(`「${who}」님에게 보낼 메시지 (앱 알림 + 메시지함으로 전달됩니다)`, '안녕하세요, 또봉이통닭입니다. ')
+    if (msg == null || !msg.trim()) return
+    try {
+      const r = await fetch('/api/messages/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: uid, body: msg.trim() }) }).then(x => x.json())
+      window.alert(r?.ok ? `✅ 「${who}」님에게 보냈어요${r.notified ? ' (푸시 알림 전송됨)' : ' (앱 메시지함에 저장 · 푸시 미구독)'}` : `❌ 실패: ${r?.error || '오류'}`)
+    } catch { window.alert('❌ 전송 실패') }
+  }
+
+  const rowClickable: React.CSSProperties = { cursor: 'pointer' }
+  const alertBtn: React.CSSProperties = { padding: '4px 10px', fontSize: 12, fontWeight: 700, color: '#111', background: '#c8a900', border: 'none', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' }
+
+  // 회원 명단 모달 본문
+  const memberListBody = (list: UserRow[]): ReactNode => (
+    list.length === 0 ? <div style={{ color: '#888', fontSize: 13, padding: 8 }}>해당 회원이 없어요.</div> : (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><th style={th}>회원</th><th style={th}>등급</th><th style={th}>마지막주문</th><th style={th}>연락</th></tr></thead>
+          <tbody>
+            {list.map(u => (
+              <tr key={u.id}>
+                <td style={td}>{nameOf(u)}</td>
+                <td style={td}>{GRADE_KO[u.grade || 'bronze'] || u.grade || '-'}</td>
+                <td style={td}>{kstDate(crm.lastOrder.get(u.id) ?? u.last_visit)}</td>
+                <td style={td}><button style={alertBtn} onClick={() => sendAlert(u.id, nameOf(u))}>🔔 알림</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  )
+  const openMembers = (title: string, list: UserRow[]) => setDetail({ title, body: memberListBody(list) })
+
+  // 특정 테이블/유형의 주문 상세(세션 시간대·주최자 회원·항목·금액)
+  const orderListBody = (rows: OrderRow[]): ReactNode => {
+    const sorted = [...rows].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    const hosts = Array.from(new Set(sorted.map(o => o.user_id).filter(Boolean))) as string[]
+    return (
+      <>
+        {hosts.length > 0 && (
+          <div style={{ ...box, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: '#c8a900', fontWeight: 700, marginBottom: 6 }}>이용 회원(주최자) · 정산/연락 대상</div>
+            {hosts.map(uid => (
+              <div key={uid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+                <span style={{ fontSize: 13, color: '#eee' }}>{nameById(uid)} <span style={{ color: '#888', fontSize: 12 }}>({GRADE_KO[crm.byId.get(uid)?.grade || 'bronze'] || '-'})</span></span>
+                <button style={alertBtn} onClick={() => sendAlert(uid, nameById(uid))}>🔔 알림 보내기</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><th style={th}>시간</th><th style={th}>회원</th><th style={th}>주문내역</th><th style={th}>금액</th></tr></thead>
+            <tbody>
+              {sorted.map(o => (
+                <tr key={o.id}>
+                  <td style={td}>{kstTime(o.created_at)}</td>
+                  <td style={td}>{nameById(o.user_id)}</td>
+                  <td style={{ ...td, whiteSpace: 'normal' }}>{(o.order_items || []).map(it => `${it.name_snapshot}×${it.qty}`).join(', ') || '-'}</td>
+                  <td style={td}>{won(o.final_amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>
+    )
+  }
+  const openTable = (tKey: string) => {
+    const n = parseInt(tKey, 10)
+    const rows = orders.filter(o => (o.order_type === 'delivery' ? '배달' : o.order_type === 'takeout' ? '포장' : `${o.table_no}번`) === tKey)
+    setDetail({ title: `🪑 ${tKey} 상세 (${range.label})`, body: orderListBody(rows) })
+  }
+  const openType = (tKey: string) => {
+    const rows = orders.filter(o => (ORDER_TYPE_LABEL[o.order_type] || o.order_type || '기타') === tKey)
+    setDetail({ title: `🛍️ ${tKey} 상세 (${range.label})`, body: orderListBody(rows) })
+  }
+
   return (
     <div style={{ padding: '0 4px' }}>
+      {/* 드릴다운 상세 모달 */}
+      {detail && (
+        <div onClick={() => setDetail(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#161616', border: '1px solid #333', borderRadius: 14, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', padding: '18px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: '#FFD700' }}>{detail.title}</div>
+              <button onClick={() => setDetail(null)} style={{ background: 'none', border: 'none', color: '#888', fontSize: 22, cursor: 'pointer' }}>✕</button>
+            </div>
+            {detail.body}
+          </div>
+        </div>
+      )}
       {/* 기간 선택 */}
       <div style={{ ...box, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         {(Object.keys(PERIOD_LABEL) as Period[]).map(p => (
@@ -367,15 +482,17 @@ export default function StatsTab() {
         )}
       </div>
 
-      {/* 테이블별 */}
+      {/* 테이블별 — 행 탭 시 그 테이블의 시간대·주최자·주문 상세 */}
       <div style={box}>
-        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>🪑 테이블별</div>
+        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>🪑 테이블별 <span style={{ fontSize: 11, color: '#888', fontWeight: 400 }}>· 행을 누르면 이용 고객·주문 상세</span></div>
         {agg.tableRank.length === 0 ? <div style={{ color: '#666', fontSize: 13 }}>내역 없음</div> : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th style={th}>테이블</th><th style={th}>주문 건수</th><th style={th}>매출액</th></tr></thead>
+            <thead><tr><th style={th}>테이블</th><th style={th}>주문 건수</th><th style={th}>매출액</th><th style={th}></th></tr></thead>
             <tbody>
               {agg.tableRank.map(([t, v]) => (
-                <tr key={t}><td style={td}>{t}</td><td style={td}>{v.count}건</td><td style={td}>{won(v.sales)}</td></tr>
+                <tr key={t} style={rowClickable} onClick={() => openTable(t)}>
+                  <td style={td}>{t}</td><td style={td}>{v.count}건</td><td style={td}>{won(v.sales)}</td><td style={{ ...td, color: '#c8a900' }}>상세 ›</td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -390,9 +507,9 @@ export default function StatsTab() {
             <thead><tr><th style={th}>유형</th><th style={th}>건수</th><th style={th}>매출액</th><th style={th}>비중</th></tr></thead>
             <tbody>
               {agg.typeRank.map(([t, v]) => (
-                <tr key={t}>
+                <tr key={t} style={rowClickable} onClick={() => openType(t)}>
                   <td style={td}>{t}</td><td style={td}>{v.count}건</td><td style={td}>{won(v.sales)}</td>
-                  <td style={td}>{agg.totalSales ? Math.round(v.sales / agg.totalSales * 100) : 0}%</td>
+                  <td style={td}>{agg.totalSales ? Math.round(v.sales / agg.totalSales * 100) : 0}% <span style={{ color: '#c8a900' }}>›</span></td>
                 </tr>
               ))}
             </tbody>
@@ -442,25 +559,25 @@ export default function StatsTab() {
       {/* ===== F-2: 고객관리 통계 ===== */}
       <div style={{ fontWeight: 900, color: '#c8a900', fontSize: 15, margin: '20px 0 10px' }}>👥 고객관리</div>
 
-      {/* 신규/재방문 (선택한 기간 기준) */}
+      {/* 신규/재방문 (선택한 기간 기준) — 카드 탭 시 회원 명단 + 알림 */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>신규 가입 (기간 내)</div>
+        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center', ...rowClickable }} onClick={() => openMembers('🆕 신규 가입 회원', crm.newList)}>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>신규 가입 (기간 내) ›</div>
           <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>{crm.newMembers}명</div>
         </div>
-        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>방문 회원 (기간 내)</div>
+        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center', ...rowClickable }} onClick={() => openMembers('🙋 방문 회원', crm.visitorList)}>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>방문 회원 (기간 내) ›</div>
           <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>{crm.visitors}명</div>
         </div>
-        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>재방문 회원</div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>{crm.revisit}명 <span style={{ fontSize: 13, color: '#888' }}>(재방문율 {crm.revisitRate}%)</span></div>
+        <div style={{ ...box, flex: 1, marginBottom: 0, textAlign: 'center', ...rowClickable }} onClick={() => openMembers('💛 재방문 회원', crm.revisitList)}>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>재방문 회원 ›</div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>{crm.revisit}명 <span style={{ fontSize: 13, color: '#888' }}>({crm.revisitRate}%)</span></div>
         </div>
       </div>
 
       {/* 마케팅 동의 + 상태 분포 (전체 회원 기준) */}
-      <div style={box}>
-        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>📣 마케팅 수신동의 (전체 회원 기준)</div>
+      <div style={{ ...box, ...rowClickable }} onClick={() => openMembers('📣 마케팅 수신동의 회원', crm.optInList)}>
+        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>📣 마케팅 수신동의 (전체 회원 기준) <span style={{ fontSize: 11, color: '#c8a900', fontWeight: 400 }}>· 명단 보기 ›</span></div>
         <div style={{ fontSize: 14, color: '#ccc' }}>
           동의 {crm.optIn}명 / 전체 {crm.total}명
           {' '}<span style={{ color: '#FFD700', fontWeight: 700 }}>({crm.total ? Math.round(crm.optIn / crm.total * 100) : 0}%)</span>
@@ -468,28 +585,28 @@ export default function StatsTab() {
       </div>
 
       <div style={box}>
-        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>🪪 회원 상태별 분포</div>
+        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>🪪 회원 상태별 분포 <span style={{ fontSize: 11, color: '#888', fontWeight: 400 }}>· 행을 누르면 명단</span></div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead><tr><th style={th}>상태</th><th style={th}>인원</th></tr></thead>
+          <thead><tr><th style={th}>상태</th><th style={th}>인원</th><th style={th}></th></tr></thead>
           <tbody>
-            <tr><td style={td}>전화번호만 가입 (phone_member)</td><td style={td}>{crm.statusDist.phone_member || 0}명</td></tr>
-            <tr><td style={td}>추가정보 일부 (profile_incomplete)</td><td style={td}>{crm.statusDist.profile_incomplete || 0}명</td></tr>
-            <tr><td style={td}>추가정보 완료 (profile_complete)</td><td style={td}>{crm.statusDist.profile_complete || 0}명</td></tr>
+            <tr style={rowClickable} onClick={() => openMembers('🪪 전화번호만 가입', crm.statusLists.phone_member)}><td style={td}>전화번호만 가입 (phone_member)</td><td style={td}>{crm.statusDist.phone_member || 0}명</td><td style={{ ...td, color: '#c8a900' }}>›</td></tr>
+            <tr style={rowClickable} onClick={() => openMembers('🪪 추가정보 일부', crm.statusLists.profile_incomplete)}><td style={td}>추가정보 일부 (profile_incomplete)</td><td style={td}>{crm.statusDist.profile_incomplete || 0}명</td><td style={{ ...td, color: '#c8a900' }}>›</td></tr>
+            <tr style={rowClickable} onClick={() => openMembers('🪪 추가정보 완료', crm.statusLists.profile_complete)}><td style={td}>추가정보 완료 (profile_complete)</td><td style={td}>{crm.statusDist.profile_complete || 0}명</td><td style={{ ...td, color: '#c8a900' }}>›</td></tr>
           </tbody>
         </table>
         <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>* guest(비회원)는 가입 기록이 없어 인원 산정 불가 — 비회원 주문은 매출 통계에 포함됨</div>
       </div>
 
-      {/* 휴면 구간 (CRM 트리거 기준: 10일 / 45~60일) */}
+      {/* 휴면 구간 (CRM 트리거 기준: 10일 / 45~60일) — 행 탭 시 명단 + 알림(재방문 유도) */}
       <div style={box}>
-        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>💤 휴면고객 (마지막 주문 기준, 오늘까지 경과일)</div>
+        <div style={{ fontWeight: 700, color: '#f0f0f0', marginBottom: 8 }}>💤 휴면고객 (마지막 주문 기준) <span style={{ fontSize: 11, color: '#888', fontWeight: 400 }}>· 행을 누르면 명단·알림</span></div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead><tr><th style={th}>구간</th><th style={th}>인원</th></tr></thead>
+          <thead><tr><th style={th}>구간</th><th style={th}>인원</th><th style={th}></th></tr></thead>
           <tbody>
-            <tr><td style={td}>활성 (10일 미만)</td><td style={td}>{crm.dormant.active}명</td></tr>
-            <tr><td style={td}>10~44일 미방문</td><td style={td}>{crm.dormant.d10}명</td></tr>
-            <tr><td style={td}>45~60일 미방문</td><td style={td}>{crm.dormant.d45}명</td></tr>
-            <tr><td style={td}>60일 초과 미방문</td><td style={td}>{crm.dormant.d60}명</td></tr>
+            <tr style={rowClickable} onClick={() => openMembers('💤 활성 (10일 미만)', crm.dormantLists.active)}><td style={td}>활성 (10일 미만)</td><td style={td}>{crm.dormant.active}명</td><td style={{ ...td, color: '#c8a900' }}>›</td></tr>
+            <tr style={rowClickable} onClick={() => openMembers('💤 10~44일 미방문', crm.dormantLists.d10)}><td style={td}>10~44일 미방문</td><td style={td}>{crm.dormant.d10}명</td><td style={{ ...td, color: '#c8a900' }}>›</td></tr>
+            <tr style={rowClickable} onClick={() => openMembers('💤 45~60일 미방문', crm.dormantLists.d45)}><td style={td}>45~60일 미방문</td><td style={td}>{crm.dormant.d45}명</td><td style={{ ...td, color: '#c8a900' }}>›</td></tr>
+            <tr style={rowClickable} onClick={() => openMembers('💤 60일 초과 미방문', crm.dormantLists.d60)}><td style={td}>60일 초과 미방문</td><td style={td}>{crm.dormant.d60}명</td><td style={{ ...td, color: '#c8a900' }}>›</td></tr>
           </tbody>
         </table>
         <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>* 주문 이력이 없는 회원은 가입일 기준으로 계산</div>

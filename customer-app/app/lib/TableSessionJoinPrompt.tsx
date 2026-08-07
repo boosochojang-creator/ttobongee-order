@@ -5,7 +5,7 @@
 //   [네] = 합류(이 진입에선 다시 안 뜸)  /  [아니오] = "테이블 번호 확인 · 직원 호출" 안내로 전환.
 //   ※ QR 안 찍고 아이콘으로 들어와 번호를 잘못 고른 손님을 바로잡는 용도.
 import { useEffect, useRef, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useCart } from './cartStore'
 import { useStoreId } from './storeContext'
 import { supabase } from './supabase'
@@ -19,9 +19,10 @@ function speak(text: string) {
 }
 
 export default function TableSessionJoinPrompt() {
-  const { userId, isMember, tableNo, orderType } = useCart()
+  const { userId, isMember, tableNo, orderType, setTableNo } = useCart()
   const storeId = useStoreId()
   const pathname = usePathname()
+  const router = useRouter()
   const [mode, setMode] = useState<null | 'ask' | 'wrongTable'>(null)
   const [staffCalled, setStaffCalled] = useState(false)
   const ran = useRef(false)
@@ -106,7 +107,13 @@ export default function TableSessionJoinPrompt() {
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button style={btnPrimary} onClick={() => { markHandled(); setMode(null) }}>네, 같은 테이블이에요</button>
-              <button style={btnGhost} onClick={() => { setMode('wrongTable'); speak('테이블 위 QR 안내판에서 테이블 번호를 확인해 주세요. 불편하시면 직원을 호출해 주세요.') }}>아니오</button>
+              <button style={btnGhost} onClick={() => {
+                // [아니오] = 이 테이블 아님 → 테이블 연결 즉시 해제(공유 종 바로 사라짐) 후 번호 확인 안내
+                try { setTableNo('0') } catch {}
+                markHandled()
+                setMode('wrongTable')
+                speak('테이블 위 QR 안내판에서 테이블 번호를 확인해 주세요. 불편하시면 직원을 호출해 주세요.')
+              }}>아니오</button>
             </div>
           </>
         )}
@@ -124,8 +131,9 @@ export default function TableSessionJoinPrompt() {
               : null}
             <div style={{ display: 'flex', gap: 10 }}>
               {!staffCalled && <button style={btnPrimary} onClick={callStaff}>🔔 직원 호출</button>}
-              <button style={btnGhost} onClick={() => { markHandled(); setMode(null) }}>{staffCalled ? '확인' : '닫기'}</button>
+              <button style={btnGhost} onClick={() => { setMode(null); router.push(`/store/${storeId}/table`) }}>자리 다시 선택</button>
             </div>
+            <button style={{ ...btnGhost, marginTop: 8, width: '100%', flex: 'unset' }} onClick={() => { markHandled(); setMode(null) }}>{staffCalled ? '확인' : '닫기'}</button>
           </>
         )}
       </div>

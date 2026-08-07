@@ -1014,6 +1014,8 @@ export default function OwnerDashboard() {
     const total = group.reduce((s, o) => s + (o.final_amount || 0), 0)
     const hasTakeout = takeoutItemMap.size > 0
     const cookingCount = group.filter(o => o.status !== 'done').length // 아직 조리중(접수·조리중)인 회차 수
+    // [미결제 방지] 이 테이블의 '미접수 신규'(아직 접수 안 누른 주문) — 있으면 결제 총액 누락 위험 → 결제완료 가드
+    const pendingNew = newOrders.filter(o => o.table_no === tableNo && (o.order_type === 'dine_in' || o.order_type === 'takeout'))
     const mi = group.find(o => o.is_member && o.member_info)?.member_info
 
     return (
@@ -1023,6 +1025,7 @@ export default function OwnerDashboard() {
           <span style={{ fontSize: 13, color: '#3ac47d', fontWeight: 700 }}>주문 {group.length}건 · 결제 대기</span>
           {hasTakeout && <span style={{ fontSize: 12, fontWeight: 800, color: '#111', background: '#f0a000', borderRadius: 20, padding: '2px 10px' }}>🛍️ 포장 포함</span>}
           {cookingCount > 0 && <span style={{ fontSize: 12, fontWeight: 800, color: '#111', background: '#f0d000', borderRadius: 20, padding: '2px 10px' }}>🍳 조리중 {cookingCount}건 포함</span>}
+          {pendingNew.length > 0 && <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#d94a3a', borderRadius: 20, padding: '2px 10px' }}>⚠️ 미접수 신규 {pendingNew.length}건 — 접수 후 결제</span>}
         </div>
         {mi && (
           <div style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[mi.grade] || '#c8a900', marginTop: 4 }}>
@@ -1054,7 +1057,16 @@ export default function OwnerDashboard() {
         )}
         <div className="order-total">누적 {won(total)}</div>
         <div className="action-btns">
-          <button className="action-btn btn-accept" onClick={() => closeTable(tableNo)}>💳 결제완료</button>
+          <button className="action-btn btn-accept"
+            style={pendingNew.length ? { opacity: 0.5 } : undefined}
+            onClick={() => {
+              if (pendingNew.length) {
+                setCallToast(`⚠️ ${tableNo}번에 아직 접수 안 한 신규 주문 ${pendingNew.length}건이 있어요. 먼저 접수(조리시작) 후 결제해주세요 — 미결제 방지`)
+                setTimeout(() => setCallToast(null), 4000)
+                return
+              }
+              closeTable(tableNo)
+            }}>💳 결제완료</button>
         </div>
       </div>
     )
