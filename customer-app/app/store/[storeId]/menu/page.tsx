@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabase'
 import LegalFooter from '../../../lib/LegalFooter'
 import ProfilePrompt from '../../../lib/ProfilePrompt'
 import SocialConnectPrompt from '../../../lib/SocialConnectPrompt'
+import TableSessionJoinPrompt from '../../../lib/TableSessionJoinPrompt'
 import { getMemberLocal, greetingLabel, isReturningGuest } from '../../../lib/memberState'
 import { useCoupons } from '../../../lib/CouponContext'
 import { fetchStoreClosed } from '../../../lib/storeStatus'
@@ -251,6 +252,9 @@ export default function MenuPage() {
         </div>
       )}
 
+
+      {/* [테이블 공유 탭] 일행 합류 안내 팝업(+음성) — dine_in 나중 합류자에게 1회 */}
+      <TableSessionJoinPrompt />
 
       {/* [로그인정책 2026-08] 재방문 소셜 계정연결 유도 박스(+음성) — 기존 전화회원 미연결에게만(서버 판정) */}
       <SocialConnectPrompt />

@@ -880,7 +880,9 @@ export default function OwnerDashboard() {
   // A2: 칸3(결제 대기) — 매장은 테이블별 병합, 포장은 개별, 배달은 기존 흐름 유지
   // [항목3] 세션(테이블 착석) 결제대기 = table_no>0의 조리완료 매장/포장 주문. 한 테이블 카드로 병합.
   //   외부 픽업형(table_no=0 포장)만 개별 카드. 배달(table_no=0)은 기존 흐름.
-  const sessionDone = orders.filter(o => o.status === 'done' && o.table_no > 0 && (o.order_type === 'dine_in' || o.order_type === 'takeout'))
+  // [테이블 공유 탭] 결제대기 병합카드 = 그 테이블의 '접수 이후 진행 주문 전체(접수·조리중·완료)'.
+  //   접수 즉시 합계에 반영되어, 조리중 주문이 합산 누락된 채 결제되는 사고를 막는다. (조리중 카드는 칸2에 그대로 유지)
+  const sessionDone = orders.filter(o => ['accepted', 'cooking', 'done'].includes(o.status) && o.table_no > 0 && (o.order_type === 'dine_in' || o.order_type === 'takeout'))
   const takeoutDone = orders.filter(o => o.status === 'done' && o.order_type === 'takeout' && !(o.table_no > 0))
   const deliveryDone = orders.filter(o => (o.status === 'done' && o.order_type === 'delivery') || o.status === 'out_for_delivery')
   // 테이블별 그룹핑 (같은 테이블의 조리완료 주문 = 하나의 결제 대기 카드)
@@ -1011,6 +1013,7 @@ export default function OwnerDashboard() {
     for (const o of group) if (Array.isArray(o.free_gifts)) for (const g of o.free_gifts) giftMap.set(g.menu, (giftMap.get(g.menu) || 0) + (g.qty || 1))
     const total = group.reduce((s, o) => s + (o.final_amount || 0), 0)
     const hasTakeout = takeoutItemMap.size > 0
+    const cookingCount = group.filter(o => o.status !== 'done').length // 아직 조리중(접수·조리중)인 회차 수
     const mi = group.find(o => o.is_member && o.member_info)?.member_info
 
     return (
@@ -1019,6 +1022,7 @@ export default function OwnerDashboard() {
           <span>{tableNo}번</span>
           <span style={{ fontSize: 13, color: '#3ac47d', fontWeight: 700 }}>주문 {group.length}건 · 결제 대기</span>
           {hasTakeout && <span style={{ fontSize: 12, fontWeight: 800, color: '#111', background: '#f0a000', borderRadius: 20, padding: '2px 10px' }}>🛍️ 포장 포함</span>}
+          {cookingCount > 0 && <span style={{ fontSize: 12, fontWeight: 800, color: '#111', background: '#f0d000', borderRadius: 20, padding: '2px 10px' }}>🍳 조리중 {cookingCount}건 포함</span>}
         </div>
         {mi && (
           <div style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[mi.grade] || '#c8a900', marginTop: 4 }}>

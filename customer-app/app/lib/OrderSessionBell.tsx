@@ -19,18 +19,22 @@ const STATUS_LABEL: Record<string, string> = {
 const won = (n: number) => n.toLocaleString() + '원'
 
 export default function OrderSessionBell() {
-  const { userId, isMember } = useCart()
+  const { userId, isMember, tableNo, orderType } = useCart()
   const [rounds, setRounds] = useState<Round[]>([])
   const [total, setTotal] = useState(0)
   const [open, setOpen] = useState(false)
-  const uidRef = useRef<string | null>(null)
-  uidRef.current = userId
+  // dine_in 착석(유효 테이블)이면 '테이블 공유 탭', 아니면 내(user) 주문 기준
+  const tableNum = parseInt(String(tableNo ?? ''), 10)
+  const shared = orderType === 'dine_in' && Number.isInteger(tableNum) && tableNum > 0
+  const ctxRef = useRef({ userId, shared, tableNum })
+  ctxRef.current = { userId, shared, tableNum }
 
   const load = useCallback(async () => {
-    const uid = uidRef.current
+    const { userId: uid, shared: sh, tableNum: tn } = ctxRef.current
     if (!uid) { setRounds([]); setTotal(0); return }
     try {
-      const r = await fetch(`/api/order/session?userId=${uid}`, { cache: 'no-store' }).then(x => x.json())
+      const url = sh ? `/api/order/session?tableNo=${tn}` : `/api/order/session?userId=${uid}`
+      const r = await fetch(url, { cache: 'no-store' }).then(x => x.json())
       if (r?.ok) { setRounds(r.rounds || []); setTotal(r.total || 0); if (!r.rounds?.length) setOpen(false) }
     } catch {}
   }, [])
@@ -38,13 +42,14 @@ export default function OrderSessionBell() {
   useEffect(() => {
     if (!isMember || !userId) { setRounds([]); setTotal(0); setOpen(false); return }
     load()
-    // 실시간(내 주문 변경 시 즉시 갱신 — 정산되면 사라지도록) + 폴링 백업
-    const ch = supabase.channel(`session-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `user_id=eq.${userId}` }, () => load())
+    // 실시간 갱신(정산되면 사라지도록) + 폴링 백업. 공유 탭이면 테이블 단위, 아니면 내 주문 단위로 구독.
+    const filter = shared ? `table_no=eq.${tableNum}` : `user_id=eq.${userId}`
+    const ch = supabase.channel(`session-${shared ? `t${tableNum}` : userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter }, () => load())
       .subscribe()
     const poll = setInterval(load, 12000)
     return () => { supabase.removeChannel(ch); clearInterval(poll) }
-  }, [isMember, userId, load])
+  }, [isMember, userId, shared, tableNum, load])
 
   if (!isMember || !userId || rounds.length === 0) return null
 
@@ -64,7 +69,7 @@ export default function OrderSessionBell() {
             🔔
             <span style={{ position: 'absolute', top: -6, right: -8, background: '#e04a3a', color: '#fff', fontSize: 11, fontWeight: 800, minWidth: 17, height: 17, lineHeight: '17px', borderRadius: 9, padding: '0 4px', textAlign: 'center' }}>{rounds.length}</span>
           </span>
-          <span>진행 중 주문 · <b>{won(total)}</b></span>
+          <span>{shared ? '이 테이블 주문' : '진행 중 주문'} · <b>{won(total)}</b></span>
           <span style={{ fontSize: 12, opacity: 0.8 }}>내역 ▲</span>
         </button>
       )}
@@ -78,11 +83,13 @@ export default function OrderSessionBell() {
             maxHeight: '80vh', overflowY: 'auto', borderTop: '2px solid #c8a900', padding: '20px 18px 28px',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-              <div style={{ fontSize: 17, fontWeight: 900, color: '#FFD700' }}>🔔 진행 중인 주문</div>
+              <div style={{ fontSize: 17, fontWeight: 900, color: '#FFD700' }}>🔔 {shared ? '이 테이블 진행 중 주문' : '진행 중인 주문'}</div>
               <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: '#888', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>✕</button>
             </div>
             <div style={{ fontSize: 12.5, color: '#999', marginBottom: 14, lineHeight: 1.6 }}>
-              아직 결제 전이에요. 추가로 주문하면 여기에 회차별로 쌓여요. 카운터에서 한 번에 결제하시면 자동으로 정리됩니다.
+              {shared
+                ? '아직 결제 전이에요. 일행이 주문해도 이 테이블 내역에 함께 쌓여요. 카운터에서 한 번에 결제하시면 자동으로 정리됩니다.'
+                : '아직 결제 전이에요. 추가로 주문하면 여기에 회차별로 쌓여요. 카운터에서 한 번에 결제하시면 자동으로 정리됩니다.'}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
