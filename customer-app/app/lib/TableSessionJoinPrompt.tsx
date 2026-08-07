@@ -5,6 +5,7 @@
 //   [네] = 합류(이 진입에선 다시 안 뜸)  /  [아니오] = "테이블 번호 확인 · 직원 호출" 안내로 전환.
 //   ※ QR 안 찍고 아이콘으로 들어와 번호를 잘못 고른 손님을 바로잡는 용도.
 import { useEffect, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { useCart } from './cartStore'
 import { useStoreId } from './storeContext'
 import { supabase } from './supabase'
@@ -20,12 +21,15 @@ function speak(text: string) {
 export default function TableSessionJoinPrompt() {
   const { userId, isMember, tableNo, orderType } = useCart()
   const storeId = useStoreId()
+  const pathname = usePathname()
   const [mode, setMode] = useState<null | 'ask' | 'wrongTable'>(null)
   const [staffCalled, setStaffCalled] = useState(false)
   const ran = useRef(false)
 
   const tableNum = parseInt(String(tableNo ?? ''), 10)
-  const shared = orderType === 'dine_in' && Number.isInteger(tableNum) && tableNum > 0
+  // 자리선택(/table)·입구(/entry) 화면에선 아직 착석 확정 전 → 팝업 제외. 그 외(메뉴·장바구니·체크아웃 등)에서 노출.
+  const onExcludedScreen = pathname === `/store/${storeId}/table` || pathname === `/store/${storeId}/entry`
+  const shared = orderType === 'dine_in' && Number.isInteger(tableNum) && tableNum > 0 && !onExcludedScreen
   const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
   const handledKey = `tblJoin-${storeId}-${tableNum}-${todayKst}`
   const markHandled = () => { try { sessionStorage.setItem(handledKey, '1') } catch {} }
