@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { tableLabel } from "../lib/tableLabel";
 
 type OrderItem = { menuId: string; name: string; unitPrice: number; qty: number };
 
@@ -131,7 +132,7 @@ export default function OrdersPage() {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <strong>{order.table_no}번 테이블</strong>
+                <strong>{tableLabel(order.table_no, true)}</strong>
                 <span style={{ fontSize: 13, color: "#888" }}>
                   {new Date(order.created_at).toLocaleTimeString("ko-KR")}
                 </span>

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminClient } from '../../../lib/supabaseAdmin'
 import { verifyToken } from '../../../lib/authToken'
-import { issueSignupCoupon } from '../../../lib/signupCoupon'
 import { sanitizeNickname } from '../../../lib/nickname'
 
 // [그룹2 새로시작] 신규 소셜신원 → 새 회원 생성(phone=null) + signup 쿠폰 즉시발급.
@@ -37,21 +36,7 @@ export async function POST(req: NextRequest) {
       user = nu; created = true
     }
 
-    // [쿠폰 무한발급 방지] '완전히 처음 보는 신원'일 때만 signup 쿠폰.
-    //   - 같은 provider_uid 이력: 위 dupe로 이미 created=false → 발급 안 함.
-    //   - 같은 device_id로 과거 signup 받은 이력: 아래에서 차단(다른 카카오로 기기 어뷰징 방지).
-    if (created) {
-      let allowSignup = true
-      if (deviceId) {
-        const { data: sameDev } = await admin.from('users').select('id').eq('store_id', sid).eq('device_id', deviceId).neq('id', user.id)
-        const priorIds = (sameDev || []).map((x: any) => x.id)
-        if (priorIds.length) {
-          const { data: had } = await admin.from('coupons').select('id').eq('type', 'signup').in('user_id', priorIds).limit(1)
-          if (had && had.length) allowSignup = false
-        }
-      }
-      if (allowSignup) await issueSignupCoupon(admin, user.id)
-    }
+    // [2026-10 쿠폰 개편] 신규가입 쿠폰 발급 폐지 — 혜택은 '5번째 방문 감사' 쿠폰으로 일원화(lib/visitCoupon.ts).
 
     return NextResponse.json({
       ok: true,

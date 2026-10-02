@@ -8,6 +8,7 @@ import { supabase } from './lib/supabase'
 import CouponStats from './CouponStats'
 import { SALES_COUNTED } from './lib/salesStatus'
 import { STORE_ID } from './lib/store'
+import { tableLabel } from './lib/tableLabel'
 
 type Period = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -222,7 +223,7 @@ export default function StatsTab() {
     const byType = new Map<string, { count: number; sales: number }>()
 
     for (const o of orders) {
-      const tKey = o.order_type === 'delivery' ? '배달' : o.order_type === 'takeout' ? '포장' : `${o.table_no}번`
+      const tKey = o.order_type === 'delivery' ? '배달' : o.order_type === 'takeout' ? '포장' : tableLabel(o.table_no)
       const t = byTable.get(tKey) || { count: 0, sales: 0 }
       t.count += 1; t.sales += o.final_amount || 0
       byTable.set(tKey, t)
@@ -411,7 +412,7 @@ export default function StatsTab() {
   }
   const openTable = (tKey: string) => {
     const n = parseInt(tKey, 10)
-    const rows = orders.filter(o => (o.order_type === 'delivery' ? '배달' : o.order_type === 'takeout' ? '포장' : `${o.table_no}번`) === tKey)
+    const rows = orders.filter(o => (o.order_type === 'delivery' ? '배달' : o.order_type === 'takeout' ? '포장' : tableLabel(o.table_no)) === tKey)
     setDetail({ title: `🪑 ${tKey} 상세 (${range.label})`, body: orderListBody(rows) })
   }
   const openType = (tKey: string) => {

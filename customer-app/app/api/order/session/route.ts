@@ -6,7 +6,8 @@ import { adminClient } from '../../../lib/supabaseAdmin'
 //   ▸ dine_in 착석(table_no>0): 그 테이블의 미결제 주문 전체(주문자 무관)를 합산 = 일행 A·B가 한 탭으로 보임.
 //   ▸ 그 외(포장·table_no 없음/0): 회원 본인(user_id) 기준 폴백 — 테이블 개념 없음, 오인식 방지.
 //   점주가 결제처리(close-session → served)하면 여기서 자동 제외 → 고객 화면 종도 사라짐.
-//   오늘(KST) + open 상태만. 지난 세션은 served라 자동 제외(closed_at 경계).
+//   [영업일 기준] 자정이 아니라 '현재 영업일 시작' 이후 + open 상태만(자정 넘으면 종이 사라지던 버그 수정).
+//   지난 세션은 served라 자동 제외(closed_at 경계).
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -26,13 +27,19 @@ export async function GET(req: NextRequest) {
     if (!userId && !shared) return NextResponse.json({ ok: true, rounds: [], total: 0, count: 0, shared: false })
 
     const admin = adminClient()
-    const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+    // 하한 = 열린 영업일 시작 1시간 전(영업 시작 직전 주문 여유). 열린 영업일이 없으면 최근 16시간.
+    const { data: openDay } = await admin.from('daily_reports').select('start_time')
+      .eq('store_id', sid).not('start_time', 'is', null).is('end_time', null)
+      .order('start_time', { ascending: false }).limit(1).maybeSingle()
+    const floor = openDay?.start_time
+      ? new Date(new Date(openDay.start_time).getTime() - 3600 * 1000).toISOString()
+      : new Date(Date.now() - 16 * 3600 * 1000).toISOString()
 
     let query = admin.from('orders')
       .select('id, status, order_type, table_no, user_id, final_amount, free_gifts, created_at, order_items(name_snapshot, qty)')
       .eq('store_id', sid)
       .in('status', OPEN_STATUSES)
-      .gte('created_at', `${todayKst}T00:00:00+09:00`)
+      .gte('created_at', floor)
       .order('created_at', { ascending: true })
 
     if (shared) {

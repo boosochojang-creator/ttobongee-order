@@ -2,7 +2,7 @@
 // [로그인정책 2026-08] 재방문 소셜 계정연결 유도 박스 (+음성안내).
 //   대상: 기존 전화회원이면서 아직 소셜 미연결(서버 member/state의 banners.socialConnect=true).
 //   재노출 규칙: "확인"은 이번 화면만 닫음 → 앱 재진입(재마운트)마다 다시 노출. 실제 연결해야만 서버에서 대상 제외되어 사라짐.
-//   혜택: 연결 완료 시 콜라/사이다 330ml 캔 택1 쿠폰 자동 지급(member/link에서 발급).
+//   (2026-10 쿠폰 개편으로 연결 보상 쿠폰은 폐지 — 연결 안내만 유지)
 import { useEffect, useRef, useState } from 'react'
 import { useStoreId } from './storeContext'
 import { getMemberLocal } from './memberState'
@@ -34,7 +34,7 @@ export default function SocialConnectPrompt() {
           setShow(true)
           if (!spoke.current) {
             spoke.current = true
-            speakSafe('또봉이 보안 안내입니다. 이제 카카오 또는 구글로 간편하고 안전하게 연결해 주세요. 지금 연결하시면 콜라 또는 사이다를 드려요.')
+            speakSafe('또봉이 보안 안내입니다. 이제 카카오 또는 구글로 간편하고 안전하게 연결해 주세요.')
           }
         }
       })
@@ -74,12 +74,6 @@ export default function SocialConnectPrompt() {
       <div style={{ fontSize: 13.5, color: '#e6e0cf', lineHeight: 1.75 }}>
         보안 정책이 강화되어, 이제 <b style={{ color: '#FFD700' }}>전화번호 대신 소셜 계정 연결</b>을 권장드려요.<br />
         연결하면 <b style={{ color: '#FFD700' }}>기존 단골 혜택·쿠폰은 그대로</b> 이어지고, 전화번호는 자동으로 삭제돼요.
-      </div>
-      <div style={{
-        background: 'rgba(58,196,125,0.14)', border: '1px solid #3ac47d66', borderRadius: 10,
-        padding: '9px 12px', fontSize: 13, color: '#a9f0c6', lineHeight: 1.5,
-      }}>
-        🥤 지금 연결하면 <b>콜라 / 사이다 330ml 캔 중 택1</b>을 드려요!
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 26, marginTop: 4 }}>
         {iconBtn('kakao', '#FEE500', '카카오',

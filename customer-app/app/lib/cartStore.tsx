@@ -50,7 +50,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // 1) 복원: 첫 화면 표시 직후 localStorage에서 장바구니 + 회원상태를 불러온다.
   //    장바구니는 새 테이블 진입(?table=)이면 새 세션이라 복원 안 함.
-  //    회원상태는 영속(MEMBER_KEY)이라 QR 재진입이어도 항상 복원한다 — 재방문 회원 인식/5% 할인 (버그[1] 수정).
+  //    회원상태는 영속(MEMBER_KEY)이라 QR 재진입이어도 항상 복원한다 — 재방문 회원 인식 (버그[1] 수정).
   useEffect(() => {
     try {
       const isNewTableEntry = new URLSearchParams(window.location.search).has('table')
@@ -132,7 +132,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const totalQty = items.reduce((sum, i) => sum + i.qty, 0)
   const totalAmount = items.reduce((sum, i) => sum + i.price * i.qty, 0)
-  const discountAmount = isMember ? Math.round(totalAmount * 0.05) : 0
+  // 회원 5% 할인 폐지(2026-10) — 필드는 호환용으로 유지하되 항상 0. 혜택은 쿠폰(5번째 방문 증정)으로 일원화.
+  const discountAmount = 0
   const finalAmount = totalAmount - discountAmount
 
   return (

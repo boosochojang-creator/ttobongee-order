@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { tableLabel } from '../../lib/tableLabel'
 import { createClient } from '@supabase/supabase-js'
 import { sendPushToUser } from '../../lib/pushSend'
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
     if (!order) return NextResponse.json({ ok: false, error: '주문을 찾을 수 없습니다' }, { status: 404 })
 
     const items = (order.order_items as any[]) || []
-    const tableLabel = order.order_type === 'takeout' ? '포장' : `${order.table_no}번 테이블`
+    const seatLabel = order.order_type === 'takeout' ? '포장' : tableLabel(order.table_no, true)
     const itemSummary = items.map(i => `${i.name_snapshot}×${i.qty}`).join(', ')
     const storeId = order.store_id || 'baegun'
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
       storeId, userId: order.user_id,
       payload: {
         title: '🍗 주문이 접수됐어요!',
-        body: `${tableLabel} · 합계 ${(order.final_amount || 0).toLocaleString()}원\n${itemSummary}\n조리 후 알려드릴게요 😊`,
+        body: `${seatLabel} · 합계 ${(order.final_amount || 0).toLocaleString()}원\n${itemSummary}\n조리 후 알려드릴게요 😊`,
         url: `/store/${storeId}/order-status?id=${orderId}`,
         tag: `order-${orderId}`,
       },

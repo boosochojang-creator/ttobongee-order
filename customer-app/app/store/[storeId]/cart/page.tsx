@@ -10,7 +10,7 @@ const won = (n: number) => n.toLocaleString() + '원'
 export default function CartPage() {
   const router = useRouter()
   const storeId = useStoreId()
-  const { items, updateQty, removeItem, totalAmount, discountAmount, finalAmount, isMember, totalQty } = useCart()
+  const { items, updateQty, removeItem, totalAmount, finalAmount, isMember, totalQty } = useCart()
 
   if (!items.length) return (
     <main>
@@ -54,11 +54,6 @@ export default function CartPage() {
           <div className="price-row">
             <span>합계</span><span>{won(totalAmount)}</span>
           </div>
-          {isMember && (
-            <div className="price-row discount">
-              <span>단골 할인 5%</span><span>-{won(discountAmount)}</span>
-            </div>
-          )}
           <div className="price-row final">
             <span>{PAYMENT_ENABLED ? '결제금액' : '예상 금액'}</span><span>{won(finalAmount)}</span>
           </div>

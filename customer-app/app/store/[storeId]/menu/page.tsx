@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
+import { tableLabel } from '../../../lib/tableLabel'
 import { useRouter } from 'next/navigation'
 import { useCart } from '../../../lib/cartStore'
 import { supabase } from '../../../lib/supabase'
@@ -114,7 +115,7 @@ export default function MenuPage() {
   }
 
   // 자리 미선택(table_no=0) dine_in은 '0번 테이블'이 아니라 '자리 선택 전'으로 — 주문 시 게이트가 자리를 확정한다.
-  const label = orderType === 'takeout' ? '포장' : (tableNo && tableNo !== '0' ? `${tableNo}번 테이블` : '자리 선택 전')
+  const label = orderType === 'takeout' ? '포장' : (tableNo && tableNo !== '0' ? tableLabel(tableNo, true) : '자리 선택 전')
 
   return (
     <main>
@@ -220,12 +221,12 @@ export default function MenuPage() {
           display:'flex', flexDirection:'column', gap:8
         }}>
           <div style={{fontSize:20, fontWeight:900, color:'#c8a900'}}>
-            {returningGuest ? '🙌 또 오셨네요! 아직 미가입이에요' : '🎁 단골 등록하면 무료 쿠폰'}
+            {returningGuest ? '🙌 또 오셨네요! 아직 미가입이에요' : '🍺 단골 등록하고 방문 감사 혜택 받기'}
           </div>
           <div style={{fontSize:15, color:'#ccc', lineHeight:1.7}}>
             {returningGuest
-              ? <>지금 <span style={{color:'#FFD700', fontWeight:700}}>3초 간편가입</span>하면 <span style={{color:'#FF6B00', fontWeight:700}}>무료 쿠폰</span>을 드려요{' '}<span style={{fontSize:13, color:'#999'}}>(다음 방문 때 사용)</span></>
-              : <>3초 간편가입으로 끝!<br/>가입하면 <span style={{color:'#FF6B00', fontWeight:700}}>무료 쿠폰</span>을 드려요{' '}<span style={{fontSize:13, color:'#999'}}>(다음 방문 때 사용 가능)</span></>}
+              ? <>지금 <span style={{color:'#FFD700', fontWeight:700}}>3초 간편가입</span>하면 오늘부터 방문이 쌓여요.<br/><span style={{color:'#FF6B00', fontWeight:700}}>5번째 방문마다 소주 1병 또는 생맥주 500cc 1잔</span> 무료!</>
+              : <>3초 간편가입으로 끝!<br/><span style={{color:'#FF6B00', fontWeight:700}}>5번째 방문마다 소주 1병 또는 생맥주 500cc 1잔</span> 무료로 드려요</>}
             <br/>
             <span style={{fontSize:12.5, color:'#8a8a8a'}}>※ 쿠폰·이벤트 혜택은 <b style={{color:'#aaa'}}>단골 회원 전용</b>이에요</span>
           </div>
@@ -235,7 +236,7 @@ export default function MenuPage() {
                 fontWeight:700, fontSize:15, borderRadius:10, border:'none', cursor:'pointer'}}
               onClick={() => router.push(`/store/${storeId}/login`)}
             >
-              가입하고 쿠폰 받기
+              3초 가입하기
             </button>
             <button
               style={{padding:'12px 16px', background:'none', color:'#666',

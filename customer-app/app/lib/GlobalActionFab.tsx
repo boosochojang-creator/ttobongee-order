@@ -3,6 +3,7 @@
 // 단일 speed-dial FAB로 통합. 평소엔 버튼 하나, 누르면 위로 펼쳐짐(스크림으로 뒤 요소 보호).
 // 직원호출은 점주 broadcast까지 포함(기존 메뉴 자체 버튼은 broadcast 누락 버그가 있었음).
 import { useState } from 'react'
+import { tableLabel } from './tableLabel'
 import { usePathname, useRouter } from 'next/navigation'
 import { useCart } from './cartStore'
 import { supabase } from './supabase'
@@ -45,7 +46,7 @@ export default function GlobalActionFab() {
     } catch {}
     // 음성
     try {
-      const label = tableNo && tableNo !== '0' ? `${tableNo}번 테이블` : '포장'
+      const label = tableNo && tableNo !== '0' ? tableLabel(tableNo, true) : '포장'
       const u = new SpeechSynthesisUtterance(`${label} ${stripEmoji(item)} 호출입니다`)
       u.lang = 'ko-KR'; u.volume = 1; u.rate = 0.9
       window.speechSynthesis.speak(u)

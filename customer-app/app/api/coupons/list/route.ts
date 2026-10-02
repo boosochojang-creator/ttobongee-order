@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // 발급 사유 → 고객에게 보여줄 문구 (내부 조건명 노출 금지)
 const REASON: Record<string, { label: string; emoji: string }> = {
+  visit5:     { label: '방문 감사',     emoji: '🍺' },
   signup:     { label: '신규가입 축하', emoji: '🎉' },
   birthday:   { label: '생일 축하',     emoji: '🎂' },
   revisit:    { label: '재방문 감사',   emoji: '💛' },

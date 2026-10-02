@@ -38,7 +38,7 @@ const VISIBLE_PAY_OPTIONS = PAY_OPTIONS.filter(
 export default function CheckoutPage() {
   const router = useRouter()
   const storeId = useStoreId()
-  const { items, tableNo, orderType, setOrderType, isMember, hydrated, userId, phone, totalAmount, discountAmount, finalAmount, clearCart } = useCart()
+  const { items, tableNo, orderType, setOrderType, isMember, hydrated, userId, phone, totalAmount, finalAmount, clearCart } = useCart()
   // [진입흐름] 주문 확정 게이트: 자리(매장/포장·테이블)를 아직 안 정한 손님이 '주문하기'까지 왔을 때 처리.
   //   ① dine_in인데 table_no=0(자리 미정) → 매장/포장→자리선택 먼저(/entry?from=order). 0번 dine_in 원천 차단.
   //   ② 자리 확정 후 비회원이면 로그인으로. (자리 → 인증 순서. 이미 정한 손님은 다시 안 물음: table_no·orderType이
@@ -95,14 +95,14 @@ export default function CheckoutPage() {
   const [gifts, setGifts] = useState<Gift[]>([])
   useEffect(() => {
     if (!userId) { setGifts([]); return }
-    // 최소주문 기준 = totalAmount(회원가 적용 전 메뉴 합계). 사용가능일/최소주문 충족한 쿠폰 전체 반환.
+    // 최소주문 기준 = totalAmount(메뉴 합계). 사용가능일/최소주문 충족한 쿠폰 전체 반환.
     fetch(`/api/coupons/applicable?userId=${userId}&amount=${totalAmount}`)
       .then(x => x.json()).then(r => setGifts(r?.ok ? (r.coupons || []) : [])).catch(() => {})
   }, [userId, totalAmount])
   // [7] 기존 금액할인 계산은 폐기(메뉴 증정으로 대체). 코드 보존용으로 남기되 항상 0.
   const couponApplied = 0
 
-  // 최종 금액 = 회원가 상품금액 + 배달료 (증정 메뉴는 0원이라 금액 영향 없음)
+  // 최종 금액 = 상품금액(정가) + 배달료 (증정 메뉴는 0원이라 금액 영향 없음)
   const payTotal = finalAmount - couponApplied + (isDelivery && deliveryFee ? deliveryFee : 0)
   const canSplit = DUTCH_PAY_ENABLED && !isDelivery && orderType === 'dine_in' // 더치페이는 홀 주문 전용 + 결제활성 시에만
 
@@ -385,11 +385,6 @@ export default function CheckoutPage() {
             <div className="price-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--text2)' }}>
               <span>합계</span><span>{won(totalAmount)}</span>
             </div>
-            {isMember && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--green)' }}>
-                <span>단골 할인 5%</span><span>-{won(discountAmount)}</span>
-              </div>
-            )}
             {/* [7] 쿠폰 금액할인 표시는 폐기(메뉴 증정으로 대체) — 옛 계산 라인 비활성화 */}
             {isDelivery && deliveryFee !== null && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--text2)' }}>

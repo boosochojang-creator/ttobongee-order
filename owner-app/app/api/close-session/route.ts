@@ -21,14 +21,16 @@ export async function POST(req: NextRequest) {
     //   [항목3] 세션 중 포장(order_type='takeout', table_no=N>0)도 같은 테이블 세션이므로 함께 마감.
     //   외부 픽업형(table_no=0)·배달(table_no=0)은 table_no=N 필터로 자연 제외됨.
     //   신규 미접수(pending/paid/cash_pending)는 아직 주방 확인 전이라 제외 — 접수 후 마감.
-    const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+    // [영업일 기준] 자정 기준 필터를 없앰 — 자정 전에 시킨 주문도 같은 테이블 세션이면 함께 마감(누락 방지).
+    //   너무 오래된 잔여 주문까지 휩쓸지 않도록 하한만 36시간으로 둔다.
+    const floor = new Date(Date.now() - 36 * 3600 * 1000).toISOString()
     const { data: targets } = await admin.from('orders')
       .select('id, user_id')
       .eq('store_id', STORE_ID)
       .in('order_type', ['dine_in', 'takeout'])
       .eq('table_no', table_no)
       .in('status', ['accepted', 'cooking', 'done'])
-      .gte('created_at', `${today}T00:00:00+09:00`)
+      .gte('created_at', floor)
     const ids = (targets || []).map(o => o.id)
     if (!ids.length) return NextResponse.json({ ok: true, closed: 0 })
 

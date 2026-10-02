@@ -5,6 +5,8 @@ import StatsTab from './StatsTab'
 import { SALES_COUNTED } from './lib/salesStatus'
 import { PAYMENT_ENABLED } from './lib/flags'
 import { STORE_ID } from './lib/store'
+import { tableLabel } from './lib/tableLabel'
+import { loadBusinessStart, loadCurrentBusinessDay, inBiz, OPEN_ORDER_STATUSES } from './lib/businessDay'
 
 type Order = {
   id: string
@@ -39,7 +41,7 @@ const PAY_LABELS: Record<string, string> = {
 }
 // 쿠폰 발급사유 → 사람이 읽는 라벨 (내부 조건명 노출 금지)
 const COUPON_LABEL: Record<string, string> = {
-  signup: '신규가입', birthday: '생일', revisit: '재방문 감사', vip_thanks: '단골감사',
+  visit5: '5번째 방문 감사', signup: '신규가입', birthday: '생일', revisit: '재방문 감사', vip_thanks: '단골감사',
 }
 
 // B4: 점주 인증 지속(재진입 시 PIN 재요구 방지) + 탭 히스토리
@@ -227,6 +229,8 @@ export default function OwnerDashboard() {
   const [boardReply, setBoardReply] = useState('') // [6] 사장님 답글 입력
   const [summary, setSummary] = useState({ count: 0, sales: 0, newMembers: 0 })
   const [couponHolders, setCouponHolders] = useState<Set<string>>(new Set()) // [D] 지금 쓸 수 있는 쿠폰 보유 회원
+  // [2026-10] 주문카드 고객정보 — user_id → 표시이름·전화 끝4자리·방문수 (서버에서 복호화 후 끝4자리만)
+  const [customerMap, setCustomerMap] = useState<Record<string, { name: string; last4: string; visit_count: number; grade: string | null }>>({})
   const [callToast, setCallToast] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -254,6 +258,7 @@ export default function OwnerDashboard() {
   const pickupAlerted = useRef(new Set<string>()) // [7] 포장 예약 15분전 알림 1회 발동
   const audioRef = useRef<AudioContext | null>(null)
   const isFirst = useRef(true)
+  const bizStartRef = useRef<string>(new Date(0).toISOString()) // [영업일 기준] 현재 영업일 시작 시각
 
   const playAlert = useCallback(() => {
     try {
@@ -307,9 +312,11 @@ export default function OwnerDashboard() {
     once()
   }
 
-  function speakOrder(tableNo: number, orderType: string, paymentMethod: string, hasGift = false) {
-    const label = orderType === 'delivery' ? '배달' : orderType === 'takeout' ? '포장' : `${tableNo}번 테이블`
-    const gift = hasGift ? ' 무료 증정 쿠폰이 포함된 주문이에요.' : '' // 쿠폰 사용 안내 음성
+  function speakOrder(tableNo: number, orderType: string, paymentMethod: string, hasGift = false, visitGift = false) {
+    const label = orderType === 'delivery' ? '배달' : orderType === 'takeout' ? '포장' : tableLabel(tableNo, true)
+    // 쿠폰 사용 안내 음성 — 5번째 방문 쿠폰은 따로 크게 안내(소주/생맥주 증정 빠뜨리지 않게)
+    const gift = visitGift ? ' 방문 감사 쿠폰 손님이에요. 소주 한 병 또는 생맥주 오백 한 잔 무료로 같이 내주세요.'
+      : hasGift ? ' 무료 증정 쿠폰이 포함된 주문이에요.' : ''
     const message = !PAYMENT_ENABLED
       ? `${label} 신규 주문입니다.${gift} 확인 후 접수해 주세요.` // 결제분리: 결제는 포스에서
       : paymentMethod === 'cash'
@@ -319,17 +326,23 @@ export default function OwnerDashboard() {
   }
 
   const loadOrders = useCallback(async () => {
-    const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
+    // [영업일 기준] 달력 자정이 아니라 '영업 시작~마감' 세션 기준으로 주문을 불러온다.
+    //   자정을 넘겨도 같은 영업일 주문이 화면·매출에서 사라지지 않게(자정 초기화 버그 수정).
+    //   + 아직 결제 안 된 진행 주문(접수대기·조리중·완료)은 영업 시작 전 것이라도 계속 보이게(미결제 누락 방지).
+    const bizStart = await loadBusinessStart(supabase, STORE_ID)
+    bizStartRef.current = bizStart
+    const openFloor = new Date(new Date(bizStart).getTime() - 24 * 3600 * 1000).toISOString()
     const { data } = await supabase
       .from('orders')
       .select(`*,
                order_items(name_snapshot, qty, subtotal),
-               users(visit_count, grade)`)
+               users(visit_count, grade, nickname)`)
       .eq('store_id', STORE_ID)
       .neq('status', 'canceled')
       // pending = 손님이 결제창만 열고 아직 결제 안 한 상태(취소·이탈 포함) → 확정 전이므로 점주 화면에서 제외
       .neq('status', 'pending')
-      .gte('created_at', `${today}T00:00:00+09:00`)
+      .gte('created_at', openFloor)
+      .or(`created_at.gte.${bizStart},status.in.(${OPEN_ORDER_STATUSES.join(',')})`)
       .order('created_at', { ascending: false })
 
     if (!data) return
@@ -349,7 +362,8 @@ export default function OwnerDashboard() {
       mapped.forEach(o => {
         if (!seenIds.current.has(o.id) && (o.status === 'paid' || o.status === 'cash_pending' || o.status === 'verification_failed')) {
           playAlert()
-          speakOrder(o.table_no, o.order_type, o.payment_method, Array.isArray(o.free_gifts) && o.free_gifts.length > 0)
+          speakOrder(o.table_no, o.order_type, o.payment_method, Array.isArray(o.free_gifts) && o.free_gifts.length > 0,
+            Array.isArray(o.free_gifts) && o.free_gifts.some((g: any) => g?.type === 'visit5'))
         }
       })
     }
@@ -379,10 +393,15 @@ export default function OwnerDashboard() {
       fetch('/api/coupon/holders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userIds: memberUserIds }) })
         .then(x => x.json()).then(r => { if (r?.ok) setCouponHolders(new Set(r.holders as string[])) }).catch(() => {})
     } else setCouponHolders(new Set())
+    // [2026-10] 주문한 손님 정보(누가 시켰는지) — 같은 테이블 일행이 따로 주문해도 각자 구분되게
+    if (memberUserIds.length) {
+      fetch('/api/customers/brief', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: memberUserIds }) })
+        .then(x => x.json()).then(r => { if (r?.ok) setCustomerMap(r.customers || {}) }).catch(() => {})
+    }
 
     // F2: 매출 지표 정의 통일 — '오늘 매출'과 '오늘 주문'을 모두 확정 매출(SALES_COUNTED) 기준으로
     // (요약카드·영업탭·매출탭·통계 동일 집합). 미처리 신규는 아래 '신규 주문' 카드로 별도 표시.
-    const salesToday = mapped.filter(o => SALES_COUNTED.includes(o.status))
+    const salesToday = mapped.filter(o => SALES_COUNTED.includes(o.status) && inBiz(o.created_at, bizStart))
     setSummary({
       count: salesToday.length,
       sales: salesToday.reduce((s, o) => s + o.final_amount, 0),
@@ -439,10 +458,10 @@ export default function OwnerDashboard() {
       .on('broadcast', { event: 'call' }, ({ payload }) => {
         const { tableNo, message, speech } = payload
         // 토스트는 이모지 포함 원본 표시(시각). 음성은 speech(이모지 제거본) 우선, 없으면 stripEmoji 폴백. [항목7]
-        setCallToast(`🔔 ${tableNo}번 테이블 - ${message}`)
+        setCallToast(`🔔 ${tableLabel(tableNo, true)} - ${message}`)
         setTimeout(() => setCallToast(null), 3000)
         playAlert()
-        speakKo(`${tableNo}번 테이블 ${speech ?? message}`, 2) // [항목7·9]
+        speakKo(`${tableLabel(tableNo, true)} ${speech ?? message}`, 2) // [항목7·9]
       })
       .subscribe()
 
@@ -752,10 +771,9 @@ export default function OwnerDashboard() {
   }
 
   const loadTodayReport = async () => {
-    const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
-    const { data } = await supabase.from('daily_reports').select('*')
-      .eq('store_id', STORE_ID).eq('date', today).maybeSingle()
-    setTodayReport(data || null)
+    // [영업일 기준] 달력 날짜가 아니라 '열린 영업일'(없으면 방금 마감한 영업일)을 보여준다.
+    //   자정을 넘겨도 '영업 시작' 버튼이 다시 뜨거나 매출이 0으로 초기화되지 않는다.
+    setTodayReport(await loadCurrentBusinessDay(supabase, STORE_ID))
   }
 
   // [2] 하드닝 — 고객화면 영업상태 반영을 '조용한 실패' 없이 확정.
@@ -776,9 +794,12 @@ export default function OwnerDashboard() {
   }
 
   const startBusiness = async () => {
-    const today = kstDay(new Date()) // KST 오늘 (영업일 기준)
+    const today = kstDay(new Date()) // 영업일 이름표(시작한 날의 KST 날짜)
+    // 같은 날짜 행이 이미 있으면(같은 날 마감 후 다시 시작) 처음 시작 시각을 유지하고 마감만 해제 → 한 영업일로 이어짐.
+    const { data: existing } = await supabase.from('daily_reports').select('start_time')
+      .eq('store_id', STORE_ID).eq('date', today).maybeSingle()
     await supabase.from('daily_reports').upsert(
-      { store_id: STORE_ID, date: today, start_time: new Date().toISOString() },
+      { store_id: STORE_ID, date: today, start_time: existing?.start_time || new Date().toISOString(), end_time: null },
       { onConflict: 'store_id,date' }
     )
     // [2] 영업상태 → 고객 화면 반영. 반영 확정 실패 시 점주에게 경고(고객화면이 아직 마감으로 보일 수 있음).
@@ -808,11 +829,9 @@ export default function OwnerDashboard() {
   // 실수로 마감했거나 다시 열어야 할 때 — 마감 시각(end_time)을 지워 '영업 중'으로 되돌리고 고객 화면 재오픈.
   // (start_time·매출 기록은 그대로 유지 → 나중에 진짜 마감 시 다시 집계됨)
   const reopenBusiness = async () => {
-    const today = kstDay(new Date())
-    await supabase.from('daily_reports').upsert(
-      { store_id: STORE_ID, date: today, end_time: null },
-      { onConflict: 'store_id,date' }
-    )
+    // [영업일 기준] 화면에 보이는 '방금 마감한 영업일' 행을 그대로 다시 연다(자정 넘겨 재오픈해도 같은 영업일).
+    if (!todayReport?.id) return
+    await supabase.from('daily_reports').update({ end_time: null }).eq('id', todayReport.id)
     const okOpen = await applyStoreOpen(true)
     if (!okOpen) alert('⚠️ 고객 화면 "다시 영업 시작" 반영에 실패했어요.\n인터넷 연결을 확인하고 다시 눌러주세요.')
     await loadTodayReport()
@@ -889,13 +908,28 @@ export default function OwnerDashboard() {
   const dineTables = Array.from(new Set(sessionDone.map(o => o.table_no))).sort((a, b) => a - b)
   const doneCount = sessionDone.length + takeoutDone.length + deliveryDone.length
 
+  // [2026-10] 주문 손님 한 줄 — 이름(닉네임/손님+끝4자리)·끝4자리·방문수·쿠폰보유
+  const CustomerLine = ({ userId, grade, visitCount }: { userId: string; grade?: string; visitCount?: number }) => {
+    const c = customerMap[userId]
+    const name = c?.name || '회원'
+    const showLast4 = c?.last4 && !name.includes(c.last4)
+    const vc = c?.visit_count ?? visitCount
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 5, fontSize: 13, fontWeight: 800, color: '#f0e6c0' }}>
+        <span>👤 {name}{showLast4 ? ` (${c!.last4})` : ''}</span>
+        {vc ? <span style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[(grade || c?.grade) as string] || '#c8a900' }}>· {vc}번째 방문</span> : null}
+        {couponHolders.has(userId) && <span style={{ fontSize: 11, fontWeight: 800, color: '#111', background: '#3ac47d', borderRadius: 8, padding: '1px 7px' }}>🎟️ 쿠폰</span>}
+      </div>
+    )
+  }
+
   const OrderCard = ({ order }: { order: Order }) => (
     <div className={`order-card ${order.status === 'pending' || order.status === 'paid' ? 'new-order' : order.status === 'cash_pending' || order.status === 'verification_failed' ? 'cash_pending' : order.status === 'accepted' ? 'accepted' : order.status === 'cooking' ? 'cooking' : 'done-card'}`}>
       <div className="order-time">{timeAgo(order.created_at)}</div>
       <div className="order-table">
         {order.order_type === 'delivery' ? '🛵 배달'
-          : order.order_type === 'takeout' ? (order.table_no > 0 ? `${order.table_no}번 · 🛍️포장` : '🛍️ 포장')
-          : `${order.table_no}번`}
+          : order.order_type === 'takeout' ? (order.table_no > 0 ? `${tableLabel(order.table_no)} · 🛍️포장` : '🛍️ 포장')
+          : tableLabel(order.table_no)}
         <span> {STATUS_LABEL[order.status] || order.status}</span>
       </div>
       {order.order_type === 'delivery' && (
@@ -921,10 +955,9 @@ export default function OwnerDashboard() {
         {PAYMENT_ENABLED ? (PAY_LABELS[order.payment_method] || order.payment_method) : '🧾 포스 결제'}
         {order.is_member && !order.member_info && ' · 단골'}
       </span>
-      {order.is_member && order.member_info && (
-        <div style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[order.member_info.grade] || '#c8a900', marginTop: 4 }}>
-          {GRADE_LABEL[order.member_info.grade]} · {order.member_info.visit_count}번째 방문
-        </div>
+      {/* [2026-10] 주문한 손님 — 누가 시켰는지(같은 테이블 일행 구분) */}
+      {order.user_id && (
+        <CustomerLine userId={order.user_id} grade={order.member_info?.grade} visitCount={order.member_info?.visit_count} />
       )}
       {/* [D] 쿠폰 보유 고객 표시 */}
       {(order as any).user_id && couponHolders.has((order as any).user_id) && (
@@ -1008,42 +1041,54 @@ export default function OwnerDashboard() {
       const map = o.order_type === 'takeout' ? takeoutItemMap : dineItemMap
       for (const it of (o.items || [])) map.set(it.name_snapshot, (map.get(it.name_snapshot) || 0) + it.qty)
     }
-    // 증정 합산(매장/포장 공통)
-    const giftMap = new Map<string, number>()
-    for (const o of group) if (Array.isArray(o.free_gifts)) for (const g of o.free_gifts) giftMap.set(g.menu, (giftMap.get(g.menu) || 0) + (g.qty || 1))
     const total = group.reduce((s, o) => s + (o.final_amount || 0), 0)
     const hasTakeout = takeoutItemMap.size > 0
     const cookingCount = group.filter(o => o.status !== 'done').length // 아직 조리중(접수·조리중)인 회차 수
     // [미결제 방지] 이 테이블의 '미접수 신규'(아직 접수 안 누른 주문) — 있으면 결제 총액 누락 위험 → 결제완료 가드
     const pendingNew = newOrders.filter(o => o.table_no === tableNo && (o.order_type === 'dine_in' || o.order_type === 'takeout'))
-    const mi = group.find(o => o.is_member && o.member_info)?.member_info
+    // [2026-10] 손님별 묶음 — 주문 순서대로, 같은 손님의 여러 회차는 합산
+    const custMap = new Map<string, { key: string; userId: string | null; grade?: string; visitCount?: number; items: Map<string, number>; gifts: Map<string, number>; amount: number }>()
+    for (const o of group) {
+      const key = o.user_id || `guest-${o.id}`
+      if (!custMap.has(key)) custMap.set(key, { key, userId: o.user_id, grade: o.member_info?.grade, visitCount: o.member_info?.visit_count, items: new Map(), gifts: new Map(), amount: 0 })
+      const cg = custMap.get(key)!
+      for (const it of (o.items || [])) {
+        const nm = o.order_type === 'takeout' ? `${it.name_snapshot} (포장)` : it.name_snapshot
+        cg.items.set(nm, (cg.items.get(nm) || 0) + it.qty)
+      }
+      if (Array.isArray(o.free_gifts)) for (const g of o.free_gifts) cg.gifts.set(g.menu, (cg.gifts.get(g.menu) || 0) + (g.qty || 1))
+      cg.amount += o.final_amount || 0
+    }
+    const byCustomer = Array.from(custMap.values()).map(c => ({ ...c, items: Array.from(c.items.entries()), gifts: Array.from(c.gifts.entries()) }))
 
     return (
       <div className="order-card done-card">
         <div className="order-table" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span>{tableNo}번</span>
+          <span>{tableLabel(tableNo)}</span>
           <span style={{ fontSize: 13, color: '#3ac47d', fontWeight: 700 }}>주문 {group.length}건 · 결제 대기</span>
           {hasTakeout && <span style={{ fontSize: 12, fontWeight: 800, color: '#111', background: '#f0a000', borderRadius: 20, padding: '2px 10px' }}>🛍️ 포장 포함</span>}
           {cookingCount > 0 && <span style={{ fontSize: 12, fontWeight: 800, color: '#111', background: '#f0d000', borderRadius: 20, padding: '2px 10px' }}>🍳 조리중 {cookingCount}건 포함</span>}
           {pendingNew.length > 0 && <span style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#d94a3a', borderRadius: 20, padding: '2px 10px' }}>⚠️ 미접수 신규 {pendingNew.length}건 — 접수 후 결제</span>}
         </div>
-        {mi && (
-          <div style={{ fontSize: 12, fontWeight: 700, color: GRADE_COLOR[mi.grade] || '#c8a900', marginTop: 4 }}>
-            {GRADE_LABEL[mi.grade]} · {mi.visit_count}번째 방문
-          </div>
-        )}
-        {/* [D] 쿠폰 보유 고객 표시 */}
-        {group.some(o => (o as any).user_id && couponHolders.has((o as any).user_id)) && (
-          <div style={{ display: 'inline-block', marginTop: 4, fontSize: 11, fontWeight: 800, color: '#111', background: '#3ac47d', borderRadius: 8, padding: '2px 8px' }}>🎟️ 쿠폰 보유 고객</div>
-        )}
-        <ul className="order-items-list">
-          {Array.from(dineItemMap.entries()).map(([name, qty], i) => (
-            <li key={i}><strong>{name}</strong> × {qty}</li>
+        {/* [2026-10] 손님별 주문 — 같은 테이블 일행이 각자 주문해도 '누가 무엇을 시켰는지' 구분(결제 시 혼선 방지) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '8px 0 4px' }}>
+          {byCustomer.map(cg => (
+            <div key={cg.key} style={{ background: '#151a12', border: '1px solid #2e3a26', borderRadius: 8, padding: '7px 10px' }}>
+              {cg.userId
+                ? <CustomerLine userId={cg.userId} grade={cg.grade} visitCount={cg.visitCount} />
+                : <div style={{ fontSize: 13, fontWeight: 800, color: '#aaa' }}>👤 비회원 주문</div>}
+              <ul className="order-items-list" style={{ margin: '4px 0 0' }}>
+                {cg.items.map(([name, qty], i) => (
+                  <li key={i}><strong>{name}</strong> × {qty}</li>
+                ))}
+                {cg.gifts.map(([menu, qty], i) => (
+                  <li key={`g${i}`} style={{ color: '#3ac47d', fontWeight: 700 }}>🎁 <strong>{menu}</strong>{qty > 1 ? ` × ${qty}` : ''} <span style={{ fontSize: 11, color: '#8ab873' }}>(무료 증정)</span></li>
+                ))}
+              </ul>
+              <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 800, color: '#dfeecd' }}>{won(cg.amount)}</div>
+            </div>
           ))}
-          {Array.from(giftMap.entries()).map(([menu, qty], i) => (
-            <li key={`g${i}`} style={{ color: '#3ac47d', fontWeight: 700 }}>🎁 <strong>{menu}</strong>{qty > 1 ? ` × ${qty}` : ''} <span style={{ fontSize: 11, color: '#8ab873' }}>(무료 증정)</span></li>
-          ))}
-        </ul>
+        </div>
         {/* [항목3] 포장 회차 메뉴 — 별도 구분 표시(따로 담아 나가야 함) */}
         {hasTakeout && (
           <div style={{ background: '#2a2000', border: '1px solid #7a6400', borderRadius: 8, padding: '8px 10px', margin: '4px 0' }}>
@@ -1061,7 +1106,7 @@ export default function OwnerDashboard() {
             style={pendingNew.length ? { opacity: 0.5 } : undefined}
             onClick={() => {
               if (pendingNew.length) {
-                setCallToast(`⚠️ ${tableNo}번에 아직 접수 안 한 신규 주문 ${pendingNew.length}건이 있어요. 먼저 접수(조리시작) 후 결제해주세요 — 미결제 방지`)
+                setCallToast(`⚠️ ${tableLabel(tableNo)}에 아직 접수 안 한 신규 주문 ${pendingNew.length}건이 있어요. 먼저 접수(조리시작) 후 결제해주세요 — 미결제 방지`)
                 setTimeout(() => setCallToast(null), 4000)
                 return
               }
@@ -1421,7 +1466,7 @@ export default function OwnerDashboard() {
                     {new Date(o.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                   <span style={{ fontSize: 13, color: '#ccc', minWidth: 40 }}>
-                    {o.order_type === 'takeout' ? (o.table_no > 0 ? `${o.table_no}번🛍️` : '🛍️포장') : `${o.table_no}번`}
+                    {o.order_type === 'takeout' ? (o.table_no > 0 ? `${tableLabel(o.table_no)}🛍️` : '🛍️포장') : tableLabel(o.table_no)}
                   </span>
                   <span style={{ flex: 1, fontSize: 13, color: '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {o.items?.[0]?.name_snapshot}{o.items && o.items.length > 1 ? ` 외 ${o.items.length - 1}` : ''}
@@ -1453,7 +1498,7 @@ export default function OwnerDashboard() {
           : '-'
 
         // 오늘 실시간 (orders state 기준)
-        const todaySales = orders.filter(o => SALES_COUNTED.includes(o.status))
+        const todaySales = orders.filter(o => SALES_COUNTED.includes(o.status) && inBiz(o.created_at, bizStartRef.current))
         const todaySalesTotal = todaySales.reduce((s, o) => s + o.final_amount, 0)
         const todayCount = todaySales.length
 
@@ -1530,7 +1575,13 @@ export default function OwnerDashboard() {
                     </button>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ textAlign: 'center', fontSize: 14, color: '#3ac47d', fontWeight: 700 }}>✅ 오늘 영업 마감 완료</div>
+                      <div style={{ textAlign: 'center', fontSize: 14, color: '#3ac47d', fontWeight: 700 }}>✅ 영업 마감 완료 ({todayReport.date})</div>
+                      {/* [영업일 기준] 지난 영업일(다른 날짜)의 마감 결과를 보고 있으면 새 영업일 시작 버튼 */}
+                      {todayReport.date !== kstDay(new Date()) && (
+                        <button onClick={startBusiness} style={{ width: '100%', padding: 14, background: '#3ac47d', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                          🟢 새 영업 시작
+                        </button>
+                      )}
                       {/* 실수 마감/재오픈 대비 — 다시 영업 시작(고객 주문 재개) */}
                       <button onClick={reopenBusiness} style={{ width: '100%', padding: 14, background: '#3ac47d', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
                         🔄 다시 영업 시작

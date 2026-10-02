@@ -3,7 +3,6 @@ import { adminClient } from '../../../lib/supabaseAdmin'
 import { verifyToken } from '../../../lib/authToken'
 import { phoneHash, phoneDigits } from '../../../lib/phoneCrypto'
 import { sanitizeNickname } from '../../../lib/nickname'
-import { issueConnectCoupon } from '../../../lib/connectCoupon'
 
 // [그룹2 연결] 신규 소셜신원 + 전화 1회 입력 → 기존 전화 단골과 매칭.
 //   매칭되면 기존 user_id에 provider 부착 + 전화(phone/phone_encrypted) 자동 파기(2c).
@@ -51,8 +50,7 @@ export async function POST(req: NextRequest) {
     const { error: uErr } = await admin.from('users').update(patch).eq('id', existing.id)
     if (uErr) throw uErr
 
-    // [계정연결 보상] 전화회원이 소셜 연결을 완료한 순간 = 연결 보상 쿠폰 1회 지급(콜라/사이다 택1).
-    await issueConnectCoupon(admin, existing.id)
+    // [2026-10 쿠폰 개편] 계정연결 보상 쿠폰 폐지(연결 기능 자체는 유지).
 
     const { data: user } = await admin.from('users')
       .select('id, grade, visit_count, nickname, member_status').eq('id', existing.id).single()

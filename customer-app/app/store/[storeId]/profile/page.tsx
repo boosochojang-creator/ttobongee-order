@@ -101,14 +101,14 @@ export default function ProfilePage() {
         {/* [2] 내 쿠폰함 */}
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f0f0', marginBottom: 4 }}>🎟️ 내 쿠폰함</div>
-          <div style={{ fontSize: 12, color: '#777', marginBottom: 10 }}>결제는 카운터에서 진행되며, 쿠폰 할인은 주문 시 자동 안내돼요.</div>
+          <div style={{ fontSize: 12, color: '#777', marginBottom: 10 }}>결제는 카운터에서 진행되며, 쿠폰 증정 메뉴는 주문 시 자동으로 함께 들어가요.</div>
           {/* 사용 가능/곧 사용가능 쿠폰만 노출 (사용됨·만료됨은 이력 보존 위해 DB엔 남기고 화면에선 숨김) */}
           {(() => {
             const visible = coupons ? coupons.filter(c => c.state === 'usable' || c.state === 'upcoming') : null
             if (visible === null) return <div style={{ color: '#888', fontSize: 13, padding: '14px 0' }}>쿠폰을 불러오는 중…</div>
             if (visible.length === 0) return (
               <div style={{ color: '#888', fontSize: 13, background: '#141414', border: '1px solid #2a2a2a', borderRadius: 10, padding: '16px', textAlign: 'center' }}>
-                지금 사용할 수 있는 쿠폰이 없어요. 방문하시면 메뉴 증정 쿠폰을 드려요 💛
+                지금 사용할 수 있는 쿠폰이 없어요. 5번째 방문마다 소주/생맥주 1잔 쿠폰을 드려요 💛
               </div>
             )
             return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{visible.map(c => <CouponCard key={c.id} c={c} />)}</div>
@@ -116,7 +116,7 @@ export default function ProfilePage() {
         </div>
 
         <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.7, borderTop: '1px solid #2a2a2a', paddingTop: 16 }}>
-          생일·주소를 추가하면 <span style={{ color: '#FFD700', fontWeight: 700 }}>생일쿠폰</span>과{' '}
+          생일·주소를 추가하면 매장 소식과{' '}
           <span style={{ color: '#FFD700', fontWeight: 700 }}>배달 주문</span>을 더 편하게 이용할 수 있어요.
           <br />모든 항목은 선택 입력입니다.
         </div>
@@ -197,7 +197,7 @@ export default function ProfilePage() {
                 <li>보유하신 <b>쿠폰이 모두 사라져요</b></li>
                 <li>지난 주문 내역은 매장 정산·통계 목적으로 <b>이름 없이(비식별)</b> 남아요</li>
               </ul>
-              <div style={{ marginTop: 10, color: '#888' }}>같은 번호로 언제든 다시 가입하실 수 있어요 (신규 가입 혜택도 다시 드려요 💛)</div>
+              <div style={{ marginTop: 10, color: '#888' }}>같은 번호로 언제든 다시 가입하실 수 있어요 💛</div>
             </div>
             {withdrawError && <div style={{ fontSize: 13, color: 'var(--red)' }}>{withdrawError}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>

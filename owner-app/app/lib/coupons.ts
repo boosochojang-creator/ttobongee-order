@@ -1,140 +1,39 @@
-// Phase 4-B 쿠폰 자동발급 엔진 (서버 전용 · 서비스롤)
-// 규칙은 템플릿 테이블 없이 하드코딩(4종 고정). 발급 인스턴스만 coupons 테이블에 저장.
+// 쿠폰 엔진 (서버 전용 · 서비스롤)
+// [2026-10 쿠폰 개편] 자동발급 규칙 4종(신규가입·생일·재방문·단골감사) 신규 발급 중단.
+//   이미 발급된 쿠폰은 그대로 사용 가능(약속된 혜택). 새 혜택 = '5번째 방문 감사'(visit5) 하나 —
+//   발급은 손님앱 lib/visitCoupon.ts(손님이 매장 착석 시 즉시 발급·당일 사용)가 담당.
+//   여기서는 ① 만료 전환 ② 오늘 발급분 조회(영업시작 팝업)만 한다.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { STORE_ID } from './store'
-import { sendPushToUser } from './pushSend'
 
-// 메뉴 무료 증정 방식 (금액할인 폐기). freeMenu 개수만큼 증정, validDays=null이면 무제한, sameDay=true면 발급 당일부터 사용가능(그 외는 다음날부터).
-// 증정 메뉴 교체(2026-07): 발급조건(minOrder/validDays/sameDay)은 그대로, 메뉴만 변경.
-//  - 생일: 음료 택1 + 감자튀김 200g / 나머지: 음료 택1. '택1'은 카운터에서 손님이 선택.
-const DRINK_CHOICE = '생맥주 500cc / 소주 1병 / 음료(대) 중 택1'
+// 표시용 라벨·증정 문구 (과거 발급분 표시를 위해 옛 종류도 남겨 둠 — 새로 발급하지 않음)
 export const COUPON_RULES = {
-  signup:     { label: '신규가입',   freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 0,     validDays: null, sameDay: false },
-  birthday:   { label: '생일',       freeMenu: `${DRINK_CHOICE} + 감자튀김 200g`,  freeQty: 1, minOrder: 0,     validDays: 7,    sameDay: true  },
-  // 재방문 감사(구 winback 대체): 2번째 방문 시 발급 · 10일 유효 · 당일 사용불가(다음 재방문부터).
-  revisit:    { label: '재방문 감사', freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 0,     validDays: 10,   sameDay: false },
-  vip_thanks: { label: '단골감사',   freeMenu: DRINK_CHOICE,                       freeQty: 1, minOrder: 20000, validDays: 7,    sameDay: false },
+  visit5:     { label: '5번째 방문 감사', freeMenu: '소주 1병 / 생맥주 500cc 중 택1' },
+  signup:     { label: '신규가입',        freeMenu: '' },
+  birthday:   { label: '생일',            freeMenu: '' },
+  revisit:    { label: '재방문 감사',     freeMenu: '' },
+  vip_thanks: { label: '단골감사',        freeMenu: '' },
+  connect:    { label: '계정연결',        freeMenu: '' },
 } as const
 export type CouponType = keyof typeof COUPON_RULES
 
-// 더미/테스트 계정(전화번호) — 자동발급 제외. 추후 전체 재진단 때 정리 예정.
-const EXCLUDE_PHONES = new Set(['01052636119', '01094706860', '010000000000'])
-
-// 생일(월·일)이 오늘부터 within일 이내인지 (KST, 연도 무관)
-function birthdayWithin(bday: string | null | undefined, within: number) {
-  if (!bday) return false
-  const d = new Date(bday); if (isNaN(d.getTime())) return false
-  const bkey = (d.getUTCMonth() + 1) * 100 + d.getUTCDate()
-  const now = new Date(Date.now() + 9 * 3600 * 1000)
-  for (let i = 0; i <= within; i++) {
-    const t = new Date(now.getTime() + i * 86400000)
-    if ((t.getUTCMonth() + 1) * 100 + t.getUTCDate() === bkey) return true
-  }
-  return false
-}
 function kstTodayStartIso() {
   const kst = new Date(Date.now() + 9 * 3600 * 1000)
   const d = `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}-${String(kst.getUTCDate()).padStart(2, '0')}`
   return `${d}T00:00:00+09:00`
 }
-// 다음 KST 자정(내일 00:00 KST)을 UTC instant로
-function nextKstMidnight(now: Date) {
-  const kst = new Date(now.getTime() + 9 * 3600 * 1000)
-  return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate() + 1, 0, 0, 0) - 9 * 3600 * 1000)
-}
-function newCoupon(userId: string, type: CouponType, now: Date) {
-  const r = COUPON_RULES[type]
-  const expires = r.validDays == null
-    ? new Date(now.getTime() + 100 * 365 * 86400000)          // 무제한(신규가입) — 100년 후
-    : new Date(now.getTime() + r.validDays * 86400000)
-  const usableFrom = r.sameDay ? now : nextKstMidnight(now)   // 생일=당일, 나머지=다음날부터
-  return {
-    user_id: userId, type,
-    discount_amount: 0,                                       // 금액할인 폐기 → 0 (컬럼은 이력보존용으로 유지)
-    free_menu: r.freeMenu, free_qty: r.freeQty,
-    min_order_amount: r.minOrder,
-    status: 'active', issued_at: now.toISOString(),
-    usable_from: usableFrom.toISOString(),
-    expires_at: expires.toISOString(),
-  }
-}
 
-// 자동발급 실행: ① 만료 전환 ② 조건 스캔·발급(중복방지) ③ 오늘(KST) 발급분 반환(팝업용)
-// 중복방지: signup은 '최초 1회'(한 번이라도 발급된 적 있으면 스킵), 나머지는 '유효(active·미만료) 보유 시 스킵'
+// 영업시작 시 실행: ① 만료 전환 ② 오늘(KST) 발급분 반환(팝업용). 새 발급은 하지 않는다.
 export async function runCouponAutomation(admin: SupabaseClient) {
-  const now = new Date()
-  const nowIso = now.toISOString()
+  const nowIso = new Date().toISOString()
 
   const { data: expired } = await admin.from('coupons').update({ status: 'expired' })
     .eq('status', 'active').lt('expires_at', nowIso).select('id')
 
-  // 탈퇴 회원(withdrawn_at)은 쿠폰 발급 대상에서 제외 — 재활성화 전까지 어떤 쿠폰도 새로 주지 않는다.
   const { data: users } = await admin.from('users')
-    .select('id, phone, nickname, birthday, customer_grade, last_visit, total_order_count, visit_count')
+    .select('id, phone, nickname')
     .eq('store_id', STORE_ID).is('withdrawn_at', null)
-  const { data: existing } = await admin.from('coupons').select('user_id, type, status, expires_at')
-
-  const everSignup = new Set<string>()
-  const everRevisit = new Set<string>() // 재방문 감사는 최초 1회만(중복발급 방지)
-  const activeUT = new Set<string>() // `${user_id}|${type}` — active & 미만료
-  for (const c of existing || []) {
-    if (c.type === 'signup') everSignup.add(c.user_id)
-    if (c.type === 'revisit') everRevisit.add(c.user_id)
-    if (c.status === 'active' && new Date(c.expires_at).getTime() > now.getTime()) activeUT.add(`${c.user_id}|${c.type}`)
-  }
-  const has = (uid: string, t: string) => activeUT.has(`${uid}|${t}`)
-
-  const toIssue: ReturnType<typeof newCoupon>[] = []
-  for (const u of users || []) {
-    if (EXCLUDE_PHONES.has(u.phone)) continue                                                     // 더미/테스트 계정 제외
-    if (!everSignup.has(u.id)) toIssue.push(newCoupon(u.id, 'signup', now))                       // 전화 가입완료 = 최초 1회
-    if (birthdayWithin(u.birthday, 7) && !has(u.id, 'birthday')) toIssue.push(newCoupon(u.id, 'birthday', now))
-    // 재방문 감사: 2번째 방문(visit_count>=2) 달성 시 1회 발급. sameDay:false라 다음 재방문부터 사용.
-    if ((u.visit_count || 0) >= 2 && !everRevisit.has(u.id)) toIssue.push(newCoupon(u.id, 'revisit', now))
-    if (u.customer_grade === 'vip' && !has(u.id, 'vip_thanks')) toIssue.push(newCoupon(u.id, 'vip_thanks', now))
-  }
-  let issuedCount = 0
-  if (toIssue.length) {
-    // [중복발급 방지] signup은 '1인 1장' — 개별 insert로, coupons(user_id) WHERE type='signup'
-    //   부분 유니크 인덱스와 충돌하면(배치가 짧은 시간에 두 번 실행되는 경쟁 등) 조용히 스킵한다.
-    //   (예전엔 bulk insert라 배치 2회 실행 시 같은 회원에게 signup이 2장 발급됐음.)
-    //   나머지(birthday/revisit/vip)는 제약이 없어 기존대로 일괄 insert.
-    const inserted: typeof toIssue = []
-    for (const row of toIssue.filter(c => c.type === 'signup')) {
-      const { error } = await admin.from('coupons').insert(row)
-      if (!error) inserted.push(row) // 실제 발급된 것만 푸시 대상(중복 스킵분 제외)
-    }
-    const otherRows = toIssue.filter(c => c.type !== 'signup')
-    if (otherRows.length) {
-      const { error } = await admin.from('coupons').insert(otherRows)
-      if (!error) inserted.push(...otherRows)
-    }
-    issuedCount = inserted.length
-    // [2] 웹푸시: 발급받은 회원에게 알림(회원별 1건 요약). 구독 없으면 조용히 스킵.
-    const byUser = new Map<string, string[]>()
-    for (const c of inserted) {
-      const label = COUPON_RULES[c.type as CouponType]?.label || c.type
-      const gift = c.free_qty && c.free_qty > 1 ? `${c.free_menu} ${c.free_qty}개` : (c.free_menu || '증정')
-      if (!byUser.has(c.user_id)) byUser.set(c.user_id, [])
-      byUser.get(c.user_id)!.push(`${label} · ${gift}`)
-    }
-    let pushed = 0
-    for (const [uid, lines] of Array.from(byUser.entries())) {
-      const pr = await sendPushToUser(admin, {
-        storeId: STORE_ID, userId: uid,
-        payload: { title: '🎁 또봉이 쿠폰이 도착했어요!', body: `${lines.join('\n')}\n앱에서 확인하세요`, url: `/store/${STORE_ID}/profile`, tag: 'coupon' },
-      })
-      if (pr.sent > 0) pushed++
-    }
-    // [항목6] 웹푸시 3종 중 '시스템자동'(쿠폰 발급 알림) 이력 기록. best-effort.
-    try {
-      await admin.from('push_logs').insert({
-        store_id: STORE_ID, kind: 'system', target: 'coupon:auto',
-        title: '🎁 쿠폰 발급 알림', body: `쿠폰 발급 ${byUser.size}명 대상`,
-        sent_count: pushed, skipped_count: byUser.size - pushed, failed_count: 0,
-      })
-    } catch {}
-  }
+  const issuedCount = 0
 
   // 오늘(KST) 발급된 쿠폰을 회원명과 함께 반환 (여러 번 눌러도 '오늘 발급분'을 일관되게 표시)
   // 멀티매장: coupons엔 store_id가 없어 이 매장 회원(user_id)로 스코핑.

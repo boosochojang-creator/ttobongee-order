@@ -5,6 +5,7 @@
 //   [네] = 합류(이 진입에선 다시 안 뜸)  /  [아니오] = "테이블 번호 확인 · 직원 호출" 안내로 전환.
 //   ※ QR 안 찍고 아이콘으로 들어와 번호를 잘못 고른 손님을 바로잡는 용도.
 import { useEffect, useRef, useState } from 'react'
+import { tableLabel } from './tableLabel'
 import { usePathname, useRouter } from 'next/navigation'
 import { useCart } from './cartStore'
 import { useStoreId } from './storeContext'
@@ -49,7 +50,7 @@ export default function TableSessionJoinPrompt() {
         // 테이블에 미결제 주문이 있고, 내 주문은 아직 없을 때만(=나중 합류자) 안내
         if (rounds.length > 0 && !iHaveOrder) {
           setMode('ask')
-          speak(`현재 이용중인 테이블이에요. 아직 결제 전이에요. ${tableNum}번 테이블이 맞으세요?`)
+          speak(`현재 이용중인 테이블이에요. 아직 결제 전이에요. ${tableLabel(tableNum, true)}이 맞으세요?`)
         } else {
           markHandled() // 내가 시작자이거나 이미 합류함 → 다시 안 뜨게
         }
@@ -102,7 +103,7 @@ export default function TableSessionJoinPrompt() {
             <div style={{ fontSize: 34, marginBottom: 6 }}>🍽️</div>
             <div style={{ fontSize: 17, fontWeight: 900, color: '#FFD700', marginBottom: 8 }}>현재 이용중인 테이블이에요</div>
             <div style={{ fontSize: 14, color: '#e6dcc6', lineHeight: 1.7, marginBottom: 18 }}>
-              <b style={{ color: '#FFD700' }}>{tableNum}번 테이블</b>에 아직 결제 전 주문이 있어요.<br />
+              <b style={{ color: '#FFD700' }}>{tableLabel(tableNum, true)}</b>에 아직 결제 전 주문이 있어요.<br />
               이 테이블이 <b>맞으세요?</b> 맞으면 주문이 <b>함께 합산</b>돼요.
             </div>
             <div style={{ display: 'flex', gap: 10 }}>

@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       total += m.price * qty
       orderItems.push({ menu_id: m.id, name_snapshot: m.name, price_snapshot: m.price, qty, subtotal: m.price * qty })
     }
-    const discount = Math.round(total * 0.05) // 단골 5% (회원만 도달)
+    const discount = 0 // 회원 5% 할인 폐지(2026-10) — 정가 그대로 저장
     const finalAmount = total - discount
     const status = (!PAYMENT_ENABLED || payMethod === 'cash') ? 'cash_pending' : 'pending'
 

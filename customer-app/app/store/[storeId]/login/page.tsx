@@ -113,7 +113,7 @@ export default function LoginPage() {
           padding: '18px 16px', marginTop: 16, fontSize: 14, lineHeight: 1.9, color: '#e0e0e0',
         }}>
           이 번호로 <b style={{ color: '#FFD700' }}>가입하셨던 이력</b>이 있어요.<br />
-          단골 혜택은 그대로 이어지지만, <b style={{ color: '#FFD700' }}>신규 가입 쿠폰은 다시 지급되지 않아요.</b><br />
+          <b style={{ color: '#FFD700' }}>단골 기록과 방문 횟수는 그대로</b> 이어져요.<br />
           <span style={{ color: '#aaa', fontSize: 13 }}>양해 부탁드려요 🙏 오늘도 맛있게 준비할게요!</span>
         </div>
         <button className="btn-primary" style={{ marginTop: 16 }} onClick={() => router.replace(`/store/${storeId}/menu`)}>
@@ -166,7 +166,7 @@ export default function LoginPage() {
       <div className="login-page">
         <div className="brand">🍗 또봉이통닭</div>
         <div className="sub">백운역점</div>
-        <div className="discount-badge">🎁 단골 등록하면 무료 쿠폰 (다음 방문 때 사용 가능)</div>
+        <div className="discount-badge">🍺 5번째 방문마다 소주 1병 / 생맥주 500cc 1잔 무료</div>
         <p style={{ fontSize: 14, color: 'var(--text2)', textAlign: 'center', lineHeight: 1.6 }}>
 3초 간편로그인으로 끝!<br />첫 방문도 자동으로 단골 등록됩니다
         </p>

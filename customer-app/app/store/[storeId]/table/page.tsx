@@ -14,8 +14,9 @@ const TABLES = [
   { no: 5, label: '5번', sub: '테이블' },
   { no: 6, label: '6번', sub: '테이블' },
   { no: 7, label: '7번', sub: '테이블' },
-  { no: 8, label: '외부1', sub: '외부석' },
-  { no: 9, label: '외부2', sub: '외부석' },
+  // 2026-10: 8번(예전 '외부1' 자리)은 일반 8번 테이블로, 9번(예전 '외부2')은 '외부1'로 표시 변경(QR 번호는 그대로)
+  { no: 8, label: '8번', sub: '테이블' },
+  { no: 9, label: '외부1', sub: '외부석' },
 ]
 
 const GRADE_LABEL: Record<string, string> = { gold: '🥇 골드 단골', silver: '🥈 실버 단골', bronze: '🥉 브론즈 단골' }
@@ -150,8 +151,8 @@ export default function TablePage() {
           <div style={{ marginTop:24, padding:'16px', textAlign:'center', fontSize:14, lineHeight:1.9, color:'#e8d4a8' }}>
             🎁 주문 전{' '}
             <span style={{color:'#FFD86A', fontWeight:700}}>3초 로그인</span>하면{' '}
-            <span style={{color:'#FF9A3C', fontWeight:700}}>생맥주·소주·음료 중 1잔 무료 쿠폰</span>{' '}
-            드려요 <span style={{fontSize:13, color:'#c9b48a'}}>(다음 방문 때 사용 가능)</span>
+            방문이 쌓여요 —{' '}
+            <span style={{color:'#FF9A3C', fontWeight:700}}>5번째 방문마다 소주 1병 또는 생맥주 500cc 1잔 무료</span>
           </div>
         )}
         {/* 1번사진 감성 — 양피지 서명 문구 */}

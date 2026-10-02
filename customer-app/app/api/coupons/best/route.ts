@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // Phase 4-B: 결제 자동적용용 최적 쿠폰 선택 (서비스롤 — 위변조 방지)
 // 유효(active·미만료) + 최소주문충족(min_order_amount <= amount) 중 할인액 최대 1개.
-const LABEL: Record<string, string> = { signup: '신규가입', birthday: '생일', revisit: '재방문 감사', vip_thanks: '단골감사' }
+const LABEL: Record<string, string> = { visit5: '방문 감사', signup: '신규가입', birthday: '생일', revisit: '재방문 감사', vip_thanks: '단골감사' }
 
 export async function GET(req: NextRequest) {
   try {

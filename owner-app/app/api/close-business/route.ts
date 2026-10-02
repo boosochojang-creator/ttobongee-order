@@ -6,14 +6,8 @@ import { STORE_ID } from '../../lib/store'
 // 확인1 후속: 영업 마감(수동 버튼 + 자동 안전장치 공용 로직).
 // 원칙: '열린 영업일'(start_time 있고 end_time null)을 타깃해 마감한다.
 //  - 수동(manual): 점주가 버튼을 누른 시각으로 마감.
-//  - 자동(auto): 익일 02:30(KST) 크론이 실행하되, 기록되는 마감시각(end_time)·집계 상한은 '기준시각 익일 01:00'.
+//  - 자동(auto): 매일 03:00(KST) 크론이 실행 — 그 시각까지의 매출을 전부 포함해 마감(예전 01:00 상한으로 01시 이후 매출이 빠지던 문제 수정).
 // 처리 내용은 수동/자동 동일: ① daily_reports(end_time+매출집계) ② stores.is_open=false. (부분처리 금지)
-
-function kstNext0100Iso(dateStr: string) {
-  // dateStr = 영업일(YYYY-MM-DD, 영업 시작일). 그 다음날 01:00 KST의 UTC instant.
-  const [y, m, d] = dateStr.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + 1, 1, 0, 0) - 9 * 3600 * 1000).toISOString()
-}
 
 async function performClose(auto: boolean) {
   const admin = createClient(
@@ -36,8 +30,8 @@ async function performClose(auto: boolean) {
     return { ok: true, closed: false, reason: 'no_open_day' }
   }
 
-  // 마감 시각·집계 상한: 자동=기준시각(익일 01:00), 수동=지금.
-  const endIso = auto ? kstNext0100Iso(openRow.date) : new Date().toISOString()
+  // 마감 시각·집계 상한 = 실제 마감 시각(수동=버튼 누른 때, 자동=03:00 실행 시각). 영업 중 들어온 주문은 자정 넘어도 전부 포함.
+  const endIso = new Date().toISOString()
 
   // 해당 영업 세션 매출 집계 ([영업시작, 마감시각))
   const { data: raw } = await admin.from('orders')
@@ -64,6 +58,14 @@ async function performClose(auto: boolean) {
   const { error: soErr } = await admin.from('stores').update({ is_open: false }).eq('id', STORE_ID)
   if (soErr) throw soErr
 
+  // ③ [2026-10] 5번째 방문 쿠폰은 '그 영업일'만 유효 → 마감과 함께 미사용분 소멸(best-effort)
+  try {
+    const { data: su } = await admin.from('users').select('id').eq('store_id', STORE_ID)
+    const ids = (su || []).map((u: any) => u.id)
+    if (ids.length) await admin.from('coupons').update({ status: 'expired' })
+      .eq('type', 'visit5').eq('status', 'active').in('user_id', ids)
+  } catch {}
+
   return { ok: true, closed: true, date: openRow.date, auto, end_time: endIso, total_sales: total, order_count: count }
 }
 
@@ -77,7 +79,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 자동 마감: Vercel Cron(매일 02:30 KST)이 GET으로 호출 → auto 처리
+// 자동 마감: Vercel Cron(매일 03:00 KST = 18:00 UTC)이 GET으로 호출 → auto 처리
 // CRON_SECRET 환경변수가 설정돼 있으면 Vercel이 Authorization 헤더를 붙여주므로 검증(외부 임의 호출 차단).
 // (미설정 시에도 동작하도록 강제하지 않음 — 설정하면 자동 하드닝)
 export async function GET(req: NextRequest) {

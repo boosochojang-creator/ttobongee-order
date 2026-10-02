@@ -44,7 +44,7 @@ function speakSafe(text: string) {
 }
 
 export function CouponProvider({ children }: { children: ReactNode }) {
-  const { userId, hydrated } = useCart()
+  const { userId, hydrated, isMember, tableNo, orderType } = useCart()
   const pathname = usePathname()
   const router = useRouter()
   const storeId = useStoreId()
@@ -52,6 +52,8 @@ export function CouponProvider({ children }: { children: ReactNode }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [popup, setPopup] = useState<Coupon[] | null>(null) // A: 새로 발급된(안 본) 쿠폰 팝업
   const popupTimer = useRef<any>(null)
+  const [visitPopup, setVisitPopup] = useState<number | null>(null) // [2026-10] 5번째 방문 쿠폰 안내(방문 번호)
+  const visitTried = useRef(0)
 
   const usable = coupons.filter(c => c.state === 'usable')
   const upcoming = coupons.filter(c => c.state === 'upcoming')
@@ -93,6 +95,26 @@ export function CouponProvider({ children }: { children: ReactNode }) {
   }, [coupons])
 
   const onStore = !!pathname && pathname.startsWith('/store/')
+
+  // [2026-10] 5번째 방문 감사 쿠폰 — 매장에 착석(QR/자리선택·포장 선택)한 회원이 주문 화면에 들어오면 서버에 판정 요청.
+  //   5·10·15…번째 방문이면 즉시 발급(당일 사용) → 큰 안내창 + 음성. 서버가 중복을 막으므로 2분 간격으로만 재확인.
+  useEffect(() => {
+    if (!hydrated || !userId || !isMember || !onStore || !storeId) return
+    const seated = parseInt(String(tableNo || '0'), 10) > 0 || orderType === 'takeout'
+    if (!seated) return
+    if (Date.now() - visitTried.current < 120000) return
+    visitTried.current = Date.now()
+    fetch('/api/coupons/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, storeId }) })
+      .then(r => r.json())
+      .then(r => {
+        if (!r?.ok || !r.issued) return
+        const s = readSeen(); s.add(r.couponId); writeSeen(s) // 일반 발급 토스트와 중복 안내 방지
+        setVisitPopup(r.visitNo)
+        speakSafe(`오늘 ${r.visitNo}번째 방문이에요! 감사의 마음으로 소주 한 병 또는 생맥주 오백 한 잔을 무료로 드려요. 오늘 주문하실 때 자동으로 함께 들어가요.`)
+        refresh()
+      })
+      .catch(() => {})
+  }, [hydrated, userId, isMember, onStore, storeId, tableNo, orderType, pathname, refresh])
   // 뱃지는 '보유' 기준(usable + upcoming) — 다음날부터 쓰는 신규가입 쿠폰도 즉시 보이게(가입 직후 뱃지 미표시 수정).
   const heldCount = usable.length + upcoming.length
   const showBadge = onStore && heldCount > 0
@@ -116,6 +138,25 @@ export function CouponProvider({ children }: { children: ReactNode }) {
             </div>
           ))}
           {popup.length > 3 && <div style={{ fontSize: 12, color: '#c8b060' }}>외 {popup.length - 3}장</div>}
+        </div>
+      )}
+
+      {/* [2026-10] 5번째 방문 감사 쿠폰 안내 — 확인을 누를 때까지 유지 */}
+      {visitPopup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 330, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ width: 'min(92vw, 380px)', background: 'linear-gradient(160deg, #2a2000, #1a1400)', border: '2px solid #FFD700', borderRadius: 20, padding: '26px 22px', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.7)' }}>
+            <div style={{ fontSize: 46, marginBottom: 6 }}>🍺</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#FFD700', marginBottom: 8 }}>오늘 {visitPopup}번째 방문이에요!</div>
+            <div style={{ fontSize: 15, color: '#f5ecc8', lineHeight: 1.7, marginBottom: 6 }}>
+              감사의 마음으로<br /><b style={{ color: '#fff' }}>소주 1병 또는 생맥주 500cc 1잔</b><br />무료로 드려요
+            </div>
+            <div style={{ fontSize: 12.5, color: '#c8b070', lineHeight: 1.6, marginBottom: 18 }}>
+              오늘 주문하실 때 자동으로 함께 들어가요<br />(오늘 영업 마감까지 사용 가능)
+            </div>
+            <button onClick={() => setVisitPopup(null)} style={{ width: '100%', padding: 14, background: 'linear-gradient(150deg,#d6b25a,#bd9a3c 45%,#7a5715)', color: '#111', border: 'none', borderRadius: 12, fontSize: 16, fontWeight: 900, cursor: 'pointer' }}>
+              확인
+            </button>
+          </div>
         </div>
       )}
 

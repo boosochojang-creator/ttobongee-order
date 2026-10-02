@@ -50,8 +50,8 @@ export default function ProfilePrompt() {
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f0f0', lineHeight: 1.6 }}>
-        🎂 생일·주소 추가하면 <span style={{ color: '#FFD700' }}>생일쿠폰</span>과{' '}
-        <span style={{ color: '#FFD700' }}>배달 주문</span>을 더 편하게!
+        🎂 생일·주소를 추가하면{' '}
+        <span style={{ color: '#FFD700' }}>매장 소식·배달 주문</span>을 더 편하게!
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button

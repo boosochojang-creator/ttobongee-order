@@ -29,7 +29,7 @@ export default function PrivacyPage() {
         <Section title="제2조 (개인정보 수집 목적)">
           <ul style={{ margin: '8px 0 0 16px', display: 'flex', flexDirection: 'column', gap: 6, color: '#ccc' }}>
             <li>QR 주문 서비스 제공 및 주문 처리</li>
-            <li>단골 혜택(5% 할인) 제공</li>
+            <li>단골 혜택(방문 감사 쿠폰·이벤트) 제공</li>
             <li>결제 처리 및 환불 처리</li>
             <li>서비스 이용 분쟁 해결</li>
             <li>법령 상 의무 이행</li>
