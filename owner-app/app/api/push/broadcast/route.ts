@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 import { sendPushToUser } from '../../../lib/pushSend'
 import { STORE_ID } from '../../../lib/store'
@@ -40,8 +41,22 @@ export async function POST(req: NextRequest) {
       })
     } catch {}
 
+    // [2026-10 어울장] 이벤트 알림을 보냈다는 사실을 어울장 운영자 휴대폰에 알림(운영자가 어울장 전체 홍보 검토).
+    //  손님 발송에는 영향 없음(best-effort, 실패해도 무시).
+    try { await notifyOperators(admin, title, reached) } catch {}
+
     return NextResponse.json({ ok: true, reached, skipped, failed, excluded: userIds.length - targets.length })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
+}
+
+async function notifyOperators(admin: any, title: string, reached: number) {
+  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY
+  if (!pub || !priv) return
+  const { data } = await admin.from('eoul_push_devices').select('endpoint, p256dh, auth').eq('role', 'operator')
+  if (!data?.length) return
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:boosochojang@naver.com', pub, priv)
+  const body = JSON.stringify({ title: '📣 매장 이벤트 알림 발송', body: `[또봉이통닭 백운역점] ${title} — ${reached}명에게 보냄. 어울장 전체 홍보를 검토해 보세요.`, url: 'https://market-pickup-owner.vercel.app/admin?tab=push', tag: 'op-ttobongee' })
+  await Promise.all(data.map((d: any) => webpush.sendNotification({ endpoint: d.endpoint, keys: { p256dh: d.p256dh, auth: d.auth } }, body).catch(() => {})))
 }

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import VersionWatcher from './lib/VersionWatcher'
 import OwnerAuthGuard from './lib/OwnerAuthGuard'
+import BackExitGuard from './lib/BackExitGuard'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -16,7 +17,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}<VersionWatcher /><OwnerAuthGuard /></body>
+      <body>{children}<VersionWatcher /><OwnerAuthGuard /><BackExitGuard title="점주 화면을 나가시겠어요?" sub="화면을 닫으면 새 주문 알림을 놓칠 수 있어요." /></body>
     </html>
   )
 }

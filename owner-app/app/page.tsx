@@ -8,6 +8,7 @@ import { STORE_ID } from './lib/store'
 import { tableLabel } from './lib/tableLabel'
 import { loadBusinessStart, loadCurrentBusinessDay, inBiz, OPEN_ORDER_STATUSES } from './lib/businessDay'
 import OperatorLogin from './lib/OperatorLogin'
+import WaitingPanel from './WaitingPanel'
 
 type Order = {
   id: string
@@ -48,7 +49,7 @@ const COUPON_LABEL: Record<string, string> = {
 // B4: 점주 인증 지속(재진입 시 PIN 재요구 방지) + 탭 히스토리
 const AUTH_KEY = 'ttobongee-owner-auth-until'
 const AUTH_TTL_MS = 12 * 3600 * 1000 // 12시간 유지
-const TAB_KEYS = ['orders', 'menu', 'members', 'sales', 'business', 'stats', 'content'] as const
+const TAB_KEYS = ['orders', 'waiting', 'menu', 'members', 'sales', 'business', 'stats', 'content'] as const
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '신규', paid: '신규', cash_pending: PAYMENT_ENABLED ? '현금대기' : '접수대기',
@@ -210,7 +211,7 @@ export default function OwnerDashboard() {
   const [msgSending, setMsgSending] = useState(false)
   const [msgThread, setMsgThread] = useState<any[]>([])                 // 현재 대화 스레드
   const [msgUnread, setMsgUnread] = useState<Set<string>>(new Set())    // 안 읽은 답장 보유 회원 id
-  const [tab, setTab] = useState<'orders' | 'menu' | 'members' | 'sales' | 'business' | 'stats' | 'content'>('orders')
+  const [tab, setTab] = useState<'orders' | 'waiting' | 'menu' | 'members' | 'sales' | 'business' | 'stats' | 'content'>('orders')
   // B4: 탭 이동을 URL 히스토리에 남겨 뒤로가기 시 이전 탭으로 돌아가게(앱 이탈/PIN 튕김 방지)
   const navTab = (t: typeof tab) => {
     if (t === tab) return
@@ -1190,6 +1191,7 @@ export default function OwnerDashboard() {
       {/* 탭 */}
       <div className="owner-tabs">
         <button className={tab === 'orders' ? 'active' : ''} onClick={() => navTab('orders')}>주문</button>
+        <button className={tab === 'waiting' ? 'active' : ''} onClick={() => navTab('waiting')}>⏳ 웨이팅</button>
         <button className={tab === 'menu' ? 'active' : ''} onClick={() => { navTab('menu'); loadMenus() }}>메뉴</button>
         <button className={tab === 'members' ? 'active' : ''} onClick={() => { navTab('members'); loadMembers() }}>회원</button>
         <button className={tab === 'sales' ? 'active' : ''} onClick={() => navTab('sales')}>매출</button>
@@ -1796,6 +1798,8 @@ export default function OwnerDashboard() {
 
       {/* 통계 (그룹 F-1) */}
       {tab === 'stats' && <StatsTab />}
+      {/* [1] 웨이팅(줄서기) — 어울장·또봉이 공용 부품 */}
+      {tab === 'waiting' && <WaitingPanel />}
 
       {/* 콘텐츠 관리 (Phase 5-2) — 오락실 게임 (음악·게시판은 다음 단계에서 이 탭에 추가) */}
       {tab === 'content' && (
