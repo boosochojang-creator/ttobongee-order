@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import VersionWatcher from './lib/VersionWatcher'
+import OwnerAuthGuard from './lib/OwnerAuthGuard'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}<VersionWatcher /></body>
+      <body>{children}<VersionWatcher /><OwnerAuthGuard /></body>
     </html>
   )
 }

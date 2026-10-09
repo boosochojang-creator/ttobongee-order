@@ -7,6 +7,7 @@ import { PAYMENT_ENABLED } from './lib/flags'
 import { STORE_ID } from './lib/store'
 import { tableLabel } from './lib/tableLabel'
 import { loadBusinessStart, loadCurrentBusinessDay, inBiz, OPEN_ORDER_STATUSES } from './lib/businessDay'
+import OperatorLogin from './lib/OperatorLogin'
 
 type Order = {
   id: string
@@ -877,6 +878,7 @@ export default function OwnerDashboard() {
       />
       {pinError && <p style={{ color: '#e84040', fontSize: 13 }}>{pinError}</p>}
       <button className="pin-btn" onClick={handlePin}>입장</button>
+      <OperatorLogin onSuccess={() => { setAuthed(true); try { localStorage.setItem(AUTH_KEY, String(Date.now() + AUTH_TTL_MS)) } catch {} }} />
     </div>
   )
 

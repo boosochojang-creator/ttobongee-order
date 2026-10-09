@@ -87,6 +87,9 @@ export async function GET(req: NextRequest) {
   if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
   }
+  // 점주 출입증 없이 들어오는 유일한 경로라, 예약 시각(03:00 KST) 앞뒤(02:30~04:30)에만 동작 — 낮에 누가 불러도 가게가 마감되지 않게(2026-10-09)
+  const kstMin = (new Date(Date.now() + 9 * 3600 * 1000).getUTCHours()) * 60 + new Date().getUTCMinutes()
+  if (kstMin < 150 || kstMin > 270) return NextResponse.json({ ok: false, error: '자동 마감 시간이 아니에요' }, { status: 403 })
   try {
     return NextResponse.json(await performClose(true))
   } catch (e: any) {
